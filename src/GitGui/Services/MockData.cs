@@ -5,9 +5,9 @@ using GitGui.Models;
 namespace GitGui.Services;
 
 /// <summary>
-/// Hard-coded sample content for the UI mockup. Every list here is what the real
-/// data layer will eventually return from libgit2 plus the host APIs — the shape
-/// is meant to be the contract, so swapping in real services touches only this file.
+/// Sample content for the XAML previewer only. Nothing at runtime reads this —
+/// the app loads real repositories through GitService. It exists so the designer
+/// and Design.DataContext have something to render without touching the disk.
 /// </summary>
 public static class MockData
 {
@@ -32,30 +32,6 @@ public static class MockData
     };
 
     public static IReadOnlyList<GitHost> Hosts { get; } = [GitHubDotCom, HomelabGitea];
-
-    public static IReadOnlyList<Account> Accounts { get; } =
-    [
-        new Account
-        {
-            Login = "Polemus",
-            DisplayName = "Dusty Roberts",
-            Host = GitHubDotCom,
-            Initials = "DR",
-            AvatarHex = "#3399CC",
-            AuthMethod = "OAuth device flow",
-            RepositoryCount = 24,
-        },
-        new Account
-        {
-            Login = "stoic",
-            DisplayName = "Homelab",
-            Host = HomelabGitea,
-            Initials = "HL",
-            AvatarHex = "#609926",
-            AuthMethod = "Personal access token",
-            RepositoryCount = 7,
-        },
-    ];
 
     public static IReadOnlyList<RepositoryInfo> Repositories { get; } =
     [
