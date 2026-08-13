@@ -20,6 +20,10 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+
+    <!-- Site descriptions shipped with the app. Loaded by HostProviderRegistry
+         through the same code path as user-written manifests. -->
+    <EmbeddedResource Include="HostProviders\Manifests\*.json" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,41 @@
+{
+  "id": "gitea",
+  "displayName": "Gitea",
+  "auth": ["token"],
+
+  "recognise": {
+    "path": "/api/v1/version",
+    "expectField": "version"
+  },
+
+  "authHeader": {
+    "name": "Authorization",
+    "value": "token {token}"
+  },
+
+  "endpoints": {
+    "currentUser": "/api/v1/user",
+    "repositories": "/api/v1/user/repos?limit=100"
+  },
+
+  "userFields": {
+    "login": "login",
+    "displayName": "full_name",
+    "avatarUrl": "avatar_url"
+  },
+
+  "repositoryFields": {
+    "name": "name",
+    "owner": "owner.login",
+    "cloneUrl": "clone_url",
+    "defaultBranch": "default_branch",
+    "isPrivate": "private",
+    "description": "description",
+    "updatedAt": "updated_at"
+  },
+
+  "gitCredentials": {
+    "username": "{login}",
+    "password": "{token}"
+  }
+}
