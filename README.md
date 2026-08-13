@@ -7,9 +7,8 @@ domain), and to anything else you describe in a JSON file.
 Runs on **Linux, Windows and macOS** from a single codebase.
 
 > **Status: working, not finished.** GitGui reads and writes real repositories — branches,
-> working-tree status, diffs, history, commits — and signs in to hosting sites to fetch,
-> push and pull. Still missing: browsing and cloning remote repositories from the UI, and
-> pull requests.
+> working-tree status, diffs, history, commits — and signs in to hosting sites to browse,
+> clone, fetch, push and pull. Still missing: pull requests and issues.
 
 **No git installation required.** The native libgit2 library ships inside the app, so
 users don't need git, .NET, or anything else installed. See [Does it need git?](#does-it-need-git).
@@ -19,7 +18,8 @@ users don't need git, .NET, or anything else installed. See [Does it need git?](
 ## Screenshots
 
 Every screenshot below is the app running against **real repositories** — including its
-own. They predate the activity console, so the bar along the bottom is missing from them.
+own. They are out of date: taken before the activity console, the settings page, the
+three-pane history and the resizable panes.
 
 **Changes — working tree and unified diff**
 
@@ -43,6 +43,11 @@ own. They predate the activity console, so the bar along the bottom is missing f
 
 - **Add any local clone** through a native folder picker. The list persists between
   launches.
+- **Browse and clone** everything your signed-in accounts can see, from every hosting site
+  at once, filtered by name or description. Cloning uses that site's own token, so private
+  repositories need no terminal. Repositories you already have are marked rather than
+  offered again, matched through the same URL parsing that groups them.
+- **Create branches**, and amend the last commit while it is still local.
 - **Repository picker grouped by hosting site.** The group a repo lands in is derived from its
   actual `origin` URL, so a GitHub clone and a self-hosted Gitea clone genuinely sort
   themselves apart. Handles `https://`, `ssh://` and scp-style `git@host:owner/repo`.
@@ -107,7 +112,7 @@ templating — including a hand-written third-party manifest.
 
 ### Signing in, fetching and pushing
 
-Sign in on the Accounts screen — **"Sign in with browser"** on github.com, which shows you
+Sign in under **Settings → Accounts** — **"Sign in with browser"** on github.com, which shows you
 a code to type into GitHub and waits for approval, or a personal access token anywhere —
 and fetch/push/pull work. GitHub Enterprise has no browser button until you register an
 OAuth App on that server (Settings → Developer settings → OAuth Apps, tick *Enable Device
@@ -134,8 +139,6 @@ a commit whose remote URL carried no credentials, confirmed server-side.
 
 ### Not yet
 
-- **Browsing and cloning remote repositories.** The provider layer already lists them;
-  the UI doesn't show them yet.
 - **Pull requests and issues.**
 
 ## Does it need git?
@@ -145,7 +148,7 @@ self-contained, they end up inside every installer. Users need no git, no .NET, 
 The bundled library covers every platform we ship: `linux-x64`, `linux-arm64`, `win-x64`,
 `osx-arm64` and `osx-x64`.
 
-One caveat for later, when remotes start being contacted: the bundled libgit2 registers
+One caveat: the bundled libgit2 registers
 `git://`, `http://` and `https://`, but **not** `ssh://`. It supports SSH only via
 `git_smart_subtransport_ssh_exec`, which shells out to a system `ssh` binary. So
 `git@github.com:` remotes will need OpenSSH present — standard on macOS and Linux, an
@@ -187,7 +190,7 @@ src/GitGui/
     SystemShell.cs         open a browser, reach the clipboard
     MockData.cs            design-time sample content only
   ViewModels/    MainWindowViewModel + per-item view models
-  Views/         MainWindow, RepositoryView, DiffView, SettingsView
+  Views/         MainWindow, RepositoryView, DiffView, CloneView, SettingsView
   Styles/        Tokens.axaml (theme colours + icons), Controls.axaml (control styles)
   Assets/        App icon
 tests/GitGui.Tests/
@@ -278,8 +281,8 @@ runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
   remote that isn't `github.com` as Gitea to pick a badge and colour for the sidebar. Sign-in
   does not work this way — that probes the server properly — so the consequence is a
   mislabelled group, not a failed connection.
-- **No branch creation, amend or undo.** Branches can be switched but not created, and a
-  commit can't be corrected from the app.
+- **No undo.** The last commit can be amended while it is still local, but there is no
+  reset, revert or reflog rescue.
 - **Tests cover the pure functions only** — diff parsing, remote-URL resolution and the
   manifest mapping. Anything touching libgit2, the network or the UI is still verified by
   hand, against a real Gitea server.
