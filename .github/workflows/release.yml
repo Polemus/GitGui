@@ -204,7 +204,9 @@ jobs:
 
           **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), the \`.AppImage\` (anywhere else — \`chmod +x\` it and run it, no install), or the portable \`.tar.gz\`.
           **Windows** — run the \`-setup.exe\`, or unzip the portable build.
-          **macOS** — open the \`.dmg\` and drag GitGui to Applications. The bundle is unsigned, so the first launch needs right-click → Open.
+          **macOS** — open the \`.dmg\` and drag GitGui to Applications.
+
+          The builds are unsigned, so the first launch needs one nudge past the OS. On **macOS 15 and later**, open GitGui, let it be blocked, then go to *System Settings → Privacy & Security*, scroll to the bottom and click **Open Anyway** — Apple removed the old right-click → Open shortcut, so that no longer works. On **macOS 14 and earlier**, Control-click GitGui in Applications → *Open* → *Open*. On **Windows**, click *More info* → *Run anyway*.
 
           **No git installation is required.** The native libgit2 library ships inside the app, along with everything else it needs.
 
