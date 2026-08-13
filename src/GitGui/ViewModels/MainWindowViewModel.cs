@@ -30,14 +30,18 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ICredentialStore _credentials;
     private readonly IActivityLog _log;
     private readonly ISystemShell _shell;
+    private readonly IRepositoryWatcher _watcher;
     private readonly bool _isDesignTime;
+
+    /// <summary>Set by an automatic refresh so the commit's file list can restore itself.</summary>
+    private string? _restoreCommitFilePath;
 
     /// <summary>Design-time constructor. Fills the previewer from sample data only.</summary>
     public MainWindowViewModel()
         : this(new GitService(), new RepositoryStore(), new FolderPicker(),
                HostProviderRegistry.Create(new System.Net.Http.HttpClient()),
                new AccountStore(new FileCredentialStore()), new FileCredentialStore(),
-               new ActivityLog(), new SystemShell(), designTime: true)
+               new ActivityLog(), new SystemShell(), new RepositoryWatcher(), designTime: true)
     {
         LoadDesignTimeData();
     }
@@ -50,8 +54,10 @@ public partial class MainWindowViewModel : ViewModelBase
         IAccountStore accountStore,
         ICredentialStore credentials,
         IActivityLog log,
-        ISystemShell shell)
-        : this(git, store, picker, hosts, accountStore, credentials, log, shell, designTime: false)
+        ISystemShell shell,
+        IRepositoryWatcher watcher)
+        : this(git, store, picker, hosts, accountStore, credentials, log, shell, watcher,
+               designTime: false)
     {
     }
 
@@ -64,6 +70,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ICredentialStore credentials,
         IActivityLog log,
         ISystemShell shell,
+        IRepositoryWatcher watcher,
         bool designTime)
     {
         _git = git;
@@ -74,7 +81,11 @@ public partial class MainWindowViewModel : ViewModelBase
         _credentials = credentials;
         _log = log;
         _shell = shell;
+        _watcher = watcher;
         _isDesignTime = designTime;
+
+        if (!designTime)
+            watcher.Changed += OnRepositoryChangedOnDisk;
 
         // An error the user can't see is an error they can't act on.
         log.ErrorLogged += (_, _) => IsConsoleExpanded = true;
@@ -202,8 +213,32 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsChangesTab => SelectedTabIndex == 0;
     public bool IsHistoryTab => SelectedTabIndex == 1;
 
+    // ---- Settings ----------------------------------------------------------
+
     [ObservableProperty]
-    public partial bool IsAccountsPageVisible { get; set; }
+    public partial bool IsSettingsPageVisible { get; set; }
+
+    /// <summary>
+    /// Which section of settings is showing. An int rather than an enum so the tab rail
+    /// can pass one through CommandParameter without a converter; there will be more.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAccountsSection))]
+    [NotifyPropertyChangedFor(nameof(IsHostsSection))]
+    public partial int SettingsSection { get; set; }
+
+    public bool IsAccountsSection => SettingsSection == 0;
+    public bool IsHostsSection => SettingsSection == 1;
+
+    /// <summary>Every site GitGui knows about, whatever the description came from.</summary>
+    public ObservableCollection<HostEntryViewModel> HostEntries { get; } = [];
+
+    /// <summary>Non-null while the add/edit host form is open.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEditingHost))]
+    public partial HostDraftViewModel? HostDraft { get; set; }
+
+    public bool IsEditingHost => HostDraft is not null;
 
     // ---- Live repository status -------------------------------------------
     // Held here rather than on RepositoryInfo, which stays immutable identity.
@@ -367,6 +402,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (SelectedRepository == repository)
         {
+            _watcher.Stop();
             SelectedRepository = null;
             Branches.Clear();
             Changes.Clear();
@@ -598,10 +634,106 @@ public partial class MainWindowViewModel : ViewModelBase
     private void ShowHistoryTab() => SelectedTabIndex = 1;
 
     [RelayCommand]
-    private void ShowAccounts() => IsAccountsPageVisible = true;
+    private void ShowSettings()
+    {
+        RefreshHostEntries();
+        IsSettingsPageVisible = true;
+    }
 
     [RelayCommand]
-    private void ShowRepository() => IsAccountsPageVisible = false;
+    private void ShowRepository() => IsSettingsPageVisible = false;
+
+    [RelayCommand]
+    private void ShowSettingsSection(int section)
+    {
+        SettingsSection = section;
+        HostDraft = null;
+    }
+
+    // ---- Hosts -------------------------------------------------------------
+
+    [RelayCommand]
+    private void AddHost() => HostDraft = HostDraftViewModel.GiteaLike();
+
+    [RelayCommand]
+    private void AddGitLabLikeHost() => HostDraft = HostDraftViewModel.GitLabLike();
+
+    [RelayCommand]
+    private void EditHost(HostEntryViewModel entry)
+    {
+        if (_hosts.LoadUserManifest(entry.Id) is not { } manifest)
+        {
+            Log(ActivityLevel.Error, $"Could not read the description for '{entry.Id}'.");
+            return;
+        }
+
+        HostDraft = HostDraftViewModel.FromManifest(manifest);
+    }
+
+    [RelayCommand]
+    private void CancelHostDraft() => HostDraft = null;
+
+    [RelayCommand]
+    private void SaveHost()
+    {
+        if (HostDraft is not { CanSave: true } draft)
+            return;
+
+        try
+        {
+            _hosts.SaveUserManifest(draft.ToManifest());
+            AfterHostsChanged($"Saved the '{draft.DisplayName}' hosting site");
+            HostDraft = null;
+        }
+        catch (Exception ex)
+        {
+            Log(ActivityLevel.Error, $"Could not save the host: {ex.Message}", ex.ToString());
+        }
+    }
+
+    [RelayCommand]
+    private void DeleteHost(HostEntryViewModel entry)
+    {
+        try
+        {
+            _hosts.DeleteUserManifest(entry.Id);
+            AfterHostsChanged($"Removed the '{entry.DisplayName}' hosting site");
+        }
+        catch (Exception ex)
+        {
+            Log(ActivityLevel.Error, $"Could not remove the host: {ex.Message}", ex.ToString());
+        }
+    }
+
+    /// <summary>
+    /// The registry reloaded, so every collection holding providers is now stale - the
+    /// sign-in picker included, which would otherwise keep a deleted site selected.
+    /// </summary>
+    private void AfterHostsChanged(string message)
+    {
+        var previouslySelected = SelectedProvider?.Id;
+
+        Providers.Clear();
+        foreach (var provider in _hosts.Providers)
+            Providers.Add(provider);
+
+        SelectedProvider = Providers.FirstOrDefault(p => p.Id == previouslySelected)
+                           ?? Providers.FirstOrDefault();
+
+        RefreshHostEntries();
+        OnPropertyChanged(nameof(HostWarnings));
+        OnPropertyChanged(nameof(HasHostWarnings));
+
+        Log(ActivityLevel.Success, message);
+    }
+
+    private void RefreshHostEntries()
+    {
+        HostEntries.Clear();
+
+        foreach (var provider in _hosts.Providers)
+            HostEntries.Add(new HostEntryViewModel(provider, _hosts.IsUserDefined(provider.Id)));
+    }
 
     // ---- Loading -----------------------------------------------------------
 
@@ -640,48 +772,103 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         SelectedRepository = repository;
         OnPropertyChanged(nameof(SyncDetailLabel));
+        _watcher.Watch(repository.LocalPath);
 
-        await RunAsync(async () =>
+        await RunAsync(() => LoadRepositoryAsync(repository, announce: true));
+    }
+
+    /// <summary>
+    /// Something changed on disk under the repository - an editor saved, or git ran in a
+    /// terminal. Reload without the busy strip and without disturbing what the user is in
+    /// the middle of, since they did not ask for this.
+    /// </summary>
+    private async void OnRepositoryChangedOnDisk(object? sender, EventArgs e)
+    {
+        // Our own git operation is already going to reload when it finishes.
+        if (IsBusy || SelectedRepository is not { } repository)
+            return;
+
+        try
         {
-            var path = repository.LocalPath;
+            await LoadRepositoryAsync(repository, announce: false);
+        }
+        catch (Exception ex)
+        {
+            // An automatic refresh is not worth interrupting anyone over; the next
+            // deliberate action will surface the problem properly.
+            Log(ActivityLevel.Trace, $"Automatic refresh failed: {ex.Message}");
+        }
+    }
 
-            var (info, branches, changes, history) = await Task.Run(() => (
-                _git.OpenRepository(path),
-                _git.GetBranches(path),
-                _git.GetWorkingChanges(path),
-                _git.GetHistory(path, HistoryLimit)));
+    /// <param name="announce">
+    /// False for automatic refreshes: keeps the log quiet and preserves the user's
+    /// selection and tick state instead of resetting to defaults.
+    /// </param>
+    private async Task LoadRepositoryAsync(RepositoryInfo repository, bool announce)
+    {
+        var path = repository.LocalPath;
 
-            Ahead = info.Ahead;
-            Behind = info.Behind;
-            LastFetched = info.LastFetched;
+        // Captured before the reload so they can be re-applied to the new instances.
+        var knownPaths = Changes.Select(c => c.Path).ToHashSet();
+        var stagedPaths = Changes.Where(c => c.IsStaged).Select(c => c.Path).ToHashSet();
+        var selectedChangePath = SelectedChange?.Path;
+        var selectedSha = SelectedCommit?.Sha;
+        var selectedCommitFilePath = SelectedCommitFile?.Path;
 
-            Replace(Branches, branches);
-            Replace(History, history);
+        var (info, branches, changes, history) = await Task.Run(() => (
+            _git.OpenRepository(path),
+            _git.GetBranches(path),
+            _git.GetWorkingChanges(path),
+            _git.GetHistory(path, HistoryLimit)));
 
-            foreach (var change in Changes)
-                change.PropertyChanged -= OnChangePropertyChanged;
+        Ahead = info.Ahead;
+        Behind = info.Behind;
+        LastFetched = info.LastFetched;
 
-            Changes.Clear();
-            foreach (var change in changes)
-            {
-                var vm = new FileChangeViewModel(change);
-                vm.PropertyChanged += OnChangePropertyChanged;
-                Changes.Add(vm);
-            }
+        Replace(Branches, branches);
+        Replace(History, history);
 
-            SelectedBranch = Branches.FirstOrDefault(b => b.IsCurrent) ?? Branches.FirstOrDefault();
-            SelectedChange = Changes.FirstOrDefault();
-            SelectedCommit = History.FirstOrDefault();
+        foreach (var change in Changes)
+            change.PropertyChanged -= OnChangePropertyChanged;
 
-            NotifyChangeCountsChanged();
+        Changes.Clear();
+        foreach (var change in changes)
+        {
+            var vm = new FileChangeViewModel(change);
 
-            Log(ActivityLevel.Trace,
-                $"Opened {repository.Name} on {SelectedBranch?.Name ?? "?"} — "
-                + $"{Changes.Count} change{(Changes.Count == 1 ? "" : "s")}, "
-                + $"{Branches.Count} branch{(Branches.Count == 1 ? "" : "es")}"
-                + (info.Ahead > 0 ? $", {info.Ahead} ahead" : string.Empty)
-                + (info.Behind > 0 ? $", {info.Behind} behind" : string.Empty));
-        });
+            // A file we already knew about keeps its tick; anything new arrives ticked,
+            // which is what a fresh listing would have done anyway.
+            if (!announce)
+                vm.IsStaged = !knownPaths.Contains(vm.Path) || stagedPaths.Contains(vm.Path);
+
+            vm.PropertyChanged += OnChangePropertyChanged;
+            Changes.Add(vm);
+        }
+
+        SelectedBranch = Branches.FirstOrDefault(b => b.IsCurrent) ?? Branches.FirstOrDefault();
+
+        SelectedChange = (announce ? null : Changes.FirstOrDefault(c => c.Path == selectedChangePath))
+                         ?? Changes.FirstOrDefault();
+
+        SelectedCommit = (announce ? null : History.FirstOrDefault(c => c.Sha == selectedSha))
+                         ?? History.FirstOrDefault();
+
+        // Reloading the commit replaces its file list, so restore the chosen file once
+        // that has happened rather than now.
+        if (!announce && selectedCommitFilePath is not null)
+            _restoreCommitFilePath = selectedCommitFilePath;
+
+        NotifyChangeCountsChanged();
+
+        if (!announce)
+            return;
+
+        Log(ActivityLevel.Trace,
+            $"Opened {repository.Name} on {SelectedBranch?.Name ?? "?"} — "
+            + $"{Changes.Count} change{(Changes.Count == 1 ? "" : "s")}, "
+            + $"{Branches.Count} branch{(Branches.Count == 1 ? "" : "es")}"
+            + (info.Ahead > 0 ? $", {info.Ahead} ahead" : string.Empty)
+            + (info.Behind > 0 ? $", {info.Behind} behind" : string.Empty));
     }
 
     /// <summary>Commit diffs are loaded only when a commit is actually selected.</summary>
@@ -710,8 +897,15 @@ public partial class MainWindowViewModel : ViewModelBase
             Replace(SelectedCommitFiles, files);
             OnPropertyChanged(nameof(SelectedCommitFilesLabel));
 
-            // Show the first file's diff rather than an empty pane.
-            SelectedCommitFile = SelectedCommitFiles.FirstOrDefault();
+            // Show the first file's diff rather than an empty pane - unless an automatic
+            // refresh asked to put the user back on the file they were reading.
+            SelectedCommitFile =
+                (_restoreCommitFilePath is { } wanted
+                    ? SelectedCommitFiles.FirstOrDefault(f => f.Path == wanted)
+                    : null)
+                ?? SelectedCommitFiles.FirstOrDefault();
+
+            _restoreCommitFilePath = null;
         }
         catch (Exception ex)
         {

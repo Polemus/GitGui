@@ -231,9 +231,9 @@
                     <Button Classes="iconButton" Click="OnToggleTheme" ToolTip.Tip="Toggle theme">
                         <Path Classes="icon" Data="{DynamicResource IconMoon}" x:Name="ThemeIcon" />
                     </Button>
-                    <Button Classes="iconButton" Command="{Binding ShowAccountsCommand}"
-                            ToolTip.Tip="Accounts and hosts">
-                        <Path Classes="icon" Data="{DynamicResource IconPerson}" />
+                    <Button Classes="iconButton" Command="{Binding ShowSettingsCommand}"
+                            ToolTip.Tip="Settings">
+                        <Path Classes="icon" Data="{DynamicResource IconSettings}" />
                     </Button>
                 </StackPanel>
             </Grid>
@@ -247,8 +247,8 @@
 
         <!-- ============================ Content ============================ -->
         <Panel Grid.Row="2">
-            <views:RepositoryView IsVisible="{Binding !IsAccountsPageVisible}" />
-            <views:AccountsView IsVisible="{Binding IsAccountsPageVisible}" />
+            <views:RepositoryView IsVisible="{Binding !IsSettingsPageVisible}" />
+            <views:SettingsView IsVisible="{Binding IsSettingsPageVisible}" />
         </Panel>
 
         <!-- ======================= Activity console ======================= -->

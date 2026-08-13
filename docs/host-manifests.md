@@ -4,6 +4,11 @@ GitGui talks to more than one kind of hosting site. Adding a new one usually nee
 code** — you write a small JSON file describing the site's API, drop it in a folder, and
 restart.
 
+You have two ways to do it. **Settings → Hosting sites → Add a site** fills in the same
+fields through a form and writes the file for you; the rest of this document describes the
+file it writes, which you can also create by hand. Neither route is privileged — a site
+added through the UI is an ordinary JSON file you can edit, copy or delete afterwards.
+
 Put your file here:
 
 | Platform | Folder |

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,8 +25,18 @@ public sealed class HostProviderRegistry
         AllowTrailingCommas = true,
     };
 
+    private static readonly JsonSerializerOptions WriteJson = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     private readonly List<IHostProvider> _providers = [];
     private readonly List<string> _warnings = [];
+
+    private HttpClient _http = null!;
+    private string? _gitHubClientId;
 
     private HostProviderRegistry() { }
 
@@ -40,23 +51,102 @@ public sealed class HostProviderRegistry
 
     public static HostProviderRegistry Create(HttpClient http, string? gitHubClientId = null)
     {
-        var registry = new HostProviderRegistry();
+        var registry = new HostProviderRegistry
+        {
+            _http = http,
+            _gitHubClientId = gitHubClientId
+                              ?? Environment.GetEnvironmentVariable("GITGUI_GITHUB_CLIENT_ID"),
+        };
+
+        registry.Reload();
+        return registry;
+    }
+
+    /// <summary>
+    /// Rebuilds the provider list from disk, in place, so callers holding this registry
+    /// see a host added through the UI without restarting.
+    /// </summary>
+    public void Reload()
+    {
+        _providers.Clear();
+        _warnings.Clear();
 
         // 1. Code providers. GitHub is here only because its browser login can't be
         //    described as data; everything else about it could have been a manifest.
-        registry._providers.Add(new GitHubProvider(
-            http,
-            gitHubClientId ?? Environment.GetEnvironmentVariable("GITGUI_GITHUB_CLIENT_ID")));
+        _providers.Add(new GitHubProvider(_http, _gitHubClientId));
 
         // 2. Manifests shipped with the app. Gitea goes through exactly the same code
         //    path a user-written manifest does, so the format can't quietly rot.
-        registry.LoadBuiltInManifests(http);
+        LoadBuiltInManifests(_http);
 
         // 3. The user's own. These override anything above, so a broken built-in can
         //    always be replaced without waiting for a release.
-        registry.LoadUserManifests(http);
+        LoadUserManifests(_http);
+    }
 
-        return registry;
+    /// <summary>True if this id came from the user's folder, so the UI may edit or delete it.</summary>
+    public bool IsUserDefined(string id) => File.Exists(PathFor(id));
+
+    /// <summary>Reads a user manifest back so it can be edited, or null if there isn't one.</summary>
+    public HostManifest? LoadUserManifest(string id)
+    {
+        var file = PathFor(id);
+        if (!File.Exists(file))
+            return null;
+
+        try
+        {
+            using var stream = File.OpenRead(file);
+            return JsonSerializer.Deserialize<HostManifest>(stream, ManifestJson);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Writes a manifest to the user's folder and reloads. The file is the source of
+    /// truth, exactly as if it had been dropped there by hand - the UI is a convenience
+    /// over the format, not a second way of storing hosts.
+    /// </summary>
+    public void SaveUserManifest(HostManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(manifest.Id))
+            throw new ArgumentException("A host needs an id.", nameof(manifest));
+
+        Directory.CreateDirectory(UserManifestDirectory);
+        File.WriteAllText(PathFor(manifest.Id), JsonSerializer.Serialize(manifest, WriteJson));
+
+        Reload();
+    }
+
+    /// <summary>Deletes a user manifest and reloads. Built-ins are untouched.</summary>
+    public void DeleteUserManifest(string id)
+    {
+        var file = PathFor(id);
+
+        if (File.Exists(file))
+            File.Delete(file);
+
+        Reload();
+    }
+
+    /// <summary>
+    /// One file per id. The id is restricted to characters that are safe in a file name,
+    /// so a manifest can never be made to write outside its own folder.
+    /// </summary>
+    private static string PathFor(string id)
+        => Path.Combine(UserManifestDirectory, $"{Sanitise(id)}.json");
+
+    private static string Sanitise(string id)
+    {
+        var safe = new char[id.Length];
+
+        for (var i = 0; i < id.Length; i++)
+            safe[i] = char.IsLetterOrDigit(id[i]) || id[i] is '-' or '_' ? id[i] : '-';
+
+        return new string(safe);
     }
 
     public IHostProvider? ById(string id)
