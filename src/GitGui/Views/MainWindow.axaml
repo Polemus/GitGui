@@ -292,6 +292,83 @@
 
             <views:CloneView IsVisible="{Binding IsClonePageVisible}" />
             <views:SettingsView IsVisible="{Binding IsSettingsPageVisible}" />
+
+            <!-- Branch switch with uncommitted work. A ContentControl so nothing binds
+                 against a null prompt, and a scrim so the choice has to be made. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasPendingBranchSwitch}">
+                <ContentControl Content="{Binding PendingBranchSwitch}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:BranchSwitchViewModel">
+                            <Border Background="{DynamicResource ElevatedBackground}"
+                                    BorderBrush="{DynamicResource BorderStrong}"
+                                    BorderThickness="1" CornerRadius="10"
+                                    Padding="22" Width="560" MaxHeight="560">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="{Binding Title}" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="{Binding Summary}" />
+
+                                    <StackPanel Spacing="8">
+                                        <RadioButton GroupName="BranchSwitch"
+                                                     IsChecked="{Binding IsBringing, Mode=OneWay}"
+                                                     Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).BringChangesCommand}"
+                                                     Content="Bring my changes with me" />
+                                        <RadioButton GroupName="BranchSwitch"
+                                                     IsChecked="{Binding LeaveEverything, Mode=OneWay}"
+                                                     Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).LeaveChangesCommand}"
+                                                     Content="Leave everything here (stash it)" />
+                                    </StackPanel>
+
+                                    <Expander Header="Choose which files come with you"
+                                              IsVisible="{Binding IsBringing}">
+                                        <StackPanel Spacing="6" Margin="0,8,0,0">
+                                            <CheckBox Content="All files"
+                                                      IsChecked="{Binding AllSelected, Mode=TwoWay}" />
+                                            <Border Classes="divider" />
+                                            <ScrollViewer MaxHeight="220">
+                                                <ItemsControl ItemsSource="{Binding Files}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:FileChangeViewModel">
+                                                            <Grid ColumnDefinitions="Auto,Auto,*"
+                                                                  ColumnSpacing="9" Margin="0,4">
+                                                                <CheckBox Grid.Column="0"
+                                                                          IsChecked="{Binding IsStaged, Mode=TwoWay}"
+                                                                          VerticalAlignment="Center" />
+                                                                <TextBlock Grid.Column="1"
+                                                                           Classes="statusGlyph"
+                                                                           Classes.added="{Binding IsAdded}"
+                                                                           Classes.modified="{Binding IsModified}"
+                                                                           Classes.deleted="{Binding IsDeleted}"
+                                                                           Classes.renamed="{Binding IsRenamed}"
+                                                                           Text="{Binding StatusGlyph}"
+                                                                           VerticalAlignment="Center" />
+                                                                <TextBlock Grid.Column="2" Classes="body"
+                                                                           VerticalAlignment="Center"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           Text="{Binding Path}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                        </StackPanel>
+                                    </Expander>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelBranchSwitchCommand}" />
+                                        <Button Classes="primary" Content="{Binding ConfirmLabel}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmBranchSwitchCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
         </Panel>
 
         <!-- ======================= Activity console ======================= -->

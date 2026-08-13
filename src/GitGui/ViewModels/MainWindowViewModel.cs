@@ -402,6 +402,24 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(CreateBranchCommand))]
     public partial string NewBranchName { get; set; } = string.Empty;
 
+    // ---- Stashes -----------------------------------------------------------
+
+    /// <summary>Stashes belonging to the branch that's checked out. Others stay hidden.</summary>
+    public ObservableCollection<StashInfo> BranchStashes { get; } = [];
+
+    public bool HasBranchStashes => BranchStashes.Count > 0;
+
+    public string StashLabel => BranchStashes.Count == 1
+        ? "You have stashed changes on this branch"
+        : $"You have {BranchStashes.Count} sets of stashed changes on this branch";
+
+    /// <summary>The prompt shown when switching branches would abandon uncommitted work.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingBranchSwitch))]
+    public partial BranchSwitchViewModel? PendingBranchSwitch { get; set; }
+
+    public bool HasPendingBranchSwitch => PendingBranchSwitch is not null;
+
     public bool CanCreateBranch => !string.IsNullOrWhiteSpace(NewBranchName)
                                    && SelectedRepository is not null
                                    && !IsBusy;
@@ -529,39 +547,133 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanCreateBranch))]
     private async Task CreateBranchAsync()
     {
+        var name = NewBranchName.Trim();
+        NewBranchName = string.Empty;
+
+        await BeginBranchSwitchAsync(name, create: true);
+    }
+
+    /// <summary>
+    /// Switching or creating a branch. With uncommitted work in the tree, the user is
+    /// asked what should happen to it first - git would silently carry it across, which
+    /// is right often enough to be the default but wrong often enough to be worth asking.
+    /// </summary>
+    private async Task BeginBranchSwitchAsync(string targetBranch, bool create)
+    {
+        if (SelectedRepository is null)
+            return;
+
+        if (Changes.Count == 0)
+        {
+            await PerformBranchSwitchAsync(targetBranch, create, bringPaths: null);
+            return;
+        }
+
+        PendingBranchSwitch = new BranchSwitchViewModel(
+            SelectedBranch?.Name ?? "this branch", targetBranch, create, Changes);
+    }
+
+    [RelayCommand]
+    private void CancelBranchSwitch() => PendingBranchSwitch = null;
+
+    // The radio buttons drive these rather than binding two-way, so that picking one
+    // can't leave both looking unselected while the other updates.
+    [RelayCommand]
+    private void BringChanges()
+    {
+        if (PendingBranchSwitch is { } pending)
+            pending.LeaveEverything = false;
+    }
+
+    [RelayCommand]
+    private void LeaveChanges()
+    {
+        if (PendingBranchSwitch is { } pending)
+            pending.LeaveEverything = true;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmBranchSwitchAsync()
+    {
+        if (PendingBranchSwitch is not { } pending)
+            return;
+
+        PendingBranchSwitch = null;
+
+        await PerformBranchSwitchAsync(pending.TargetBranch, pending.Create, pending.BringPaths());
+    }
+
+    private async Task PerformBranchSwitchAsync(string targetBranch, bool create, IReadOnlyList<string>? bringPaths)
+    {
         if (SelectedRepository is not { } repo)
             return;
 
         var path = repo.LocalPath;
-        var name = NewBranchName;
+        var stashedSomething = bringPaths is not null;
 
         await RunAsync(async () =>
         {
-            var created = await Task.Run(() => _git.CreateBranch(path, name));
-            Log(ActivityLevel.Success, $"Created and switched to branch {created}");
+            await Task.Run(() => _git.SwitchBranch(path, targetBranch, create, bringPaths));
+
+            Log(ActivityLevel.Success, create
+                ? $"Created and switched to branch {targetBranch}"
+                : $"Switched to branch {targetBranch}");
+
+            if (stashedSomething)
+                Log(ActivityLevel.Info, "Changes left behind were stashed on the previous branch");
         });
 
-        NewBranchName = string.Empty;
+        await OpenRepositoryAsync(repo);
+    }
+
+    // ---- Stashes -----------------------------------------------------------
+
+    [RelayCommand]
+    private async Task RestoreStashAsync()
+    {
+        if (SelectedRepository is not { } repo || BranchStashes.FirstOrDefault() is not { } stash)
+            return;
+
+        var path = repo.LocalPath;
+        var index = stash.Index;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.PopStash(path, index));
+            Log(ActivityLevel.Success, "Restored your stashed changes");
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    [RelayCommand]
+    private async Task DiscardStashAsync()
+    {
+        if (SelectedRepository is not { } repo || BranchStashes.FirstOrDefault() is not { } stash)
+            return;
+
+        var path = repo.LocalPath;
+        var index = stash.Index;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.DropStash(path, index));
+            Log(ActivityLevel.Warning, "Discarded the stashed changes");
+        });
+
         await OpenRepositoryAsync(repo);
     }
 
     [RelayCommand]
     private async Task SelectBranchAsync(BranchInfo branch)
     {
-        if (SelectedRepository is not { } repo || branch.IsCurrent)
+        if (SelectedRepository is null || branch.IsCurrent)
         {
             SelectedBranch = branch;
             return;
         }
 
-        await RunAsync(async () =>
-        {
-            var path = repo.LocalPath;
-            await Task.Run(() => _git.CheckoutBranch(path, branch.Name));
-            Log(ActivityLevel.Success, $"Switched to branch {branch.Name}");
-        });
-
-        await OpenRepositoryAsync(repo);
+        await BeginBranchSwitchAsync(branch.Name, create: false);
     }
 
     [RelayCommand]
@@ -1117,11 +1229,12 @@ public partial class MainWindowViewModel : ViewModelBase
         var selectedSha = SelectedCommit?.Sha;
         var selectedCommitFilePath = SelectedCommitFile?.Path;
 
-        var (info, branches, changes, history) = await Task.Run(() => (
+        var (info, branches, changes, history, stashes) = await Task.Run(() => (
             _git.OpenRepository(path),
             _git.GetBranches(path),
             _git.GetWorkingChanges(path),
-            _git.GetHistory(path, HistoryLimit)));
+            _git.GetHistory(path, HistoryLimit),
+            _git.GetStashes(path)));
 
         Ahead = info.Ahead;
         Behind = info.Behind;
@@ -1149,6 +1262,15 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         SelectedBranch = Branches.FirstOrDefault(b => b.IsCurrent) ?? Branches.FirstOrDefault();
+
+        // Only the current branch's stashes, since that's all the commit box can offer
+        // to restore without switching first.
+        BranchStashes.Clear();
+        foreach (var stash in stashes.Where(s => s.BranchName == SelectedBranch?.Name))
+            BranchStashes.Add(stash);
+
+        OnPropertyChanged(nameof(HasBranchStashes));
+        OnPropertyChanged(nameof(StashLabel));
 
         SelectedChange = (announce ? null : Changes.FirstOrDefault(c => c.Path == selectedChangePath))
                          ?? Changes.FirstOrDefault();

@@ -56,6 +56,24 @@ public sealed class BranchInfo
     public string RelativeTime => TimeFormat.Relative(LastCommitAt);
 }
 
+/// <summary>
+/// One entry on the stash stack. <see cref="BranchName"/> is read back out of git's own
+/// message ("On main: …"), which is the only place the originating branch is recorded.
+/// </summary>
+public sealed class StashInfo
+{
+    /// <summary>Position on the stack. Shifts as entries are added or dropped.</summary>
+    public required int Index { get; init; }
+
+    public required string Message { get; init; }
+
+    public required string BranchName { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public string RelativeTime => TimeFormat.Relative(CreatedAt);
+}
+
 public sealed class CommitInfo
 {
     public required string Sha { get; init; }

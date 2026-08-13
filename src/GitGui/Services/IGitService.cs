@@ -39,6 +39,23 @@ public interface IGitService
     string CreateBranch(string path, string branchName);
 
     /// <summary>
+    /// Switches branch, deciding what happens to uncommitted work first.
+    /// <paramref name="bringPaths"/> lists the files to carry across; everything else
+    /// changed is stashed against the branch being left. Null brings everything, which
+    /// is what a plain checkout does.
+    /// </summary>
+    void SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths);
+
+    /// <summary>Stash entries, newest first, across all branches.</summary>
+    IReadOnlyList<StashInfo> GetStashes(string path);
+
+    /// <summary>Restores a stash into the working tree and removes it from the stack.</summary>
+    void PopStash(string path, int index);
+
+    /// <summary>Throws the stash away without restoring it.</summary>
+    void DropStash(string path, int index);
+
+    /// <summary>
     /// Replaces the last commit with one carrying this message and these paths. Only
     /// valid while the commit has not been pushed, which the caller checks.
     /// </summary>
