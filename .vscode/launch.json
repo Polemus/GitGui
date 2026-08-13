@@ -10,7 +10,16 @@
             "args": [],
             "cwd": "${workspaceFolder}/src/GitGui",
             "console": "internalConsole",
-            "stopAtEntry": false
+            "stopAtEntry": false,
+            // Only step through our own code; framework and Avalonia assemblies
+            // are treated as external (this is the default, stated explicitly).
+            "justMyCode": true,
+            // Suppresses the per-assembly "Loaded '...dll'" chatter in the
+            // Debug Console. Flip moduleLoad back to true if you ever need to
+            // confirm which build of an assembly actually got loaded.
+            "logging": {
+                "moduleLoad": false
+            }
         }
     ]
 }
