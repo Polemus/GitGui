@@ -76,6 +76,14 @@ if [ -n "$missing" ]; then
         echo "both and still exits 0, so it stays usable on a machine without fpm." >&2
     fi
 
+    if printf '%s' "$missing" | grep -q '\.flatpak$'; then
+        echo >&2
+        echo "Missing .flatpak usually means flatpak or org.flatpak.Builder was not" >&2
+        echo "installed on the runner. package.sh treats either as a skip and exits 0." >&2
+        echo "It is also the one Linux artifact that cannot be cross-built, so each" >&2
+        echo "architecture has to come off a runner of that architecture." >&2
+    fi
+
     if printf '%s' "$missing" | grep -q '\.AppImage$'; then
         echo >&2
         echo "Missing .AppImage usually means appimagetool could not be downloaded." >&2

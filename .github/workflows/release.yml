@@ -4,11 +4,13 @@ name: Release
 # GitHub Release.
 #
 # Triggered only by a version tag or a manual dispatch - never on ordinary
-# pushes. Packaging twelve artifacts across three operating systems takes tens of
-# minutes, and none of it tells you anything ci.yml hasn't already.
+# pushes. Packaging fourteen artifacts across three operating systems takes tens
+# of minutes, and none of it tells you anything ci.yml hasn't already.
 #
 # Both Linux RIDs are cross-published from one ubuntu runner, and both macOS RIDs
-# from one macos runner, so this is 3 jobs rather than 5.
+# from one macos runner. The Flatpak is the exception: its build runs inside a
+# sandbox using the runtime for the host architecture, so it cannot be
+# cross-built and needs one runner per architecture of its own.
 #
 # contents: write below is the only elevated permission in this repository, and it
 # is why this workflow must never gain a pull_request trigger - that would hand a
@@ -98,6 +100,67 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # ---------------------------------------------------------------- flatpak
+  # One runner per architecture, because a Flatpak build happens inside a sandbox
+  # running the runtime for the machine it is on - there is no cross-build.
+  # fail-fast is off so a broken aarch64 build still leaves an x86_64 one to look
+  # at, which is most of what tells you whether the problem is the architecture.
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    needs: [version, test]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - uses: actions/checkout@v7
+
+      # No setup-dotnet here: the SDK comes from the Flatpak extension, inside
+      # the sandbox. A .NET on the runner would not be visible to the build and
+      # would only make it look as though the version on the runner mattered.
+      - name: Install flatpak and the builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.flatpak.Builder \
+            org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08 \
+            org.freedesktop.Sdk.Extension.dotnet10//25.08
+
+      # Catches a PackageReference bumped without regenerating the offline NuGet
+      # lists, before spending twenty minutes finding out the same thing from a
+      # restore error. ci.yml runs this too, on every push.
+      - name: Check the offline NuGet lists
+        run: ./build/linux/flatpak/check-nuget-sources.sh
+
+      - name: Package
+        run: ./build/linux/flatpak/package.sh "${{ needs.version.outputs.version }}"
+
+      # Runs after packaging because it lints the exported repository as well as
+      # the manifest, and that only exists once the build has happened. It is the
+      # same linter Flathub runs on a submission.
+      - name: Validate the manifest and the build
+        run: ./build/linux/flatpak/validate.sh --repo
+
+      # package.sh exits 0 when flatpak is missing, same as the others.
+      - name: Verify the Flatpak artifact
+        run: ./build/verify-artifacts.sh "${{ needs.version.outputs.version }}" --dir dist flatpak-${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-${{ matrix.arch }}
+          path: dist/*.flatpak
+          if-no-files-found: error
+
   # ---------------------------------------------------------------- windows
   windows:
     name: Windows (installer, zip)
@@ -166,7 +229,7 @@ jobs:
   # ---------------------------------------------------------------- release
   release:
     name: Publish release
-    needs: [version, linux, windows, macos]
+    needs: [version, linux, flatpak, windows, macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -202,7 +265,7 @@ jobs:
 
           ## Install
 
-          **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), the \`.AppImage\` (anywhere else — \`chmod +x\` it and run it, no install), or the portable \`.tar.gz\`.
+          **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), \`.flatpak\` (\`flatpak install ./GitGui-${VERSION}-x86_64.flatpak\`), the \`.AppImage\` (anywhere else — \`chmod +x\` it and run it, no install), or the portable \`.tar.gz\`.
           **Windows** — run the \`-setup.exe\`, or unzip the portable build.
           **macOS** — open the \`.dmg\` and drag GitGui to Applications.
 

@@ -133,8 +133,19 @@ that was never committed — the one place in this codebase where a bug is unrec
 **ImageMagick: `-background none` must come *before* the input file.** After it, the SVG
 has already been rasterised onto white and the alpha is gone.
 
-**Both packaging scripts exit 0 when a tool is missing**, and `gh release upload` has
-exited 0 having quietly not uploaded two of twelve assets. That is how 0.2.0 first
+**Every packaging script exits 0 when a tool is missing**, and `gh release upload` has
+exited 0 having quietly not uploaded two of the release's assets. That is how 0.2.0 first
 shipped with no `.deb` at all. `build/verify-artifacts.sh` exists because nothing short
 of asking the published release what it actually contains catches either failure — both
 look like a green build.
+
+**`--socket=fallback-x11` is the wrong permission for an Avalonia app.** Avalonia 12 has
+no Wayland backend — it draws through XWayland — and `fallback-x11` hands over the X
+socket only when the app has *no* Wayland socket. Pair it with `--socket=wayland`, as
+almost every Flatpak does, and X11 gets withheld from exactly the desktops that need it:
+the app dies at startup with `XOpenDisplay failed`. `--socket=x11`, and nothing else.
+
+**A Flatpak build has no network, so `nuget-sources-*.json` is part of the source.** Bump
+a `PackageReference` without regenerating it and every other artifact still builds; the
+Flatpak fails partway through a release with a restore error. `check-nuget-sources.sh`
+runs in CI to make that a push-time failure instead. See [flatpak.md](flatpak.md).

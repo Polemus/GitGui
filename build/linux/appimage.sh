@@ -86,11 +86,13 @@ exec "$HERE/usr/lib/gitgui/GitGui" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
 
-# appimagetool wants the desktop entry and the icon at the top of the AppDir,
-# and desktop integration reads the icon from .DirIcon.
-cp "$ROOT/build/linux/gitgui.desktop" "$APPDIR/gitgui.desktop"
-cp "$ROOT/build/linux/icons/gitgui-256.png" "$APPDIR/gitgui.png"
-cp "$APPDIR/gitgui.png" "$APPDIR/.DirIcon"
+# appimagetool wants the desktop entry and the icon at the top of the AppDir, and
+# the icon file has to be named after the entry's Icon= key or it refuses to
+# build. Desktop integration reads the icon from .DirIcon.
+APP_ID=io.github.polemus.GitGui
+cp "$ROOT/build/linux/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
+cp "$ROOT/build/linux/icons/gitgui-256.png" "$APPDIR/$APP_ID.png"
+cp "$APPDIR/$APP_ID.png" "$APPDIR/.DirIcon"
 
 echo "==> Building the AppImage"
 mkdir -p "$DIST"

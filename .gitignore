@@ -5,6 +5,11 @@ dist/
 build/.stage-*/
 build/.appdir-*/
 build/.tools/
+build/.nuget-restore/
+build/.flatpak-builder/
+build/.flatpak-repo/
+# flatpak-builder --show-manifest makes this at the root whatever you ask for.
+.flatpak-builder/
 
 # .NET
 *.user

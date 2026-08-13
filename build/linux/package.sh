@@ -45,15 +45,26 @@ chmod +x "$STAGE/usr/lib/gitgui/GitGui"
 ln -sf ../lib/gitgui/GitGui "$STAGE/usr/bin/gitgui"
 
 echo "==> Laying out desktop integration"
-install -Dm644 "$ROOT/build/linux/gitgui.desktop" \
-    "$STAGE/usr/share/applications/gitgui.desktop"
+
+# Everything a desktop environment reads is named after the app id, not the
+# binary: that is what Flatpak requires and what lets one desktop entry and one
+# metainfo file serve all four package formats. The command stays "gitgui".
+APP_ID=io.github.polemus.GitGui
+
+install -Dm644 "$ROOT/build/linux/$APP_ID.desktop" \
+    "$STAGE/usr/share/applications/$APP_ID.desktop"
+
+# Without this a software centre lists GitGui as a bare package name and no
+# description. It is the same file the Flatpak ships.
+install -Dm644 "$ROOT/build/linux/$APP_ID.metainfo.xml" \
+    "$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 
 for size in 16 32 48 64 128 256; do
     install -Dm644 "$ROOT/build/linux/icons/gitgui-${size}.png" \
-        "$STAGE/usr/share/icons/hicolor/${size}x${size}/apps/gitgui.png"
+        "$STAGE/usr/share/icons/hicolor/${size}x${size}/apps/$APP_ID.png"
 done
 install -Dm644 "$ROOT/src/GitGui/Assets/gitgui.svg" \
-    "$STAGE/usr/share/icons/hicolor/scalable/apps/gitgui.svg"
+    "$STAGE/usr/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 
 echo "==> Portable tarball"
 tar -czf "$DIST/GitGui-$VERSION-$RID.tar.gz" -C "$STAGE/usr/lib" gitgui

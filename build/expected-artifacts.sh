@@ -3,7 +3,13 @@
 # Prints the artifacts a complete release contains, one filename per line.
 #
 # Usage: build/expected-artifacts.sh <version> [group]
-#   group: linux | windows | macos | all   (default: all)
+#   group: linux | flatpak | flatpak-x86_64 | flatpak-aarch64
+#          | windows | macos | all          (default: all)
+#
+# The Flatpak is split by architecture because, unlike everything else on Linux,
+# it cannot be cross-built - the build runs inside a sandbox using the runtime
+# for the host architecture, so each one comes off its own runner and each runner
+# can only be asked about its own.
 #
 # This is the single place that knows what "complete" means. The packaging
 # scripts each decide their own filenames, so this list has to agree with them;
@@ -27,6 +33,10 @@ linux_artifacts() {
     echo "GitGui-$VERSION-aarch64.AppImage"
 }
 
+flatpak_artifacts() {  # flatpak_artifacts <flatpak-arch>
+    echo "GitGui-$VERSION-$1.flatpak"
+}
+
 windows_artifacts() {
     echo "GitGui-$VERSION-win-x64-setup.exe"
     echo "GitGui-$VERSION-win-x64.zip"
@@ -38,9 +48,22 @@ macos_artifacts() {
 }
 
 case "$GROUP" in
-    linux)   linux_artifacts ;;
-    windows) windows_artifacts ;;
-    macos)   macos_artifacts ;;
-    all)     linux_artifacts; windows_artifacts; macos_artifacts ;;
-    *) echo "unknown group: $GROUP (expected linux, windows, macos or all)" >&2; exit 1 ;;
+    linux)           linux_artifacts ;;
+    flatpak)         flatpak_artifacts x86_64; flatpak_artifacts aarch64 ;;
+    flatpak-x86_64)  flatpak_artifacts x86_64 ;;
+    flatpak-aarch64) flatpak_artifacts aarch64 ;;
+    windows)         windows_artifacts ;;
+    macos)           macos_artifacts ;;
+    all)
+        linux_artifacts
+        flatpak_artifacts x86_64
+        flatpak_artifacts aarch64
+        windows_artifacts
+        macos_artifacts
+        ;;
+    *)
+        echo "unknown group: $GROUP" >&2
+        echo "expected linux, flatpak, flatpak-x86_64, flatpak-aarch64, windows, macos or all" >&2
+        exit 1
+        ;;
 esac

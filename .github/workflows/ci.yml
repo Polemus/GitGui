@@ -57,3 +57,36 @@ jobs:
       # Pure functions only, so this needs no display, no network and no git.
       - name: Test
         run: dotnet test GitGui.slnx --configuration Release --no-build --verbosity normal
+
+  # The Linux packages carry a desktop entry and an AppStream file that nothing
+  # in the build compiles, so a mistake in either is invisible until a software
+  # centre quietly ignores the app - or, for the Flatpak, until a release is
+  # already running. All three checks are seconds long and need no .NET.
+  packaging:
+    name: Packaging metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends appstream desktop-file-utils
+
+      # --no-net because a release should not be able to fail on whether
+      # github.com answered a HEAD request from a CI runner today.
+      - name: Validate the AppStream metainfo
+        run: |
+          appstreamcli validate --explain --no-net --strict \
+            build/linux/io.github.polemus.GitGui.metainfo.xml
+
+      - name: Validate the desktop entry
+        run: desktop-file-validate build/linux/io.github.polemus.GitGui.desktop
+
+      # The one that catches Dependabot: a Flatpak build has no network and can
+      # only install the packages listed ahead of time, so a bumped
+      # PackageReference has to come with regenerated lists.
+      - name: Check the offline NuGet lists
+        run: ./build/linux/flatpak/check-nuget-sources.sh

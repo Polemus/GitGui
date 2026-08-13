@@ -1,0 +1,20 @@
+# Named after the app id rather than the binary, because Flatpak requires every
+# exported file to carry the app id, and AppStream needs this file name to match
+# the <launchable> in io.github.polemus.GitGui.metainfo.xml. The .deb, .rpm and
+# AppImage install it under the same name so there is only one of these.
+#
+# Exec=gitgui works in all four: /usr/bin/gitgui is a symlink in the packages,
+# /app/bin/gitgui is one in the Flatpak, and the AppImage starts through AppRun.
+# No %U or %F - the app takes no path argument, so promising to accept one would
+# only mean a file manager handing it something it ignores.
+[Desktop Entry]
+Type=Application
+Name=GitGui
+GenericName=Git Client
+Comment=Desktop git client for GitHub, Gitea and other forges
+Exec=gitgui
+Icon=io.github.polemus.GitGui
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;github;gitea;version control;vcs;
+StartupWMClass=GitGui

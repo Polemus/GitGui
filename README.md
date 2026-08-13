@@ -26,11 +26,16 @@ users don't need git, .NET, or anything else installed. See [Does it need git?](
 | --- | --- |
 | Debian, Ubuntu, Mint | `.deb` |
 | Fedora, RHEL, openSUSE | `.rpm` |
+| Any Linux, sandboxed | `.flatpak` — `flatpak install ./GitGui-*.flatpak` |
 | Any other Linux | `.AppImage` — `chmod +x` it and run it, nothing to install |
 | Windows | `-setup.exe`, or the `.zip` for a portable copy |
 | macOS | `.dmg` — drag GitGui to Applications |
 
 Both x64 and arm64 are built for Linux and macOS; Windows is x64.
+
+The Flatpak sees your home directory, `/mnt`, `/media` and `/run/media`, which is
+where repositories nearly always are. If yours are somewhere else,
+`flatpak override --user --filesystem=host io.github.polemus.GitGui` widens it.
 
 **The builds are unsigned**, so the first launch needs a nudge past the OS — once, then
 never again:
@@ -234,6 +239,7 @@ behaves identically on all three platforms.
 | [docs/architecture.md](docs/architecture.md) | The layers and *why* they're shaped this way |
 | [docs/notes.md](docs/notes.md) | Decisions that look arbitrary and aren't, plus every Avalonia and libgit2 trap already paid for |
 | [docs/host-manifests.md](docs/host-manifests.md) | How to add a hosting site by writing one JSON file |
+| [docs/flatpak.md](docs/flatpak.md) | The Flatpak: what the sandbox is allowed to do, why the NuGet lists are checked in, and how a release reaches Flathub |
 | [CONTRIBUTING.md](.github/CONTRIBUTING.md) | Building it, running the tests, and what a good pull request looks like |
 | [SECURITY.md](.github/SECURITY.md) | Reporting a vulnerability privately, and what's in scope |
 
@@ -326,6 +332,9 @@ Each script publishes a **self-contained** build, so end users don't need .NET i
 ./build/linux/package.sh linux-x64 0.2.0
 ./build/linux/package.sh linux-arm64 0.2.0
 
+# Linux — .flatpak  (needs flatpak: flatpak install flathub org.flatpak.Builder)
+./build/linux/flatpak/package.sh 0.2.0
+
 # macOS — .app bundle inside a .dmg  (run on macOS)
 ./build/macos/package.sh osx-arm64 0.2.0
 
@@ -349,6 +358,14 @@ The architecture of the output comes from the runtime handed to `appimagetool`, 
 the machine running it, so the arm64 AppImage cross-builds from an x64 runner like the
 rest of the Linux artifacts.
 
+**The Flatpak is the exception to that.** Its build runs inside a sandbox on the runtime
+for the host architecture, so it cannot be cross-built and each architecture needs a
+runner of its own. It also builds with no network at all, which means every NuGet package
+has to be listed and hashed in advance — so **bumping a `PackageReference` means
+regenerating `build/linux/flatpak/nuget-sources-*.json`**, and CI checks that you did.
+[docs/flatpak.md](docs/flatpak.md) covers that, the permissions the sandbox asks for and
+why, and how a release reaches Flathub.
+
 ## Releasing
 
 Tag and push:
@@ -365,25 +382,29 @@ attaches the results to a GitHub Release:
 | Platform | Artifacts |
 | --- | --- |
 | Linux x64 / arm64 | `.deb`, `.rpm`, `.tar.gz`, `.AppImage` |
+| Linux x86_64 / aarch64 | `.flatpak`, one runner each — it is the one thing here that can't cross-build |
 | Windows x64 | `-setup.exe`, `.zip` |
 | macOS arm64 / x64 | `.dmg` |
 
 You can also run it manually from the Actions tab and pass a version.
 
 **Every release is checked against a list of what it should contain.**
-`build/expected-artifacts.sh` names the twelve files a complete release has, and
+`build/expected-artifacts.sh` names the fourteen files a complete release has, and
 `build/verify-artifacts.sh` enforces it — once on each runner right after packaging,
-once when the three sets are gathered together, and once against the published release
-itself. That last one is the one that matters: both packaging scripts treat a missing
-tool as a skip and still exit 0, and `gh release upload` has exited 0 having quietly not
-uploaded two of the twelve. Every one of those failures has happened, and all of them
+once when every set is gathered together, and once against the published release
+itself. That last one is the one that matters: every packaging script treats a missing
+tool as a skip and still exits 0, and `gh release upload` has exited 0 having quietly not
+uploaded two of them. Every one of those failures has happened, and all of them
 looked like a green build.
 
 **On CI shape:** the release workflow runs **only** on tags or manual dispatch, and
 cross-publishes both Linux RIDs from one Linux runner and both macOS RIDs from one macOS
-runner — 3 jobs instead of 5. Everyday CI is Linux-only and build-only, because this is
+runner. Only the Flatpak needs a runner per architecture, because it is the one artifact
+that cannot be cross-built. Everyday CI is Linux-only and build-only, because this is
 one codebase with no per-platform branches, so a three-platform matrix on every push
-would mostly buy you a longer wait for the same answer.
+would mostly buy you a longer wait for the same answer — plus a few seconds validating
+the desktop entry, the AppStream file and the Flatpak's NuGet lists, none of which the
+build would ever notice were wrong.
 
 ## Known gaps
 
@@ -407,9 +428,10 @@ would mostly buy you a longer wait for the same answer.
 - **Installers are ~45 MB** because each build bundles the .NET runtime. Enabling
   `PublishTrimmed` would cut that substantially, but Avalonia needs trimming feed
   configuration and `ViewLocator`'s reflection would have to go first.
-- **No Flatpak.** The `.AppImage` covers distros without `.deb` or `.rpm`. It carries no
-  AppStream metainfo yet, so it won't show up with a description in software centres that
-  index AppImages.
+- **Not on Flathub yet.** The Flatpak builds, and every release attaches one, but it is
+  installed from a `.flatpak` file rather than from `flatpak install flathub gitgui`.
+  Getting there is a pull request against `flathub/flathub` and a review of the sandbox
+  permissions; [docs/flatpak.md](docs/flatpak.md) has the steps and the arguments.
 
 ## Contributing
 
