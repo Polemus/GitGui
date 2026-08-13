@@ -137,6 +137,10 @@ modules:
           /app/share/applications/io.github.polemus.GitGui.desktop
       - install -Dm644 build/linux/io.github.polemus.GitGui.metainfo.xml
           /app/share/metainfo/io.github.polemus.GitGui.metainfo.xml
+
+      # Flathub asks that the licence ship at this exact path. $FLATPAK_DEST is
+      # /app, and using it rather than writing /app is the convention there.
+      - install -Dm644 LICENSE "$FLATPAK_DEST/share/licenses/$FLATPAK_ID/LICENSE"
       - |
         set -eu
         for size in 16 32 48 64 128 256; do

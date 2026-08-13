@@ -1,0 +1,173 @@
+name: Flathub
+
+# Opens the pull request that publishes a release on Flathub.
+#
+# Flathub builds from its own repository, flathub/io.github.polemus.GitGui, and
+# maintainers cannot push to its protected branch - every update is a pull
+# request there. That pull request is all this makes: regenerate the manifest
+# from the tag, drop it and the NuGet lists into a branch, open the PR. Flathub's
+# bot then builds it and comments with an installable bundle, you install that
+# and check it, and merging publishes within an hour or two.
+#
+# Deliberately not automatic past that point. The test build exists to be tried,
+# and a git client that eats somebody's uncommitted work is not the thing to find
+# out about after publishing.
+#
+# Nothing here runs until the app has been accepted onto Flathub and FLATHUB_TOKEN
+# exists; before that the job says so and stops. See docs/flatpak.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (without the leading v)'
+        required: true
+
+  # Releases created with the workflow's own GITHUB_TOKEN do not raise a release
+  # event - that is GitHub's loop protection - so watching the Release workflow
+  # is what makes this happen on its own.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+# The GitHub token is only ever used to read this repository. Everything done to
+# the Flathub repository uses FLATHUB_TOKEN, which is scoped to that repository
+# alone and to nothing in this one.
+permissions:
+  contents: read
+
+concurrency:
+  group: flathub
+  cancel-in-progress: false
+
+jobs:
+  pull-request:
+    name: Open a Flathub pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # workflow_run fires whatever the release did, including failing halfway
+    # through. Only a release that produced all fourteen artifacts should reach
+    # Flathub.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Work out which version this is
+        id: target
+        env:
+          # For a tag push, the run that triggered this one has the tag as its
+          # head_branch. A release from a branch would not, which is what the
+          # v-prefix check below is for.
+          DISPATCH_VERSION: ${{ inputs.version }}
+          TRIGGERING_REF: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            tag="v${DISPATCH_VERSION}"
+          else
+            tag="${TRIGGERING_REF}"
+          fi
+
+          case "$tag" in
+              v[0-9]*) ;;
+              *)
+                  echo "::notice::$tag is not a version tag - nothing to publish"
+                  echo "skip=yes" >> "$GITHUB_OUTPUT"
+                  exit 0
+                  ;;
+          esac
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check there is somewhere to publish to
+        id: token
+        if: steps.target.outputs.skip != 'yes'
+        run: |
+          if [ -z "${{ secrets.FLATHUB_TOKEN }}" ]; then
+            echo "::notice::FLATHUB_TOKEN is not set, so GitGui is not on Flathub yet."
+            echo "::notice::docs/flatpak.md has the one-time submission steps."
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The tag, not the default branch: the manifest has to be generated from
+      # the same commit it pins, or it would describe a build nobody ran.
+      - uses: actions/checkout@v7
+        if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+          # flathub-manifest.sh resolves the tag and refuses to pin a commit that
+          # was never pushed, both of which need more than a shallow clone.
+          fetch-depth: 0
+
+      - name: Generate the Flathub manifest
+        if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
+        run: ./build/linux/flatpak/flathub-manifest.sh "${{ steps.target.outputs.version }}"
+
+      - name: Check out the Flathub repository
+        if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
+        uses: actions/checkout@v7
+        with:
+          repository: flathub/io.github.polemus.GitGui
+          token: ${{ secrets.FLATHUB_TOKEN }}
+          path: flathub
+
+      - name: Commit and open the pull request
+        if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          VERSION: ${{ steps.target.outputs.version }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd flathub
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          branch="gitgui-$VERSION"
+          git checkout -b "$branch"
+
+          # Copy rather than mirror: the Flathub repository owns files we do not,
+          # flathub.json among them, and deleting one would change how the app is
+          # built without anything here having decided to.
+          cp ../dist/flathub/* .
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::notice::Flathub already has $VERSION - nothing to do"
+            exit 0
+          fi
+
+          git commit -m "GitGui $VERSION"
+          git push --force-with-lease -u origin "$branch"
+
+          # An open pull request for this version means this is a re-run, and the
+          # push above has already updated it.
+          if gh pr view "$branch" --json number >/dev/null 2>&1; then
+            echo "::notice::Updated the existing pull request for $VERSION"
+            exit 0
+          fi
+
+          # A file rather than an inline --body, so the Markdown is readable here
+          # and arrives without the line continuations an inline string needs.
+          # The delimiter is unquoted because $TAG has to expand; the backticks
+          # are escaped for the same reason.
+          cat > /tmp/pr-body.md <<BODY
+          Built from [\`$TAG\`](https://github.com/Polemus/GitGui/releases/tag/$TAG).
+
+          Opened automatically by \`.github/workflows/flathub.yml\` in
+          [Polemus/GitGui](https://github.com/Polemus/GitGui), from the manifest that
+          \`build/linux/flatpak/flathub-manifest.sh\` generates. The offline NuGet lists
+          are regenerated upstream whenever a dependency changes, and checked against the
+          project file on every push, so they match the commit pinned here.
+
+          \`bot, build\`
+          BODY
+
+          gh pr create \
+            --base master \
+            --head "$branch" \
+            --title "GitGui $VERSION" \
+            --body-file /tmp/pr-body.md

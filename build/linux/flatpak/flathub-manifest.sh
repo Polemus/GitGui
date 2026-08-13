@@ -33,6 +33,18 @@ fi
 
 URL="$(git -C "$ROOT" remote get-url origin | sed 's/\.git$//').git"
 
+# Flathub shows the newest <release> in the metainfo as the release notes, and
+# rejects a submission whose newest release is not the version being built. It is
+# the easiest thing in the world to forget, and the place you find out is a
+# review comment days later.
+NEWEST="$(sed -n 's/.*<release version="\([^"]*\)".*/\1/p' \
+    "$ROOT/build/linux/$APP_ID.metainfo.xml" | head -n1)"
+if [ "$NEWEST" != "$VERSION" ]; then
+    echo "!! the metainfo's newest release is $NEWEST, but this is $VERSION" >&2
+    echo "   add a <release> for $VERSION to build/linux/$APP_ID.metainfo.xml" >&2
+    exit 1
+fi
+
 if ! COMMIT="$(git -C "$ROOT" rev-parse --verify "$REF^{commit}" 2>/dev/null)"; then
     echo "!! $REF is not a commit in this repository" >&2
     echo "   tag the release first, or pass --ref <branch-or-sha>" >&2

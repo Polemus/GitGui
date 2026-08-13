@@ -142,7 +142,7 @@ screenshots this metainfo points at, mirrors them to `dl.flathub.org` and
 rewrites the URLs into the repository. Nothing built on your machine can have
 done that.
 
-## Submitting to Flathub
+## The generated manifest
 
 Flathub builds from its own copy of the manifest, in a repository it owns, and it
 clones the source itself — so its manifest cannot use the `type: dir` source that
@@ -156,30 +156,114 @@ git push origin v0.3.0
 ./build/linux/flatpak/flathub-manifest.sh 0.3.0
 ```
 
-That writes `dist/flathub/` — the manifest with the source swapped for a `type:
-git` pinned to the tag and its commit, plus the two NuGet lists. It refuses to
-run against a commit that has not been pushed, because Flathub would not be able
-to fetch it.
+That writes `dist/flathub/`: the manifest with its source swapped for a `type:
+git` pinned to the tag *and* its commit, plus the two NuGet lists. It refuses to
+run if the commit has not been pushed — Flathub could not fetch it — or if the
+newest `<release>` in the metainfo is not the version being built, which is a
+rejection on Flathub's side and easy to forget.
 
-First submission:
+Two versions have to agree before any of this, and both are checked:
 
-1. Fork `github.com/flathub/flathub` and branch from `new-pr`.
-2. Add the three files from `dist/flathub/` at the root.
-3. Open a pull request against `new-pr`. A bot builds it and comments; a reviewer
-   then looks at the permissions — expect to justify `--filesystem=home`, and
-   point at the reasoning above.
-4. Once merged, Flathub creates `flathub/io.github.polemus.GitGui`.
+- **`<Version>` in `GitGui.csproj`** decides what the app reports. The Flatpak
+  build never passes `-p:Version`, on purpose, because Flathub would not either.
+  `package.sh` refuses to build if the version you ask for and the csproj
+  disagree.
+- **The newest `<release>` in the metainfo** is what Flathub shows as the release
+  notes. `flathub-manifest.sh` refuses to generate anything if it doesn't match.
 
-Afterwards, each release is a pull request to that repository with a regenerated
-manifest. The `x-checker-data` on the libsecret source lets Flathub's update bot
-propose libsecret bumps on its own.
+## The one-time submission
 
-Two things to keep in step by hand:
+This happens once, by hand, and only you can do it — it needs your GitHub account
+and a human reviewer.
 
-- **The `<releases>` block in the metainfo.** Flathub shows the newest entry as
-  the release notes, and a submission whose newest release does not match the
-  version being built gets rejected.
-- **`<Version>` in `GitGui.csproj`.** The Flatpak build never passes
-  `-p:Version`, on purpose — Flathub would not either — so the csproj is the only
-  thing that decides what the app reports. `package.sh` refuses to build if the
-  version you asked for and the csproj disagree.
+**Before starting**, tag and release the version you want to submit, and check
+the build the same way Flathub will:
+
+```bash
+./build/linux/flatpak/package.sh 0.3.0 --install
+flatpak run io.github.polemus.GitGui        # actually use it
+./build/linux/flatpak/validate.sh --repo
+```
+
+Then:
+
+1. **Fork `github.com/flathub/flathub`** and clone the `new-pr` branch — not
+   `master`:
+
+   ```bash
+   git clone --branch=new-pr git@github.com:<you>/flathub.git
+   cd flathub
+   git checkout -b add-io.github.polemus.GitGui new-pr
+   ```
+
+2. **Copy in `dist/flathub/`** — the manifest and both NuGet lists — at the root
+   of the repository. Nothing else: the metainfo, the desktop entry and the icons
+   are installed by the build from the GitGui repository, which is where Flathub
+   prefers them.
+
+3. **Open a pull request against `new-pr`**, titled
+   `Add io.github.polemus.GitGui`. Opening it against `master` is the usual
+   mistake.
+
+4. **Comment `bot, build`.** Flathub builds it for both architectures and
+   comments with an installable bundle. Install that and try it — this is the
+   first time anything has run the aarch64 build.
+
+5. **Expect a question about `--filesystem=home`.** It is an error to the linter,
+   and the reviewer will want the reasoning: repositories are wherever the user
+   put them, libgit2 opens them by path, and a portal document handle is not
+   something it can pass to `git_repository_open`. The argument in full is
+   further up this page. Reviewers are volunteers; a few days of silence is
+   normal.
+
+6. **On merge**, Flathub creates `flathub/io.github.polemus.GitGui` and invites
+   you as maintainer. **Accept within a week**, and note it requires 2FA on your
+   GitHub account. The app appears on flathub.org within a few hours.
+
+Afterwards, consider [verifying the app](https://docs.flathub.org/docs/for-app-authors/verification)
+through your GitHub account, which is straightforward for an `io.github.*` id and
+puts a verified badge on the listing.
+
+## Automating every release after that
+
+Updates never go through submission again. Each one is a pull request to
+`flathub/io.github.polemus.GitGui` — and maintainers cannot push to its protected
+branch, so a pull request is the only route regardless.
+
+`.github/workflows/flathub.yml` opens it. It runs when the Release workflow
+finishes successfully on a tag, or manually from the Actions tab with a version.
+It checks out that tag, runs `flathub-manifest.sh`, commits the result to a
+`gitgui-<version>` branch of the Flathub repository and opens the pull request
+with `bot, build` in the body.
+
+**It needs one secret, and does nothing until it exists.** Before the app is
+accepted there is no repository to push to, so the job says so and stops rather
+than failing every release.
+
+1. Create a **fine-grained personal access token** at
+   [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens),
+   with access to `flathub/io.github.polemus.GitGui` only, and repository
+   permissions **Contents: read and write** and **Pull requests: read and write**.
+   Nothing else, and nothing on this repository — the workflow reads GitGui with
+   the ordinary `GITHUB_TOKEN`.
+2. Add it to GitGui as the repository secret **`FLATHUB_TOKEN`**.
+
+Then a release publishes itself as far as a pull request with a green test build,
+and stops there for you to install it and merge. That last step is deliberately
+manual: the test build exists to be tried, and a git client that eats somebody's
+uncommitted work is not a thing to discover after publishing.
+
+### What is deliberately *not* automated
+
+Flathub runs an external data checker across the whole organisation every two
+hours, which reads `x-checker-data` and opens update pull requests on its own.
+The libsecret source has one, so libsecret bumps arrive without anyone doing
+anything.
+
+**The GitGui source deliberately does not.** A checker that noticed a new tag
+would bump the commit without regenerating `nuget-sources-*.json` — and the moment
+a release also changed a `PackageReference`, that pull request would be a build
+failure nobody asked for. Our own workflow moves the two together or not at all.
+
+For the same reason, don't turn on `automerge-flathubbot-prs` in a `flathub.json`
+here.

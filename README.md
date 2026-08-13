@@ -388,6 +388,11 @@ attaches the results to a GitHub Release:
 
 You can also run it manually from the Actions tab and pass a version.
 
+Once GitGui is on Flathub, `flathub.yml` picks up from there: a successful release
+opens the pull request that publishes it, leaving the test build for a human to install
+and merge. It needs one repository secret and does nothing at all until that exists —
+[docs/flatpak.md](docs/flatpak.md) has both the one-time submission and the token.
+
 **Every release is checked against a list of what it should contain.**
 `build/expected-artifacts.sh` names the fourteen files a complete release has, and
 `build/verify-artifacts.sh` enforces it — once on each runner right after packaging,
