@@ -153,7 +153,9 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
         }
         catch (HttpRequestException ex)
         {
-            throw new HostProviderException($"Could not reach {url.Host}: {ex.Message}", ex);
+            // The whole URL, not just the host: when this is wrong it is nearly always
+            // the path that is wrong, and the host alone gives nothing to correct.
+            throw new HostProviderException($"Could not reach {url}: {ex.Message}", ex);
         }
 
         using (response)
@@ -162,7 +164,7 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
                 throw new HostProviderException("The token was rejected. Check it has not expired and has the right scopes.");
 
             if (!response.IsSuccessStatusCode)
-                throw new HostProviderException($"{url.Host} returned {(int)response.StatusCode} {response.ReasonPhrase}.");
+                throw new HostProviderException($"{url} returned {(int)response.StatusCode} {response.ReasonPhrase}.");
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
@@ -172,7 +174,7 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
             }
             catch (JsonException ex)
             {
-                throw new HostProviderException($"{url.Host} returned something that isn't JSON.", ex);
+                throw new HostProviderException($"{url} returned something that isn't JSON.", ex);
             }
         }
     }

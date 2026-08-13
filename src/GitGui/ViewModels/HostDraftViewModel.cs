@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using GitGui.HostProviders;
 
@@ -79,6 +80,49 @@ public partial class HostDraftViewModel : ObservableObject
                            && !string.IsNullOrWhiteSpace(CurrentUserEndpoint);
 
     public string Title => IsEditing ? $"Editing {DisplayName}" : "Add a hosting site";
+
+    // ---- Testing it against a real server -----------------------------------
+    // A manifest is only right about a server that exists, so the form carries the
+    // URL to try it against. Neither of these two ends up in the manifest.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanTest))]
+    public partial string TestUrl { get; set; } = string.Empty;
+
+    /// <summary>Held only for the length of the test. Never written to the manifest.</summary>
+    [ObservableProperty]
+    public partial string TestToken { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanTest))]
+    public partial bool IsTesting { get; set; }
+
+    public ObservableCollection<ProbeStepViewModel> TestSteps { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTestResult))]
+    public partial string? TestSummary { get; set; }
+
+    [ObservableProperty]
+    public partial bool TestPassed { get; set; }
+
+    public bool HasTestResult => TestSummary is not null;
+
+    /// <summary>A URL is all that is needed; without a token the test just checks less.</summary>
+    public bool CanTest => !IsTesting && HostConnectionTester.TryParseBaseUrl(TestUrl, out _);
+
+    public void ShowTestResult(HostConnectionReport report)
+    {
+        TestSteps.Clear();
+
+        foreach (var step in report.Steps)
+            TestSteps.Add(new ProbeStepViewModel(step));
+
+        TestPassed = report.Passed;
+        TestSummary = report.Passed
+            ? "Everything GitGui could check works."
+            : "Something is wrong — see below.";
+    }
 
     /// <summary>Starts from Gitea's shape, which most self-hosted forges follow.</summary>
     public static HostDraftViewModel GiteaLike() => new();
