@@ -1,8 +1,7 @@
 # Adding a git hosting site
 
-GitGui talks to more than one kind of hosting site. Adding a new one usually needs **no
-code** — you write a small JSON file describing the site's API, drop it in a folder, and
-restart.
+GitGui talks to more than one kind of hosting site. Adding a new one needs **no code** —
+just a small JSON file describing the site's API.
 
 You have two ways to do it. **Settings → Hosting sites → Add a site** fills in the same
 fields through a form and writes the file for you; the rest of this document describes the
@@ -151,7 +150,8 @@ Sites differ — GitHub takes the token as the password, GitLab wants a fixed us
 2. Call `curl -H 'Authorization: ...' https://your-site/api/.../user` and look at the
    JSON. The field names you see are what go in `userFields`.
 3. Do the same for the repository list endpoint to fill in `repositoryFields`.
-4. Save the file, restart GitGui, and add an account.
+4. Save the file and add an account. A site added through **Settings → Hosting sites** is
+   usable straight away; a file you drop in the folder by hand is picked up at startup.
 
 If a manifest is malformed or missing an `id`, GitGui logs a warning naming the file and
 carries on with the rest — one bad file never stops the app starting.
