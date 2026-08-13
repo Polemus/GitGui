@@ -32,11 +32,20 @@
                 Background="{DynamicResource ToolbarBackground}"
                 BorderBrush="{DynamicResource BorderSubtle}"
                 BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto,1.25*,1*,1.15*,Auto" Height="60" Margin="14,0">
+            <Grid Height="60" Margin="0,0,14,0">
+                <Grid.ColumnDefinitions>
+                    <!-- Same width as the sidebar, and driven by the same value, so the
+                         wordmark stays flush with it when the splitter is dragged. -->
+                    <ColumnDefinition Width="{Binding SidebarWidth}" />
+                    <ColumnDefinition Width="1.25*" />
+                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="1.15*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
                 <!-- Wordmark -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="9"
-                            VerticalAlignment="Center" Margin="0,0,18,0">
+                            VerticalAlignment="Center" Margin="14,0,18,0">
                     <Border Width="26" Height="26" CornerRadius="7"
                             Background="{DynamicResource AccentBrush}">
                         <TextBlock Text="G" FontSize="15" FontWeight="Bold"
@@ -243,47 +252,51 @@
         </Panel>
 
         <!-- ======================= Activity console ======================= -->
-        <Grid Grid.Row="3" RowDefinitions="Auto,Auto"
+        <Grid Grid.Row="3" RowDefinitions="Auto,Auto,Auto"
               Background="{DynamicResource ToolbarBackground}">
 
             <Border Grid.Row="0" Classes="divider" />
 
-            <!-- Always-visible bar: click anywhere to expand. -->
-            <Button Grid.Row="1" Classes="consoleBar"
-                    Command="{Binding ToggleConsoleCommand}"
-                    IsVisible="{Binding !IsConsoleExpanded}">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                    <Border Grid.Column="0" Width="7" Height="7" CornerRadius="4"
-                            VerticalAlignment="Center"
-                            Classes="logDot"
-                            Classes.trace="{Binding LatestEntry.IsTrace, FallbackValue=False}"
-                            Classes.success="{Binding LatestEntry.IsSuccess, FallbackValue=False}"
-                            Classes.warning="{Binding LatestEntry.IsWarning, FallbackValue=False}"
-                            Classes.error="{Binding LatestEntry.IsError, FallbackValue=False}" />
+            <!-- The header IS the toggle, expanded or not. Clear sits outside the
+                 button so clicking it doesn't also collapse the console. -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                <Button Grid.Column="0" Classes="consoleBar"
+                        Command="{Binding ToggleConsoleCommand}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Border Grid.Column="0" Width="7" Height="7" CornerRadius="4"
+                                VerticalAlignment="Center"
+                                Classes="logDot"
+                                Classes.trace="{Binding LatestEntry.IsTrace, FallbackValue=False}"
+                                Classes.success="{Binding LatestEntry.IsSuccess, FallbackValue=False}"
+                                Classes.warning="{Binding LatestEntry.IsWarning, FallbackValue=False}"
+                                Classes.error="{Binding LatestEntry.IsError, FallbackValue=False}" />
 
-                    <TextBlock Grid.Column="1" Classes="caption" VerticalAlignment="Center"
-                               Text="{Binding LatestEntry.Message, FallbackValue='Ready'}" />
+                        <TextBlock Grid.Column="1" Classes="caption" VerticalAlignment="Center"
+                                   Text="{Binding LatestEntry.Message, FallbackValue='Ready'}" />
 
-                    <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center"
-                               Text="Activity ⌃" />
-                </Grid>
-            </Button>
+                        <!-- Chevron only. Points up to expand, down to collapse. -->
+                        <Path Grid.Column="2" Classes="icon" VerticalAlignment="Center"
+                              Data="{DynamicResource IconChevronDown}"
+                              RenderTransformOrigin="50%,50%"
+                              RenderTransform="rotate(180deg)"
+                              IsVisible="{Binding !IsConsoleExpanded}" />
+                        <Path Grid.Column="2" Classes="icon" VerticalAlignment="Center"
+                              Data="{DynamicResource IconChevronDown}"
+                              IsVisible="{Binding IsConsoleExpanded}" />
+                    </Grid>
+                </Button>
+
+                <Button Grid.Column="1" Classes="secondary" Padding="9,4" FontSize="12"
+                        Margin="0,0,14,0" VerticalAlignment="Center"
+                        Content="Clear" Command="{Binding ClearLogCommand}"
+                        IsVisible="{Binding IsConsoleExpanded}" />
+            </Grid>
 
             <!-- Expanded log -->
-            <Grid Grid.Row="1" RowDefinitions="Auto,*" Height="240"
+            <Grid Grid.Row="2" RowDefinitions="*" Height="240"
                   IsVisible="{Binding IsConsoleExpanded}">
 
-                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="14,6"
-                      ColumnSpacing="8">
-                    <TextBlock Grid.Column="0" Classes="sectionLabel" Text="ACTIVITY"
-                               VerticalAlignment="Center" />
-                    <Button Grid.Column="1" Classes="secondary" Padding="9,4" FontSize="12"
-                            Content="Clear" Command="{Binding ClearLogCommand}" />
-                    <Button Grid.Column="2" Classes="secondary" Padding="9,4" FontSize="12"
-                            Content="Hide ⌄" Command="{Binding ToggleConsoleCommand}" />
-                </Grid>
-
-                <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}"
+                <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
                         BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,1,0,0">
                     <ScrollViewer x:Name="LogScroller" Padding="14,8">
                         <ItemsControl ItemsSource="{Binding LogEntries}">

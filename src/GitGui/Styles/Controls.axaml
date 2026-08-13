@@ -348,8 +348,28 @@
         <Setter Property="Cursor" Value="Hand" />
     </Style>
 
-    <Style Selector="Button.consoleBar:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    <!-- Deliberately no :pointerover background. The bar spans the whole window, so
+         lighting it up on hover reads as a flash rather than as feedback. The hand
+         cursor is enough to say it is clickable. -->
+
+    <!-- Drag handle between resizable panes. Reads as the divider it replaces until
+         you approach it, so the layout doesn't gain a visible seam. -->
+    <Style Selector="GridSplitter.paneSplitter">
+        <Setter Property="Width" Value="5" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="SizeWestEast" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel Background="{TemplateBinding Background}">
+                    <Border Width="1" HorizontalAlignment="Center"
+                            Background="{DynamicResource BorderSubtle}" />
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="GridSplitter.paneSplitter:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     </Style>
 
     <!-- Severity dot on the collapsed bar. -->

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls; // GridLength, for the resizable pane widths below.
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GitGui.HostProviders;
@@ -284,6 +285,20 @@ public partial class MainWindowViewModel : ViewModelBase
     public string SelectedCommitFilesLabel => SelectedCommitFiles.Count == 1
         ? "1 file changed"
         : $"{SelectedCommitFiles.Count} files changed";
+
+    /// <summary>Which of the commit's files the diff pane is showing.</summary>
+    [ObservableProperty]
+    public partial FileChange? SelectedCommitFile { get; set; }
+
+    // ---- Pane widths -------------------------------------------------------
+    // Bound two-way so the GridSplitters write back here. The toolbar wordmark
+    // reads SidebarWidth too, which is what keeps it flush with the sidebar.
+
+    [ObservableProperty]
+    public partial GridLength SidebarWidth { get; set; } = new(340);
+
+    [ObservableProperty]
+    public partial GridLength CommitFilesWidth { get; set; } = new(300);
 
     // ---- Startup -----------------------------------------------------------
 
@@ -694,6 +709,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
             Replace(SelectedCommitFiles, files);
             OnPropertyChanged(nameof(SelectedCommitFilesLabel));
+
+            // Show the first file's diff rather than an empty pane.
+            SelectedCommitFile = SelectedCommitFiles.FirstOrDefault();
         }
         catch (Exception ex)
         {

@@ -18,7 +18,15 @@
         <conv:HexToBrushConverter x:Key="HexToBrush" />
     </UserControl.Resources>
 
-    <Grid ColumnDefinitions="340,Auto,*">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <!-- Two-way: the splitter writes the new width back to the view model,
+                 which is also what the toolbar wordmark measures itself against. -->
+            <ColumnDefinition Width="{Binding SidebarWidth, Mode=TwoWay}"
+                              MinWidth="260" MaxWidth="620" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" MinWidth="360" />
+        </Grid.ColumnDefinitions>
 
         <!-- ======================= Sidebar ======================= -->
         <Border Grid.Column="0" Background="{DynamicResource SidebarBackground}">
@@ -148,7 +156,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Column="1" Width="1" Background="{DynamicResource BorderSubtle}" />
+        <GridSplitter Grid.Column="1" Classes="paneSplitter" />
 
         <!-- ======================= Detail pane ======================= -->
         <Panel Grid.Column="2" Background="{DynamicResource AppBackground}">
@@ -169,14 +177,21 @@
                        Text="No local changes."
                        ZIndex="-1" />
 
-            <!-- Selected commit -->
-            <ScrollViewer IsVisible="{Binding IsHistoryTab}" Padding="18">
-                <StackPanel Spacing="14">
+            <!-- Selected commit: header across the top, then files | splitter | diff. -->
+            <Grid IsVisible="{Binding IsHistoryTab}" RowDefinitions="Auto,*">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{Binding CommitFilesWidth, Mode=TwoWay}"
+                                      MinWidth="180" MaxWidth="560" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="260" />
+                </Grid.ColumnDefinitions>
 
-                    <!-- A ContentControl, not a Border with IsVisible: the template isn't
-                         realised until SelectedCommit is non-null, so nothing binds against
-                         a null commit and the debug console stays quiet. -->
-                    <ContentControl Content="{Binding SelectedCommit}">
+                <!-- A ContentControl, not a Border with IsVisible: the template isn't
+                     realised until SelectedCommit is non-null, so nothing binds against
+                     a null commit and the debug console stays quiet. -->
+                <ContentControl Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                Margin="18,18,18,0"
+                                Content="{Binding SelectedCommit}">
                         <ContentControl.ContentTemplate>
                             <DataTemplate x:DataType="m:CommitInfo">
                                 <Border Classes="card">
@@ -214,15 +229,57 @@
                         </ContentControl.ContentTemplate>
                     </ContentControl>
 
-                    <ItemsControl ItemsSource="{Binding SelectedCommitFiles}">
-                        <ItemsControl.ItemTemplate>
+                <!-- Files in this commit. Clicking one shows its diff on the right. -->
+                <ListBox Grid.Row="1" Grid.Column="0" Classes="plain" Margin="0,12,0,0"
+                         ItemsSource="{Binding SelectedCommitFiles}"
+                         SelectedItem="{Binding SelectedCommitFile, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="m:FileChange">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9"
+                                  Margin="18,7,10,7">
+                                <TextBlock Grid.Column="0"
+                                           Classes="statusGlyph"
+                                           Classes.added="{Binding IsAdded}"
+                                           Classes.modified="{Binding IsModified}"
+                                           Classes.deleted="{Binding IsDeleted}"
+                                           Classes.renamed="{Binding IsRenamed}"
+                                           Text="{Binding StatusGlyph}"
+                                           VerticalAlignment="Center" />
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Classes="body" Text="{Binding FileName}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Classes="muted" Text="{Binding Directory}"
+                                               TextTrimming="CharacterEllipsis"
+                                               IsVisible="{Binding Directory, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Classes="muted"
+                                               Foreground="{DynamicResource StatusAdded}"
+                                               Text="{Binding Additions, StringFormat='+{0}'}" />
+                                    <TextBlock Classes="muted"
+                                               Foreground="{DynamicResource StatusDeleted}"
+                                               Text="{Binding Deletions, StringFormat='-{0}'}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <GridSplitter Grid.Row="1" Grid.Column="1" Classes="paneSplitter" />
+
+                <ScrollViewer Grid.Row="1" Grid.Column="2" Padding="18,12,18,18">
+                    <ContentControl Content="{Binding SelectedCommitFile}">
+                        <ContentControl.ContentTemplate>
                             <DataTemplate x:DataType="m:FileChange">
                                 <views:DiffView />
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </ScrollViewer>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+                </ScrollViewer>
+            </Grid>
         </Panel>
     </Grid>
 </UserControl>
