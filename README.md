@@ -182,12 +182,16 @@ src/GitGui/
     UnifiedDiffParser.cs   libgit2 patch text -> renderable diff rows
     HostResolver.cs        origin URL -> which hosting site a clone belongs to
     RepositoryStore.cs     known-clone list, JSON in the app-data dir
+    RepositoryWatcher.cs   notices work done outside the app, debounced
     FolderPicker.cs        native folder dialog via StorageProvider
+    SystemShell.cs         open a browser, reach the clipboard
     MockData.cs            design-time sample content only
   ViewModels/    MainWindowViewModel + per-item view models
   Views/         MainWindow, RepositoryView, DiffView, SettingsView
   Styles/        Tokens.axaml (theme colours + icons), Controls.axaml (control styles)
   Assets/        App icon
+tests/GitGui.Tests/
+                 xunit over the pure functions — see "Tests" above
 build/
   linux/         package.sh, .desktop entry, hicolor icons
   windows/       package.ps1, Inno Setup script
@@ -211,6 +215,20 @@ dotnet run --project src/GitGui/GitGui.csproj
 In VS Code, <kbd>F5</kbd> works via the checked-in `.vscode/launch.json`. (If you press
 F5 with a `.axaml` file focused *before* that config exists, VS Code offers to find an
 "Avalonia XAML debugger" — decline it; no such extension is needed.)
+
+## Tests
+
+```bash
+dotnet test
+```
+
+They cover the pure functions, which are the parts that break silently: the unified-diff
+parser, the remote-URL resolution behind repository grouping, and the manifest field
+mapping — including the round trip through the settings form, since a lost field there
+would quietly mislabel every repository on a site.
+
+Nothing here talks to libgit2, the network or the UI. Those are still checked by hand
+against a real server, as described in `CLAUDE.md`.
 
 ## Building installers
 
@@ -262,7 +280,9 @@ runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
   mislabelled group, not a failed connection.
 - **No branch creation, amend or undo.** Branches can be switched but not created, and a
   commit can't be corrected from the app.
-- **No test project.** Verification has been manual, against a real Gitea server.
+- **Tests cover the pure functions only** — diff parsing, remote-URL resolution and the
+  manifest mapping. Anything touching libgit2, the network or the UI is still verified by
+  hand, against a real Gitea server.
 - **History is capped at 100 commits** with no paging yet.
 - **macOS builds are unsigned.** Gatekeeper will complain on first launch — right-click →
   Open. Signing and notarisation need an Apple Developer account.

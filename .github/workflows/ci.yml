@@ -44,3 +44,7 @@ jobs:
 
       - name: Build
         run: dotnet build GitGui.slnx --configuration Release --no-restore
+
+      # Pure functions only, so this needs no display, no network and no git.
+      - name: Test
+        run: dotnet test GitGui.slnx --configuration Release --no-build --verbosity normal
