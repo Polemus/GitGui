@@ -28,6 +28,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IAccountStore _accountStore;
     private readonly ICredentialStore _credentials;
     private readonly IActivityLog _log;
+    private readonly ISystemShell _shell;
     private readonly bool _isDesignTime;
 
     /// <summary>Design-time constructor. Fills the previewer from sample data only.</summary>
@@ -35,7 +36,7 @@ public partial class MainWindowViewModel : ViewModelBase
         : this(new GitService(), new RepositoryStore(), new FolderPicker(),
                HostProviderRegistry.Create(new System.Net.Http.HttpClient()),
                new AccountStore(new FileCredentialStore()), new FileCredentialStore(),
-               new ActivityLog(), designTime: true)
+               new ActivityLog(), new SystemShell(), designTime: true)
     {
         LoadDesignTimeData();
     }
@@ -47,8 +48,9 @@ public partial class MainWindowViewModel : ViewModelBase
         HostProviderRegistry hosts,
         IAccountStore accountStore,
         ICredentialStore credentials,
-        IActivityLog log)
-        : this(git, store, picker, hosts, accountStore, credentials, log, designTime: false)
+        IActivityLog log,
+        ISystemShell shell)
+        : this(git, store, picker, hosts, accountStore, credentials, log, shell, designTime: false)
     {
     }
 
@@ -60,6 +62,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IAccountStore accountStore,
         ICredentialStore credentials,
         IActivityLog log,
+        ISystemShell shell,
         bool designTime)
     {
         _git = git;
@@ -69,6 +72,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _accountStore = accountStore;
         _credentials = credentials;
         _log = log;
+        _shell = shell;
         _isDesignTime = designTime;
 
         // An error the user can't see is an error they can't act on.
@@ -99,6 +103,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public partial IHostProvider? SelectedProvider { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanUseBrowserLogin))]
     public partial string SignInServerUrl { get; set; } = "https://github.com";
 
     [ObservableProperty]
@@ -109,8 +114,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasPendingDeviceLogin => PendingDeviceLogin is not null;
 
+    /// <summary>
+    /// Depends on the server as well as the provider: GitGui's built-in client id is
+    /// registered on github.com, so the button hides again if the URL points elsewhere.
+    /// </summary>
     public bool CanUseBrowserLogin
-        => SelectedProvider is GitHubProvider { CanUseBrowserLogin: true };
+        => SelectedProvider is GitHubProvider github
+           && Uri.TryCreate(SignInServerUrl, UriKind.Absolute, out var baseUrl)
+           && github.CanUseBrowserLogin(baseUrl);
 
     public string TokenHelpText => SelectedProvider is null
         ? string.Empty
@@ -496,6 +507,15 @@ public partial class MainWindowViewModel : ViewModelBase
             PendingDeviceLogin = login;
             OnPropertyChanged(nameof(HasPendingDeviceLogin));
 
+            // The code is useless where it is: it has to reach a browser. Put it on the
+            // clipboard and open the page, so the common path is paste-and-approve. Both
+            // can fail on a bare desktop, hence the panel keeps its own buttons.
+            if (await _shell.CopyTextAsync(login.UserCode))
+                Log(ActivityLevel.Info, $"Copied the code {login.UserCode} to the clipboard");
+
+            if (!await _shell.OpenUrlAsync(login.VerificationUri))
+                Log(ActivityLevel.Warning, $"Couldn't open a browser. Go to {login.VerificationUri} yourself.");
+
             try
             {
                 var account = await provider.CompleteBrowserLoginAsync(baseUrl, login, default);
@@ -508,6 +528,28 @@ public partial class MainWindowViewModel : ViewModelBase
                 OnPropertyChanged(nameof(HasPendingDeviceLogin));
             }
         });
+    }
+
+    [RelayCommand]
+    private async Task OpenDeviceUrlAsync()
+    {
+        if (PendingDeviceLogin is not { } login)
+            return;
+
+        if (!await _shell.OpenUrlAsync(login.VerificationUri))
+            Log(ActivityLevel.Warning, $"Couldn't open a browser. Go to {login.VerificationUri} yourself.");
+    }
+
+    [RelayCommand]
+    private async Task CopyDeviceCodeAsync()
+    {
+        if (PendingDeviceLogin is not { } login)
+            return;
+
+        if (await _shell.CopyTextAsync(login.UserCode))
+            Log(ActivityLevel.Info, $"Copied {login.UserCode} to the clipboard");
+        else
+            Log(ActivityLevel.Warning, "Couldn't reach the clipboard.");
     }
 
     [RelayCommand]

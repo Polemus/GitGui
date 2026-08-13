@@ -14,12 +14,20 @@ namespace GitGui.HostProviders;
 /// browser, poll until it flips - which cannot be expressed as endpoint descriptions.
 /// Everything else about GitHub could have been a manifest.
 /// </summary>
-public sealed class GitHubProvider(HttpClient http, string? clientId) : IHostProvider
+public sealed class GitHubProvider(HttpClient http, string? configuredClientId) : IHostProvider
 {
     private const string DeviceGrantType = "urn:ietf:params:oauth:grant-type:device_code";
 
     /// <summary>Scopes needed to list repositories and to push over HTTPS.</summary>
     private const string Scopes = "repo read:org";
+
+    /// <summary>
+    /// GitGui's own OAuth App, registered on github.com. A client id is public by design:
+    /// it names the application on the approval screen and authorises nothing by itself,
+    /// and the device flow uses no client secret. There is nothing here to keep out of the
+    /// repository, and shipping it is what saves every user from registering their own.
+    /// </summary>
+    private const string DefaultClientId = "Ov23liTTmSX5cD9G8Ywg";
 
     public string Id => "github";
 
@@ -30,8 +38,18 @@ public sealed class GitHubProvider(HttpClient http, string? clientId) : IHostPro
         AuthMethods = [AuthMethod.BrowserDeviceLogin, AuthMethod.PersonalAccessToken],
     };
 
-    /// <summary>True once an OAuth App client id is configured; browser login needs one.</summary>
-    public bool CanUseBrowserLogin => !string.IsNullOrWhiteSpace(clientId);
+    /// <summary>
+    /// Whether browser sign-in can run against this server. It needs a client id, and
+    /// <see cref="DefaultClientId"/> is registered on github.com, so it means nothing to an
+    /// Enterprise install - those need GITGUI_GITHUB_CLIENT_ID naming an app on that server.
+    /// </summary>
+    public bool CanUseBrowserLogin(Uri baseUrl) => ClientIdFor(baseUrl) is not null;
+
+    /// <summary>A configured id wins everywhere; the built-in one applies only to github.com.</summary>
+    private string? ClientIdFor(Uri baseUrl)
+        => !string.IsNullOrWhiteSpace(configuredClientId) ? configuredClientId
+            : IsDotCom(baseUrl) ? DefaultClientId
+            : null;
 
     public async Task<bool> RecognisesAsync(Uri baseUrl, CancellationToken cancellationToken)
     {
@@ -63,18 +81,18 @@ public sealed class GitHubProvider(HttpClient http, string? clientId) : IHostPro
 
     public async Task<DeviceLogin> StartBrowserLoginAsync(Uri baseUrl, CancellationToken cancellationToken)
     {
-        if (!CanUseBrowserLogin)
+        if (ClientIdFor(baseUrl) is not { } clientId)
         {
             throw new HostProviderException(
-                "Browser sign-in needs a GitHub OAuth App client ID, which identifies GitGui to "
-                + "GitHub and cannot be shared or invented. Register one at Settings → Developer "
-                + "settings → OAuth Apps (tick 'Enable Device Flow'), then set GITGUI_GITHUB_CLIENT_ID. "
-                + "A personal access token works without any of that.");
+                $"Browser sign-in to {baseUrl.Host} needs an OAuth App registered on that server, "
+                + "which identifies GitGui to it and cannot be shared or invented. Register one at "
+                + "Settings → Developer settings → OAuth Apps (tick 'Enable Device Flow'), then set "
+                + "GITGUI_GITHUB_CLIENT_ID. A personal access token works without any of that.");
         }
 
         using var content = Form(new Dictionary<string, string>
         {
-            ["client_id"] = clientId!,
+            ["client_id"] = clientId,
             ["scope"] = Scopes,
         });
 
@@ -100,6 +118,11 @@ public sealed class GitHubProvider(HttpClient http, string? clientId) : IHostPro
     public async Task<HostAccount> CompleteBrowserLoginAsync(
         Uri baseUrl, DeviceLogin login, CancellationToken cancellationToken)
     {
+        // Start already refused if there were no id for this server, so this cannot be null;
+        // asking again keeps the two halves of the flow reading the same value.
+        var clientId = ClientIdFor(baseUrl)
+            ?? throw new HostProviderException($"Browser sign-in is not configured for {baseUrl.Host}.");
+
         var delay = TimeSpan.FromSeconds(Math.Max(1, login.IntervalSeconds));
 
         while (DateTimeOffset.Now < login.ExpiresAt)
@@ -108,7 +131,7 @@ public sealed class GitHubProvider(HttpClient http, string? clientId) : IHostPro
 
             using var content = Form(new Dictionary<string, string>
             {
-                ["client_id"] = clientId!,
+                ["client_id"] = clientId,
                 ["device_code"] = login.DeviceCode,
                 ["grant_type"] = DeviceGrantType,
             });

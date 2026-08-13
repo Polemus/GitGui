@@ -143,6 +143,20 @@
         <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
     </Style>
 
+    <!-- Reads as a hyperlink, behaves as a command. Used where text is an action. -->
+    <Style Selector="Button.link">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+        <Setter Property="TextBlock.TextDecorations" Value="Underline" />
+    </Style>
+
     <!-- Flat row used inside picker flyouts and list overlays. -->
     <Style Selector="Button.rowButton">
         <Setter Property="Background" Value="Transparent" />

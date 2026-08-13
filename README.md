@@ -96,7 +96,12 @@ templating — including a hand-written third-party manifest.
 
 ### Signing in, fetching and pushing
 
-Sign in on the Accounts screen with a personal access token, and fetch/push/pull work.
+Sign in on the Accounts screen — **"Sign in with browser"** on github.com, which shows you
+a code to type into GitHub and waits for approval, or a personal access token anywhere —
+and fetch/push/pull work. GitHub Enterprise has no browser button until you register an
+OAuth App on that server (Settings → Developer settings → OAuth Apps, tick *Enable Device
+Flow*) and set `GITGUI_GITHUB_CLIENT_ID`; a token works there without any of that.
+
 The sync button performs whatever its label says — pull when behind, push when ahead,
 otherwise fetch — and sets the upstream on a branch's first push so you don't have to
 drop to the command line for a branch you just created.
@@ -118,10 +123,6 @@ a commit whose remote URL carried no credentials, confirmed server-side.
 
 ### Not yet
 
-- **GitHub browser sign-in needs an OAuth App client ID**, which identifies GitGui to
-  GitHub and can't be invented. Register one (Settings → Developer settings → OAuth Apps,
-  tick *Enable Device Flow*) and set `GITGUI_GITHUB_CLIENT_ID`. The button stays hidden
-  until it is set. Personal access tokens work without any of that.
 - **Browsing and cloning remote repositories.** The provider layer already lists them;
   the UI doesn't show them yet.
 - **Pull requests and issues.**
@@ -157,7 +158,6 @@ behaves identically on all three platforms.
 
 | Document | What's in it |
 | --- | --- |
-| [CLAUDE.md](CLAUDE.md) | Working notes: build commands, decisions not to re-litigate, gotchas already paid for, and what's next |
 | [docs/architecture.md](docs/architecture.md) | The layers and *why* they're shaped this way |
 | [docs/host-manifests.md](docs/host-manifests.md) | How to add a hosting site by writing one JSON file |
 

@@ -156,12 +156,28 @@
                                 IsVisible="{Binding HasPendingDeviceLogin}">
                             <StackPanel Spacing="8">
                                 <TextBlock Classes="caption"
-                                           Text="Open this page and enter the code:" />
-                                <TextBlock Classes="mono" FontSize="14"
-                                           Text="{Binding PendingDeviceLogin.VerificationUri}" />
-                                <TextBlock Classes="mono" FontSize="26" FontWeight="Bold"
-                                           Foreground="{DynamicResource AccentBrush}"
-                                           Text="{Binding PendingDeviceLogin.UserCode}" />
+                                           Text="Your browser should have opened with the code already copied. If not:" />
+                                <!-- FontFamily is set here, not by the mono class: Avalonia
+                                     selectors match the exact type, so TextBlock.mono
+                                     reaches neither a Button nor a SelectableTextBlock. -->
+                                <Button Classes="link" HorizontalAlignment="Left"
+                                        FontFamily="{DynamicResource MonoFont}"
+                                        Content="{Binding PendingDeviceLogin.VerificationUri}"
+                                        Command="{Binding OpenDeviceUrlCommand}"
+                                        ToolTip.Tip="Open this page in your browser" />
+                                <StackPanel Orientation="Horizontal" Spacing="12"
+                                            VerticalAlignment="Center">
+                                    <!-- Selectable so the code can be dragged out even if
+                                         the clipboard is unreachable. -->
+                                    <SelectableTextBlock FontFamily="{DynamicResource MonoFont}"
+                                                         FontSize="26" FontWeight="Bold"
+                                                         Foreground="{DynamicResource AccentBrush}"
+                                                         VerticalAlignment="Center"
+                                                         Text="{Binding PendingDeviceLogin.UserCode}" />
+                                    <Button Classes="secondary" Content="Copy code"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding CopyDeviceCodeCommand}" />
+                                </StackPanel>
                                 <TextBlock Classes="muted" Text="Waiting for approval…" />
                             </StackPanel>
                         </Border>

@@ -55,7 +55,8 @@ public partial class App : Application
                 HostProviderRegistry.Create(http),
                 new AccountStore(credentials),
                 credentials,
-                new ActivityLog());
+                new ActivityLog(),
+                new SystemShell());
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 
