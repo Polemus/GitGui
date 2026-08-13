@@ -61,7 +61,7 @@ jobs:
 
   # ------------------------------------------------------------------ linux
   linux:
-    name: Linux (deb, rpm, tar.gz)
+    name: Linux (deb, rpm, tar.gz, AppImage)
     needs: [version, test]
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -175,7 +175,7 @@ jobs:
 
           ## Install
 
-          **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), or the portable \`.tar.gz\`.
+          **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), the \`.AppImage\` (anywhere else — \`chmod +x\` it and run it, no install), or the portable \`.tar.gz\`.
           **Windows** — run the \`-setup.exe\`, or unzip the portable build.
           **macOS** — open the \`.dmg\` and drag GitGui to Applications. The bundle is unsigned, so the first launch needs right-click → Open.
 
