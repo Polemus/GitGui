@@ -108,9 +108,9 @@ Listed for completeness rather than obligation.
 | Component | Version | Licence |
 | --- | --- | --- |
 | [xunit](https://github.com/xunit/xunit) | 2.9.3 | Apache-2.0 |
-| [xunit.runner.visualstudio](https://github.com/xunit/visualstudio.xunit) | 3.1.4 | Apache-2.0 |
-| [Microsoft.NET.Test.Sdk](https://github.com/microsoft/vstest) | 17.14.1 | MIT |
-| [coverlet.collector](https://github.com/coverlet-coverage/coverlet) | 6.0.4 | MIT |
+| [xunit.runner.visualstudio](https://github.com/xunit/visualstudio.xunit) | 3.1.5 | Apache-2.0 |
+| [Microsoft.NET.Test.Sdk](https://github.com/microsoft/vstest) | 18.8.1 | MIT |
+| [coverlet.collector](https://github.com/coverlet-coverage/coverlet) | 10.0.1 | MIT |
 | [AvaloniaUI.DiagnosticsSupport](https://github.com/AvaloniaUI/Avalonia) | 2.2.3 | MIT |
 
 `AvaloniaUI.DiagnosticsSupport` is excluded from non-Debug configurations by the
