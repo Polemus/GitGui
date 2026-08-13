@@ -487,6 +487,72 @@ public sealed class GitService : IGitService
             : (message[..split].Trim(), message[(split + 1)..].Trim());
     }
 
+    // ----------------------------------------------------- discarding, ignoring
+
+    public string GetWorkingDirectory(string path)
+    {
+        using var repo = new Repository(Discover(path));
+        return repo.Info.WorkingDirectory;
+    }
+
+    public void DiscardChanges(string path, IEnumerable<string> paths)
+    {
+        var wanted = paths.ToList();
+        if (wanted.Count == 0)
+            return;
+
+        using var repo = new Repository(Discover(path));
+
+        // Untracked files have nothing in HEAD to check out over, so a checkout would
+        // silently leave them behind. They have to be deleted outright.
+        var status = repo.RetrieveStatus(new StatusOptions
+        {
+            IncludeUntracked = true,
+            RecurseUntrackedDirs = true,
+        });
+
+        var untracked = status
+            .Where(e => e.State.HasFlag(FileStatus.NewInWorkdir))
+            .Select(e => e.FilePath)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var tracked = wanted.Where(p => !untracked.Contains(p)).ToList();
+
+        if (tracked.Count > 0)
+        {
+            repo.CheckoutPaths(
+                repo.Head.FriendlyName,
+                tracked,
+                new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
+        }
+
+        foreach (var relative in wanted.Where(untracked.Contains))
+        {
+            var full = Path.Combine(repo.Info.WorkingDirectory, relative);
+            if (File.Exists(full))
+                File.Delete(full);
+        }
+    }
+
+    public void AddToGitignore(string path, string pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+            return;
+
+        using var repo = new Repository(Discover(path));
+        var file = Path.Combine(repo.Info.WorkingDirectory, ".gitignore");
+
+        var lines = File.Exists(file) ? File.ReadAllLines(file).ToList() : [];
+
+        if (lines.Any(l => l.Trim() == pattern))
+            return;
+
+        // ReadAllLines/WriteAllLines round-trips through whole lines, so a file whose
+        // last line had no trailing newline gets one rather than being appended to.
+        lines.Add(pattern);
+        File.WriteAllLines(file, lines);
+    }
+
     // ------------------------------------------------------------- networking
 
     public string? GetRemoteUrl(string path)

@@ -11,7 +11,20 @@ public sealed class HostGroupViewModel
 
     public string Header => Host.Name;
 
-    public string SubHeader => Repositories.Count == 1
-        ? $"{Host.KindLabel} · 1 repository"
-        : $"{Host.KindLabel} · {Repositories.Count} repositories";
+    /// <summary>
+    /// The kind is only worth printing when it isn't already the name: on github.com both
+    /// are "GitHub" and the heading stutters, whereas "git.homelab.net" gains from being
+    /// labelled Gitea.
+    /// </summary>
+    public string SubHeader
+    {
+        get
+        {
+            var count = Repositories.Count == 1
+                ? "1 repository"
+                : $"{Repositories.Count} repositories";
+
+            return Host.KindLabel == Host.Name ? count : $"{Host.KindLabel} · {count}";
+        }
+    }
 }

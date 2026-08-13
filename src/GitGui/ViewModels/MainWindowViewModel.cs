@@ -427,6 +427,112 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasPendingBranchSwitch => PendingBranchSwitch is not null;
 
+    // ---- Changed-file context menu -----------------------------------------
+
+    /// <summary>
+    /// The file a discard is waiting on confirmation for. Discarding cannot be undone -
+    /// the change was never committed, so there is nothing to recover it from - which is
+    /// the one thing in this app worth an extra click.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingDiscard))]
+    [NotifyPropertyChangedFor(nameof(PendingDiscardSummary))]
+    public partial FileChangeViewModel? PendingDiscard { get; set; }
+
+    public bool HasPendingDiscard => PendingDiscard is not null;
+
+    public string PendingDiscardSummary => PendingDiscard is not { } change
+        ? string.Empty
+        : $"{change.Path} goes back to its last committed state. This cannot be undone.";
+
+    [RelayCommand]
+    private void AskDiscardChanges(FileChangeViewModel? change)
+    {
+        if (change is not null)
+            PendingDiscard = change;
+    }
+
+    [RelayCommand]
+    private void CancelDiscard() => PendingDiscard = null;
+
+    [RelayCommand]
+    private async Task ConfirmDiscardAsync()
+    {
+        if (PendingDiscard is not { } change || SelectedRepository is not { } repo)
+            return;
+
+        var path = repo.LocalPath;
+        var target = change.Path;
+        PendingDiscard = null;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.DiscardChanges(path, [target]));
+            Log(ActivityLevel.Success, $"Discarded changes to {target}");
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    [RelayCommand]
+    private async Task IgnoreAsync(string? pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern) || SelectedRepository is not { } repo)
+            return;
+
+        var path = repo.LocalPath;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.AddToGitignore(path, pattern));
+            Log(ActivityLevel.Success, $"Added {pattern} to .gitignore");
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    [RelayCommand]
+    private async Task CopyFilePathAsync(FileChangeViewModel? change)
+    {
+        if (change is null || SelectedRepository is not { } repo)
+            return;
+
+        var full = System.IO.Path.Combine(
+            await Task.Run(() => _git.GetWorkingDirectory(repo.LocalPath)),
+            change.Path);
+
+        await CopyAsync(full, "file path");
+    }
+
+    [RelayCommand]
+    private async Task CopyRelativeFilePathAsync(FileChangeViewModel? change)
+    {
+        if (change is not null)
+            await CopyAsync(change.Path, "relative file path");
+    }
+
+    [RelayCommand]
+    private async Task ShowInFileManagerAsync(FileChangeViewModel? change)
+    {
+        if (change is null || SelectedRepository is not { } repo)
+            return;
+
+        var full = System.IO.Path.Combine(
+            await Task.Run(() => _git.GetWorkingDirectory(repo.LocalPath)),
+            change.Path);
+
+        if (!await _shell.ShowInFileManagerAsync(full))
+            Log(ActivityLevel.Warning, "Could not open a file manager");
+    }
+
+    private async Task CopyAsync(string text, string what)
+    {
+        if (await _shell.CopyTextAsync(text))
+            Log(ActivityLevel.Info, $"Copied the {what} to the clipboard");
+        else
+            Log(ActivityLevel.Warning, "Could not reach the clipboard");
+    }
+
     public bool CanCreateBranch => !string.IsNullOrWhiteSpace(NewBranchName)
                                    && SelectedRepository is not null
                                    && !IsBusy;
@@ -467,7 +573,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // reads SidebarWidth too, which is what keeps it flush with the sidebar.
 
     [ObservableProperty]
-    public partial GridLength SidebarWidth { get; set; } = new(340);
+    public partial GridLength SidebarWidth { get; set; } = new(400);
 
     [ObservableProperty]
     public partial GridLength CommitFilesWidth { get; set; } = new(300);
@@ -526,9 +632,22 @@ public partial class MainWindowViewModel : ViewModelBase
             await OpenRepositoryAsync(added);
     }
 
+    /// <summary>
+    /// Whether the repository list is expanded in the sidebar. It pushes the tabs down
+    /// rather than floating over them, so it has to be state the view model owns.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsRepositoryPickerOpen { get; set; }
+
+    [RelayCommand]
+    private void ToggleRepositoryPicker() => IsRepositoryPickerOpen = !IsRepositoryPickerOpen;
+
     [RelayCommand]
     private async Task SelectRepositoryAsync(RepositoryInfo repository)
-        => await OpenRepositoryAsync(repository);
+    {
+        IsRepositoryPickerOpen = false;
+        await OpenRepositoryAsync(repository);
+    }
 
     [RelayCommand]
     private async Task RemoveRepositoryAsync(RepositoryInfo repository)

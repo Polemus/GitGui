@@ -20,6 +20,7 @@
 
     <Style Selector="TextBlock.body">
         <Setter Property="FontSize" Value="13" />
+        <Setter Property="LineHeight" Value="17" />
     </Style>
 
     <Style Selector="TextBlock.caption">
@@ -29,6 +30,7 @@
 
     <Style Selector="TextBlock.muted">
         <Setter Property="FontSize" Value="11" />
+        <Setter Property="LineHeight" Value="14" />
         <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
     </Style>
 
@@ -43,6 +45,15 @@
         <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
     </Style>
 
+    <!-- Host group headings inside the repository picker. Quieter than the rows they
+         label, so a group of one still reads as a heading and not another row. -->
+    <Style Selector="TextBlock.groupLabel">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <!--
         FluentAvalonia's Button theme animates the ContentPresenter's background
         between states. Our classes set their own hover colours on top of that,
@@ -54,7 +65,9 @@
                      Button.rowButton /template/ ContentPresenter,
                      Button.primary /template/ ContentPresenter,
                      Button.secondary /template/ ContentPresenter,
-                     Button.tab /template/ ContentPresenter">
+                     Button.tab /template/ ContentPresenter,
+                     Button.addButton /template/ ContentPresenter,
+                     Button.repoPicker /template/ ContentPresenter">
         <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
 
@@ -98,6 +111,74 @@
 
     <Style Selector="Button.iconButton:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    </Style>
+
+    <!-- The repository picker at the top of the sidebar. Full width, no border of its
+         own: the divider below it is what separates it from the tabs. -->
+    <Style Selector="Button.repoPicker">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.repoPicker:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    </Style>
+
+    <!-- The + in the header. Outlined rather than accent-filled: the accent is spent on
+         the wordmark and the active tab, and a third use in the same 60px strip stops
+         any of them meaning anything. Size and border carry it instead. -->
+    <Style Selector="Button.addButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Width" Value="30" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.addButton:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    </Style>
+
+    <!-- Selectors match the exact type, so this names Path directly rather than relying
+         on the .icon class. Heavier stroke so the glyph holds its own unfilled. -->
+    <Style Selector="Button.addButton Path">
+        <Setter Property="Stroke" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="StrokeThickness" Value="1.9" />
+    </Style>
+
+    <!-- ===================== Check boxes ===================== -->
+
+    <!-- Stock CheckBox fills itself with SystemAccentColor when ticked, which put a
+         column of blue down the whole changes list. Neutral instead: the tick is what
+         says it is on. Part names are FluentAvalonia's template. -->
+    <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource TextSecondary}" />
+    </Style>
+
+    <Style Selector="CheckBox:checked:pointerover /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <Style Selector="CheckBox:checked:pressed /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource TextMuted}" />
+    </Style>
+
+    <Style Selector="CheckBox:indeterminate /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource TextSecondary}" />
     </Style>
 
     <!-- ===================== Primary action ===================== -->
@@ -191,7 +272,7 @@
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Padding" Value="10,6" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Cursor" Value="Hand" />

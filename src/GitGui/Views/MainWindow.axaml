@@ -46,117 +46,37 @@
                     <!-- Same width as the sidebar, and driven by the same value, so the
                          wordmark stays flush with it when the splitter is dragged. -->
                     <ColumnDefinition Width="{Binding SidebarWidth}" />
-                    <ColumnDefinition Width="1.25*" />
                     <ColumnDefinition Width="1*" />
                     <ColumnDefinition Width="1.15*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Wordmark -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="9"
-                            VerticalAlignment="Center" Margin="14,0,18,0">
-                    <Border Width="26" Height="26" CornerRadius="7"
+                <!-- Wordmark, with + pushed to the right of the block so it sits over
+                     the sidebar it fills. -->
+                <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto" Margin="14,0,18,0">
+                    <Border Grid.Column="0" Width="26" Height="26" CornerRadius="7"
+                            VerticalAlignment="Center"
                             Background="{DynamicResource AccentBrush}">
                         <TextBlock Text="G" FontSize="15" FontWeight="Bold"
                                    Foreground="{DynamicResource TextOnAccent}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock Text="GitGui" FontSize="15" FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
-                </StackPanel>
+                    <TextBlock Grid.Column="1" Text="GitGui" FontSize="15" FontWeight="SemiBold"
+                               Margin="9,0,0,0" VerticalAlignment="Center" />
 
-                <!-- Current repository -->
-                <Button Grid.Column="1" x:Name="RepositoryPickerButton"
-                        Classes="toolbarItem" Margin="0,0,8,0">
-                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
-                        <Border Grid.Column="0" Classes="hostBadge"
-                                Background="{Binding SelectedRepository.Host.AccentHex, Converter={StaticResource HexToBrush}}">
-                            <TextBlock Text="{Binding SelectedRepository.Host.Badge}"
-                                       FontSize="11" FontWeight="Bold" Foreground="White"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Classes="muted" Text="Current repository" />
-                            <TextBlock Classes="body" FontWeight="SemiBold"
-                                       Text="{Binding SelectedRepository.Name}" />
-                        </StackPanel>
-                        <Path Grid.Column="2" Classes="icon" Data="{DynamicResource IconChevronDown}" />
-                    </Grid>
-
-                    <Button.Flyout>
-                        <Flyout Placement="BottomEdgeAlignedLeft"
-                                FlyoutPresenterClasses="picker">
-                            <Grid Width="380" RowDefinitions="Auto,Auto,*,Auto,Auto">
-                                <TextBlock Grid.Row="0" Classes="sectionLabel" Text="REPOSITORIES"
-                                           Margin="10,6,10,8" />
-                                <Border Grid.Row="1" Classes="divider" Margin="0,0,0,6" />
-
-                                <TextBlock Grid.Row="2" Classes="caption" Margin="10,8"
-                                           TextWrapping="Wrap"
-                                           IsVisible="{Binding !HasRepositories}"
-                                           Text="No repositories yet. Add a local clone to get started." />
-
-                                <ScrollViewer Grid.Row="2" MaxHeight="420"
-                                              IsVisible="{Binding HasRepositories}">
-                                    <ItemsControl ItemsSource="{Binding RepositoryGroups}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:HostGroupViewModel">
-                                                <StackPanel Margin="0,0,0,8">
-
-                                                    <!-- Host group header -->
-                                                    <StackPanel Orientation="Horizontal" Spacing="8"
-                                                                Margin="10,6,10,6">
-                                                        <Border Classes="hostBadge" Width="18" Height="18"
-                                                                Background="{Binding Host.AccentHex, Converter={StaticResource HexToBrush}}">
-                                                            <TextBlock Text="{Binding Host.Badge}" FontSize="10"
-                                                                       FontWeight="Bold" Foreground="White"
-                                                                       HorizontalAlignment="Center"
-                                                                       VerticalAlignment="Center" />
-                                                        </Border>
-                                                        <TextBlock Classes="caption" FontWeight="SemiBold"
-                                                                   Text="{Binding Header}" />
-                                                        <TextBlock Classes="muted" Text="{Binding SubHeader}"
-                                                                   VerticalAlignment="Center" />
-                                                    </StackPanel>
-
-                                                    <!-- Repositories on this host -->
-                                                    <ItemsControl ItemsSource="{Binding Repositories}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate x:DataType="m:RepositoryInfo">
-                                                                <Button Classes="rowButton"
-                                                                        Click="OnRepositoryRowClick"
-                                                                        Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).SelectRepositoryCommand}"
-                                                                        CommandParameter="{Binding}">
-                                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
-                                                                        <Path Grid.Column="0" Classes="icon"
-                                                                              Data="{DynamicResource IconRepo}" />
-                                                                        <StackPanel Grid.Column="1">
-                                                                            <TextBlock Classes="body"
-                                                                                       Text="{Binding Name}" />
-                                                                            <TextBlock Classes="muted"
-                                                                                       Text="{Binding FullName}" />
-                                                                        </StackPanel>
-                                                                        <Border Grid.Column="2" Classes="chip"
-                                                                                IsVisible="{Binding HasVisibility}">
-                                                                            <TextBlock Classes="muted"
-                                                                                       Text="{Binding VisibilityLabel}" />
-                                                                        </Border>
-                                                                    </Grid>
-                                                                </Button>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-
-                                <Border Grid.Row="3" Classes="divider" Margin="0,6" />
-
-                                <StackPanel Grid.Row="4">
+                    <!-- Everything that brings a new repository in. It was buried at the
+                         bottom of the picker, which is a list of what you already have. -->
+                    <Button Grid.Column="2" x:Name="AddRepositoryButton"
+                            Classes="addButton" VerticalAlignment="Center"
+                            ToolTip.Tip="Add a repository">
+                        <Path Data="{DynamicResource IconPlus}" Width="16" Height="16"
+                              Stretch="None" StrokeLineCap="Round" Fill="Transparent" />
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedLeft"
+                                    FlyoutPresenterClasses="picker">
+                                <StackPanel Width="280">
                                     <Button Classes="rowButton"
-                                            Click="OnRepositoryRowClick"
+                                            Click="OnAddRepositoryRowClick"
                                             Command="{Binding AddRepositoryCommand}">
                                         <StackPanel Orientation="Horizontal" Spacing="9">
                                             <Path Classes="icon" Data="{DynamicResource IconPlus}" />
@@ -165,7 +85,7 @@
                                     </Button>
 
                                     <Button Classes="rowButton"
-                                            Click="OnRepositoryRowClick"
+                                            Click="OnAddRepositoryRowClick"
                                             Command="{Binding ShowCloneCommand}">
                                         <StackPanel Orientation="Horizontal" Spacing="9">
                                             <Path Classes="icon" Data="{DynamicResource IconRepo}" />
@@ -173,13 +93,13 @@
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
-                            </Grid>
-                        </Flyout>
-                    </Button.Flyout>
-                </Button>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </Grid>
 
                 <!-- Current branch -->
-                <Button Grid.Column="2" x:Name="BranchPickerButton"
+                <Button Grid.Column="1" x:Name="BranchPickerButton"
                         Classes="toolbarItem" Margin="0,0,8,0">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
                         <Path Grid.Column="0" Classes="icon" Data="{DynamicResource IconBranch}" />
@@ -243,7 +163,7 @@
                 </Button>
 
                 <!-- Fetch / push / pull -->
-                <Button Grid.Column="3" Classes="toolbarItem"
+                <Button Grid.Column="2" Classes="toolbarItem"
                         Command="{Binding SyncCommand}">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
                         <Path Grid.Column="0" Classes="icon" Data="{DynamicResource IconSync}" />
@@ -260,7 +180,7 @@
                 </Button>
 
                 <!-- Right-hand controls -->
-                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4"
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4"
                             VerticalAlignment="Center" Margin="10,0,0,0">
                     <Button Classes="iconButton" Click="OnToggleTheme" ToolTip.Tip="Toggle theme">
                         <Path Classes="icon" Data="{DynamicResource IconMoon}" x:Name="ThemeIcon" />
@@ -292,6 +212,31 @@
 
             <views:CloneView IsVisible="{Binding IsClonePageVisible}" />
             <views:SettingsView IsVisible="{Binding IsSettingsPageVisible}" />
+
+            <!-- Discarding is the other unrecoverable action here: the change was never
+                 committed, so nothing can bring it back. Hence the scrim and the extra
+                 click, and the destructive button on the right rather than under the
+                 pointer's resting place. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasPendingDiscard}">
+                <Border Background="{DynamicResource ElevatedBackground}"
+                        BorderBrush="{DynamicResource BorderStrong}"
+                        BorderThickness="1" CornerRadius="10" Padding="22" Width="460"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel Spacing="14">
+                        <TextBlock Classes="h2" Text="Discard changes?" />
+                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                   Text="{Binding PendingDiscardSummary}" />
+                        <StackPanel Orientation="Horizontal" Spacing="9"
+                                    HorizontalAlignment="Right">
+                            <Button Classes="secondary" Content="Cancel"
+                                    Command="{Binding CancelDiscardCommand}" />
+                            <Button Classes="primary" Content="Discard changes"
+                                    Command="{Binding ConfirmDiscardCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Border>
 
             <!-- Branch switch with uncommitted work. A ContentControl so nothing binds
                  against a null prompt, and a scrim so the choice has to be made. -->
