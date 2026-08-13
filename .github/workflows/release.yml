@@ -42,10 +42,27 @@ jobs:
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
 
+  # ------------------------------------------------------------------- test
+  # ci.yml only runs on pushes to a branch, so a tag would otherwise reach the
+  # packaging jobs untested. One cheap Linux job gates all three of them.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test GitGui.slnx --configuration Release
+
   # ------------------------------------------------------------------ linux
   linux:
     name: Linux (deb, rpm, tar.gz)
-    needs: version
+    needs: [version, test]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -73,7 +90,7 @@ jobs:
   # ---------------------------------------------------------------- windows
   windows:
     name: Windows (installer, zip)
-    needs: version
+    needs: [version, test]
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
@@ -103,7 +120,7 @@ jobs:
   # ------------------------------------------------------------------ macos
   macos:
     name: macOS (dmg, arm64 + x64)
-    needs: version
+    needs: [version, test]
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
@@ -156,13 +173,23 @@ jobs:
               --title "GitGui $VERSION" \
               --notes "Automated build of GitGui $VERSION.
 
+          ## Install
+
           **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), or the portable \`.tar.gz\`.
           **Windows** — run the \`-setup.exe\`, or unzip the portable build.
           **macOS** — open the \`.dmg\` and drag GitGui to Applications. The bundle is unsigned, so the first launch needs right-click → Open.
 
-          No git installation is required — the native libgit2 library ships inside the app.
+          **No git installation is required.** The native libgit2 library ships inside the app, along with everything else it needs.
 
-          Add a local clone from the repository picker, and sign in on the Accounts screen to fetch and push. Hosting sites other than GitHub and Gitea can be added by dropping a JSON manifest in the hosts folder; see docs/host-manifests.md." \
+          ## Getting started
+
+          Add a clone you already have from the repository picker, or sign in under **Settings → Accounts** and clone one straight from the picker's *Clone from a hosting site…* entry. GitHub supports browser sign-in; anywhere else takes a personal access token. Tokens go to your OS keychain, never to a settings file.
+
+          Beyond the usual staging, committing, branching and fetch/push/pull: switching branches with uncommitted work asks whether to bring it along or stash it, the app notices changes made outside it, and hosting sites other than GitHub, Gitea and GitLab can be added under **Settings → Hosting sites** without writing any code — or by hand, see docs/host-manifests.md.
+
+          ## Not in this build
+
+          Pull requests and issues." \
               --target "$GITHUB_SHA"
           fi
 

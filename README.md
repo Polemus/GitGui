@@ -271,7 +271,9 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`release.yml` then builds every target and attaches the results to a GitHub Release:
+`release.yml` runs the tests first — `ci.yml` only triggers on pushes to a branch, so
+without that gate a tag would package untested code — then builds every target and
+attaches the results to a GitHub Release:
 
 | Platform | Artifacts |
 | --- | --- |
