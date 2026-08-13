@@ -149,6 +149,11 @@
                              PlaceholderText="Description"
                              Text="{Binding CommitDescription, Mode=TwoWay}"
                              AcceptsReturn="True" TextWrapping="Wrap" Height="76" />
+                    <CheckBox IsChecked="{Binding IsAmending, Mode=TwoWay}"
+                              IsEnabled="{Binding CanAmend}"
+                              ToolTip.Tip="{Binding AmendHint}"
+                              Content="Amend last commit" />
+
                     <Button Classes="primary" HorizontalAlignment="Stretch"
                             Command="{Binding CommitCommand}"
                             Content="{Binding CommitButtonLabel}" />
