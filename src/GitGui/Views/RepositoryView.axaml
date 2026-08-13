@@ -1,0 +1,205 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GitGui.ViewModels"
+             xmlns:m="using:GitGui.Models"
+             xmlns:views="using:GitGui.Views"
+             xmlns:conv="using:GitGui.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
+             x:Class="GitGui.Views.RepositoryView"
+             x:DataType="vm:MainWindowViewModel">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <UserControl.Resources>
+        <conv:HexToBrushConverter x:Key="HexToBrush" />
+    </UserControl.Resources>
+
+    <Grid ColumnDefinitions="340,Auto,*">
+
+        <!-- ======================= Sidebar ======================= -->
+        <Border Grid.Column="0" Background="{DynamicResource SidebarBackground}">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+                <!-- Changes / History tabs -->
+                <Grid Grid.Row="0" ColumnDefinitions="*,*">
+                    <Button Grid.Column="0" Classes="tab"
+                            Classes.active="{Binding IsChangesTab}"
+                            Command="{Binding ShowChangesTabCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+                            <TextBlock Text="Changes" />
+                            <Border Classes="chip" Padding="6,1">
+                                <TextBlock Classes="muted" Text="{Binding Changes.Count}" />
+                            </Border>
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1" Classes="tab"
+                            Classes.active="{Binding IsHistoryTab}"
+                            Command="{Binding ShowHistoryTabCommand}"
+                            Content="History" />
+                </Grid>
+
+                <Border Grid.Row="1" Classes="divider" />
+
+                <!-- Tab body -->
+                <Panel Grid.Row="2">
+
+                    <!-- Working-tree changes -->
+                    <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsChangesTab}">
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="9"
+                              Margin="14,11">
+                            <CheckBox Grid.Column="0" IsChecked="{Binding AreAllStaged, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="1" Classes="caption" VerticalAlignment="Center"
+                                       Text="{Binding StagedCountLabel}" />
+                        </Grid>
+
+                        <Border Grid.Row="1" Classes="divider" />
+
+                        <ListBox Grid.Row="2" Classes="plain"
+                                 ItemsSource="{Binding Changes}"
+                                 SelectedItem="{Binding SelectedChange, Mode=TwoWay}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FileChangeViewModel">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="9"
+                                          Margin="14,7">
+                                        <CheckBox Grid.Column="0"
+                                                  IsChecked="{Binding IsStaged, Mode=TwoWay}"
+                                                  VerticalAlignment="Center" />
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Classes="body" Text="{Binding FileName}" />
+                                            <TextBlock Classes="muted" Text="{Binding Directory}"
+                                                       IsVisible="{Binding HasDirectory}" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Classes="muted"
+                                                       Foreground="{DynamicResource StatusAdded}"
+                                                       Text="{Binding AdditionsLabel}" />
+                                            <TextBlock Classes="muted"
+                                                       Foreground="{DynamicResource StatusDeleted}"
+                                                       Text="{Binding DeletionsLabel}" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="3"
+                                                   Classes="statusGlyph"
+                                                   Classes.added="{Binding IsAdded}"
+                                                   Classes.modified="{Binding IsModified}"
+                                                   Classes.deleted="{Binding IsDeleted}"
+                                                   Classes.renamed="{Binding IsRenamed}"
+                                                   Text="{Binding StatusGlyph}"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <!-- Commit history -->
+                    <ListBox Classes="plain"
+                             IsVisible="{Binding IsHistoryTab}"
+                             ItemsSource="{Binding History}"
+                             SelectedItem="{Binding SelectedCommit, Mode=TwoWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="m:CommitInfo">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="14,10">
+                                    <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
+                                            VerticalAlignment="Top"
+                                            Background="{Binding AvatarHex, Converter={StaticResource HexToBrush}}">
+                                        <TextBlock Text="{Binding AuthorInitials}"
+                                                   FontSize="11" FontWeight="Bold" Foreground="White"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock Classes="body" Text="{Binding Summary}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                            <TextBlock Classes="muted" Text="{Binding AuthorName}" />
+                                            <TextBlock Classes="muted" Text="·" />
+                                            <TextBlock Classes="muted" Text="{Binding RelativeTime}" />
+                                            <TextBlock Classes="muted" FontFamily="{DynamicResource MonoFont}"
+                                                       Text="{Binding ShortSha}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Panel>
+
+                <!-- Commit box (Changes tab only) -->
+                <StackPanel Grid.Row="3" Spacing="9" Margin="14"
+                            IsVisible="{Binding IsChangesTab}">
+                    <Border Classes="divider" Margin="-14,0,-14,4" />
+                    <TextBox Classes="commitBox"
+                             PlaceholderText="{Binding CommitSummaryPlaceholder}"
+                             Text="{Binding CommitSummary, Mode=TwoWay}" />
+                    <TextBox Classes="commitBox"
+                             PlaceholderText="Description"
+                             Text="{Binding CommitDescription, Mode=TwoWay}"
+                             AcceptsReturn="True" TextWrapping="Wrap" Height="76" />
+                    <Button Classes="primary" HorizontalAlignment="Stretch"
+                            Command="{Binding CommitCommand}"
+                            Content="{Binding CommitButtonLabel}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Width="1" Background="{DynamicResource BorderSubtle}" />
+
+        <!-- ======================= Detail pane ======================= -->
+        <Panel Grid.Column="2" Background="{DynamicResource AppBackground}">
+
+            <!-- Selected working-tree file -->
+            <ScrollViewer IsVisible="{Binding IsChangesTab}" Padding="18">
+                <views:DiffView DataContext="{Binding SelectedChange.Model}" />
+            </ScrollViewer>
+
+            <!-- Selected commit -->
+            <ScrollViewer IsVisible="{Binding IsHistoryTab}" Padding="18">
+                <StackPanel Spacing="14" DataContext="{Binding SelectedCommit}"
+                            x:DataType="m:CommitInfo">
+
+                    <Border Classes="card">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                            <Border Grid.Column="0" Width="40" Height="40" CornerRadius="20"
+                                    VerticalAlignment="Top"
+                                    Background="{Binding AvatarHex, Converter={StaticResource HexToBrush}}">
+                                <TextBlock Text="{Binding AuthorInitials}"
+                                           FontSize="14" FontWeight="Bold" Foreground="White"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+
+                            <StackPanel Grid.Column="1" Spacing="5">
+                                <TextBlock Classes="h2" Text="{Binding Summary}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Classes="caption" Text="{Binding AuthorName}" />
+                                    <TextBlock Classes="muted" Text="committed" />
+                                    <TextBlock Classes="muted" Text="{Binding RelativeTime}" />
+                                    <TextBlock Classes="muted" Text="·" />
+                                    <TextBlock Classes="muted" Text="{Binding FilesChangedLabel}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Border Grid.Column="2" Classes="chip" VerticalAlignment="Top">
+                                <TextBlock Classes="mono" Foreground="{DynamicResource TextSecondary}"
+                                           Text="{Binding ShortSha}" />
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding Files}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="m:FileChange">
+                                <views:DiffView />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Panel>
+    </Grid>
+</UserControl>
