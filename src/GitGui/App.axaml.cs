@@ -54,7 +54,8 @@ public partial class App : Application
                 new FolderPicker(),
                 HostProviderRegistry.Create(http),
                 new AccountStore(credentials),
-                credentials);
+                credentials,
+                new ActivityLog());
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 

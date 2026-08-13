@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using GitGui.HostProviders;
 using GitGui.Models;
@@ -34,15 +35,19 @@ public interface IGitService
     /// <summary>The origin URL, so callers can work out which account to authenticate with.</summary>
     string? GetRemoteUrl(string path);
 
-    /// <summary>Fetches from origin. Returns a short description of what happened.</summary>
-    string Fetch(string path, GitCredentials? credentials);
+    /// <summary>
+    /// Fetches from origin. Authentication problems come back as a
+    /// <see cref="SyncResult"/> rather than an exception - being signed out is an
+    /// ordinary condition, not a fault.
+    /// </summary>
+    SyncResult Fetch(string path, GitCredentials? credentials, Action<string>? trace = null);
 
     /// <summary>Fetches and merges the tracked upstream branch.</summary>
-    string Pull(string path, GitCredentials? credentials);
+    SyncResult Pull(string path, GitCredentials? credentials, Action<string>? trace = null);
 
     /// <summary>
     /// Pushes the current branch, setting its upstream on first push so the user
     /// doesn't have to run git themselves for a freshly created branch.
     /// </summary>
-    string Push(string path, GitCredentials? credentials);
+    SyncResult Push(string path, GitCredentials? credentials, Action<string>? trace = null);
 }

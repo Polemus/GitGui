@@ -4,6 +4,7 @@
         xmlns:m="using:GitGui.Models"
         xmlns:views="using:GitGui.Views"
         xmlns:conv="using:GitGui.Converters"
+        xmlns:svc="using:GitGui.Services"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
@@ -24,7 +25,7 @@
         <conv:HexToBrushConverter x:Key="HexToBrush" />
     </Window.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
 
         <!-- ============================ Toolbar ============================ -->
         <Border Grid.Row="0"
@@ -235,42 +236,86 @@
                      Foreground="{DynamicResource AccentBrush}"
                      IsVisible="{Binding IsBusy}" />
 
-        <!-- ============================ Banners ============================ -->
-        <StackPanel Grid.Row="2">
-            <Border Background="{DynamicResource BannerErrorBackground}"
-                    BorderBrush="{DynamicResource BannerErrorBorder}"
-                    BorderThickness="0,0,0,1"
-                    Padding="16,10"
-                    IsVisible="{Binding HasError}">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <TextBlock Grid.Column="0" Classes="body" TextWrapping="Wrap"
-                               Foreground="{DynamicResource StatusDeleted}"
-                               Text="{Binding ErrorMessage}" />
-                    <Button Grid.Column="1" Classes="iconButton" Width="24" Height="24"
-                            Padding="4" Command="{Binding DismissErrorCommand}"
-                            Content="✕" FontSize="11" />
-                </Grid>
-            </Border>
-
-            <Border Background="{DynamicResource BannerInfoBackground}"
-                    BorderBrush="{DynamicResource BannerInfoBorder}"
-                    BorderThickness="0,0,0,1"
-                    Padding="16,10"
-                    IsVisible="{Binding HasStatus}">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <TextBlock Grid.Column="0" Classes="body" TextWrapping="Wrap"
-                               Text="{Binding StatusMessage}" />
-                    <Button Grid.Column="1" Classes="iconButton" Width="24" Height="24"
-                            Padding="4" Command="{Binding DismissStatusCommand}"
-                            Content="✕" FontSize="11" />
-                </Grid>
-            </Border>
-        </StackPanel>
-
         <!-- ============================ Content ============================ -->
-        <Panel Grid.Row="3">
+        <Panel Grid.Row="2">
             <views:RepositoryView IsVisible="{Binding !IsAccountsPageVisible}" />
             <views:AccountsView IsVisible="{Binding IsAccountsPageVisible}" />
         </Panel>
+
+        <!-- ======================= Activity console ======================= -->
+        <Grid Grid.Row="3" RowDefinitions="Auto,Auto"
+              Background="{DynamicResource ToolbarBackground}">
+
+            <Border Grid.Row="0" Classes="divider" />
+
+            <!-- Always-visible bar: click anywhere to expand. -->
+            <Button Grid.Row="1" Classes="consoleBar"
+                    Command="{Binding ToggleConsoleCommand}"
+                    IsVisible="{Binding !IsConsoleExpanded}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <Border Grid.Column="0" Width="7" Height="7" CornerRadius="4"
+                            VerticalAlignment="Center"
+                            Classes="logDot"
+                            Classes.trace="{Binding LatestEntry.IsTrace, FallbackValue=False}"
+                            Classes.success="{Binding LatestEntry.IsSuccess, FallbackValue=False}"
+                            Classes.warning="{Binding LatestEntry.IsWarning, FallbackValue=False}"
+                            Classes.error="{Binding LatestEntry.IsError, FallbackValue=False}" />
+
+                    <TextBlock Grid.Column="1" Classes="caption" VerticalAlignment="Center"
+                               Text="{Binding LatestEntry.Message, FallbackValue='Ready'}" />
+
+                    <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center"
+                               Text="Activity ⌃" />
+                </Grid>
+            </Button>
+
+            <!-- Expanded log -->
+            <Grid Grid.Row="1" RowDefinitions="Auto,*" Height="240"
+                  IsVisible="{Binding IsConsoleExpanded}">
+
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="14,6"
+                      ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Classes="sectionLabel" Text="ACTIVITY"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="secondary" Padding="9,4" FontSize="12"
+                            Content="Clear" Command="{Binding ClearLogCommand}" />
+                    <Button Grid.Column="2" Classes="secondary" Padding="9,4" FontSize="12"
+                            Content="Hide ⌄" Command="{Binding ToggleConsoleCommand}" />
+                </Grid>
+
+                <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}"
+                        BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,1,0,0">
+                    <ScrollViewer x:Name="LogScroller" Padding="14,8">
+                        <ItemsControl ItemsSource="{Binding LogEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="svc:ActivityEntry">
+                                    <StackPanel Margin="0,1">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <TextBlock Grid.Column="0" Classes="mono"
+                                                       Foreground="{DynamicResource DiffGutterText}"
+                                                       Text="{Binding Timestamp}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Classes="mono logLine"
+                                                       Classes.trace="{Binding IsTrace}"
+                                                       Classes.success="{Binding IsSuccess}"
+                                                       Classes.warning="{Binding IsWarning}"
+                                                       Classes.error="{Binding IsError}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding Message}" />
+                                        </Grid>
+                                        <TextBlock Classes="mono" FontSize="11"
+                                                   Margin="72,2,0,6"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasDetail}"
+                                                   Text="{Binding Detail}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
     </Grid>
 </Window>
