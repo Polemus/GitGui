@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using FluentAvalonia.Styling;
+using GitGui.HostProviders;
 using GitGui.Services;
 using GitGui.ViewModels;
 using GitGui.Views;
@@ -44,10 +45,16 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            var http = new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(30) };
+            var credentials = CredentialStoreFactory.Create();
+
             var viewModel = new MainWindowViewModel(
                 new GitService(),
                 new RepositoryStore(),
-                new FolderPicker());
+                new FolderPicker(),
+                HostProviderRegistry.Create(http),
+                new AccountStore(credentials),
+                credentials);
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 

@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using GitGui.HostProviders;
 using GitGui.Models;
 using LibGit2Sharp;
+using LibGit2Sharp.Handlers;
 
 namespace GitGui.Services;
 
@@ -240,6 +242,123 @@ public sealed class GitService : IGitService
 
         Commands.Checkout(repo, branch);
     }
+
+    // ------------------------------------------------------------- networking
+
+    public string? GetRemoteUrl(string path)
+    {
+        using var repo = new Repository(Discover(path));
+        return (repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault())?.Url;
+    }
+
+    public string Fetch(string path, GitCredentials? credentials)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var remote = repo.Network.Remotes["origin"]
+                     ?? repo.Network.Remotes.FirstOrDefault()
+                     ?? throw new InvalidOperationException("This repository has no remote to fetch from.");
+
+        var refSpecs = remote.FetchRefSpecs.Select(r => r.Specification).ToList();
+
+        Commands.Fetch(repo, remote.Name, refSpecs, BuildFetchOptions(credentials), "fetch by GitGui");
+
+        var tracking = repo.Head?.TrackingDetails;
+        var behind = tracking?.BehindBy ?? 0;
+
+        return behind > 0
+            ? $"Fetched from {remote.Name} — {behind} commit{(behind == 1 ? "" : "s")} to pull"
+            : $"Fetched from {remote.Name} — already up to date";
+    }
+
+    public string Pull(string path, GitCredentials? credentials)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var signature = repo.Config.BuildSignature(DateTimeOffset.Now)
+                        ?? new Signature("GitGui", "gitgui@localhost", DateTimeOffset.Now);
+
+        var result = Commands.Pull(repo, signature, new PullOptions
+        {
+            FetchOptions = BuildFetchOptions(credentials),
+            MergeOptions = new MergeOptions { FailOnConflict = false },
+        });
+
+        return result.Status switch
+        {
+            MergeStatus.UpToDate => "Already up to date",
+            MergeStatus.FastForward => $"Fast-forwarded to {Short(result.Commit)}",
+            MergeStatus.NonFastForward => $"Merged to {Short(result.Commit)}",
+            MergeStatus.Conflicts => "Pulled with conflicts — resolve them before committing",
+            _ => "Pull finished",
+        };
+    }
+
+    public string Push(string path, GitCredentials? credentials)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var branch = repo.Head
+                     ?? throw new InvalidOperationException("No branch is checked out.");
+
+        var remote = repo.Network.Remotes["origin"]
+                     ?? repo.Network.Remotes.FirstOrDefault()
+                     ?? throw new InvalidOperationException("This repository has no remote to push to.");
+
+        // A branch created locally has no upstream, and libgit2 refuses to push it.
+        // Setting it here saves the user dropping to the command line for their first
+        // push of a new branch, which is exactly when a GUI should help.
+        if (!branch.IsTracking)
+        {
+            repo.Branches.Update(branch,
+                b => b.Remote = remote.Name,
+                b => b.UpstreamBranch = branch.CanonicalName);
+
+            branch = repo.Branches[branch.FriendlyName];
+        }
+
+        var pushed = 0;
+        var options = new PushOptions
+        {
+            CredentialsProvider = CredentialsFor(credentials),
+            OnPushStatusError = error =>
+                throw new InvalidOperationException($"{remote.Name} rejected {error.Reference}: {error.Message}"),
+            OnPackBuilderProgress = (_, current, _) => { pushed = current; return true; },
+        };
+
+        repo.Network.Push(branch, options);
+
+        return $"Pushed {branch.FriendlyName} to {remote.Name}"
+               + (pushed > 0 ? $" ({pushed} objects)" : string.Empty);
+    }
+
+    private static FetchOptions BuildFetchOptions(GitCredentials? credentials) => new()
+    {
+        CredentialsProvider = CredentialsFor(credentials),
+        TagFetchMode = TagFetchMode.Auto,
+        Prune = true,
+    };
+
+    /// <summary>
+    /// Supplies credentials to libgit2. Returning null for a missing account lets
+    /// public repositories over HTTPS keep working without any sign-in at all.
+    /// </summary>
+    private static CredentialsHandler? CredentialsFor(GitCredentials? credentials)
+    {
+        if (credentials is null)
+            return null;
+
+        return (_, _, types) => types.HasFlag(SupportedCredentialTypes.UsernamePassword)
+            ? new UsernamePasswordCredentials
+            {
+                Username = credentials.Username,
+                Password = credentials.Password,
+            }
+            : new DefaultCredentials();
+    }
+
+    private static string Short(Commit? commit)
+        => commit?.Sha is { Length: >= 7 } sha ? sha[..7] : "HEAD";
 
     // ---------------------------------------------------------------- helpers
 
