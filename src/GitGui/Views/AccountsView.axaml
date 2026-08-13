@@ -149,38 +149,45 @@
                                     Command="{Binding StartBrowserLoginCommand}" />
                         </StackPanel>
 
-                        <!-- Device code, shown while a browser login is pending -->
-                        <Border Background="{DynamicResource BannerInfoBackground}"
-                                BorderBrush="{DynamicResource BannerInfoBorder}"
-                                BorderThickness="1" CornerRadius="8" Padding="14"
-                                IsVisible="{Binding HasPendingDeviceLogin}">
-                            <StackPanel Spacing="8">
-                                <TextBlock Classes="caption"
-                                           Text="Your browser should have opened with the code already copied. If not:" />
-                                <!-- FontFamily is set here, not by the mono class: Avalonia
-                                     selectors match the exact type, so TextBlock.mono
-                                     reaches neither a Button nor a SelectableTextBlock. -->
-                                <Button Classes="link" HorizontalAlignment="Left"
-                                        FontFamily="{DynamicResource MonoFont}"
-                                        Content="{Binding PendingDeviceLogin.VerificationUri}"
-                                        Command="{Binding OpenDeviceUrlCommand}"
-                                        ToolTip.Tip="Open this page in your browser" />
-                                <StackPanel Orientation="Horizontal" Spacing="12"
-                                            VerticalAlignment="Center">
-                                    <!-- Selectable so the code can be dragged out even if
-                                         the clipboard is unreachable. -->
-                                    <SelectableTextBlock FontFamily="{DynamicResource MonoFont}"
-                                                         FontSize="26" FontWeight="Bold"
-                                                         Foreground="{DynamicResource AccentBrush}"
-                                                         VerticalAlignment="Center"
-                                                         Text="{Binding PendingDeviceLogin.UserCode}" />
-                                    <Button Classes="secondary" Content="Copy code"
-                                            VerticalAlignment="Center"
-                                            Command="{Binding CopyDeviceCodeCommand}" />
-                                </StackPanel>
-                                <TextBlock Classes="muted" Text="Waiting for approval…" />
-                            </StackPanel>
-                        </Border>
+                        <!-- Device code, shown while a browser login is pending. A
+                             ContentControl, not IsVisible: the template isn't realised until
+                             there is a login, so nothing binds against null. -->
+                        <ContentControl Content="{Binding PendingDeviceLogin}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate x:DataType="hp:DeviceLogin">
+                                    <Border Background="{DynamicResource BannerInfoBackground}"
+                                            BorderBrush="{DynamicResource BannerInfoBorder}"
+                                            BorderThickness="1" CornerRadius="8" Padding="14">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Classes="caption"
+                                                       Text="Your browser should have opened with the code already copied. If not:" />
+                                            <!-- FontFamily is set here, not by the mono class: Avalonia
+                                                 selectors match the exact type, so TextBlock.mono
+                                                 reaches neither a Button nor a SelectableTextBlock. -->
+                                            <Button Classes="link" HorizontalAlignment="Left"
+                                                    FontFamily="{DynamicResource MonoFont}"
+                                                    Content="{Binding VerificationUri}"
+                                                    Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).OpenDeviceUrlCommand}"
+                                                    ToolTip.Tip="Open this page in your browser" />
+                                            <StackPanel Orientation="Horizontal" Spacing="12"
+                                                        VerticalAlignment="Center">
+                                                <!-- Selectable so the code can be dragged out even if
+                                                     the clipboard is unreachable. -->
+                                                <SelectableTextBlock FontFamily="{DynamicResource MonoFont}"
+                                                                     FontSize="26" FontWeight="Bold"
+                                                                     Foreground="{DynamicResource AccentBrush}"
+                                                                     VerticalAlignment="Center"
+                                                                     Text="{Binding UserCode}" />
+                                                <Button Classes="secondary" Content="Copy code"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CopyDeviceCodeCommand}" />
+                                            </StackPanel>
+                                            <TextBlock Classes="muted" Text="Waiting for approval…" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
                     </StackPanel>
                 </Border>
 
