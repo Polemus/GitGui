@@ -1273,6 +1273,51 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void CancelHostDraft() => HostDraft = null;
 
+    /// <summary>
+    /// Tries the draft against a real server before it is saved. Sign-in used to be the
+    /// first thing that touched these endpoints, which meant a typo showed up as a
+    /// failed login with nothing pointing at the field that caused it.
+    /// </summary>
+    [RelayCommand]
+    private async Task TestHostAsync()
+    {
+        if (HostDraft is not { CanTest: true } draft)
+            return;
+
+        if (!HostConnectionTester.TryParseBaseUrl(draft.TestUrl, out var baseUrl))
+        {
+            Log(ActivityLevel.Error, "Enter the address of a server to test against.");
+            return;
+        }
+
+        draft.IsTesting = true;
+
+        try
+        {
+            var report = await _hosts.TestAsync(draft.ToManifest(), baseUrl, draft.TestToken, default);
+            draft.ShowTestResult(report);
+
+            foreach (var step in report.Steps)
+            {
+                Log(step.Outcome switch
+                    {
+                        ProbeOutcome.Passed => ActivityLevel.Trace,
+                        ProbeOutcome.Failed => ActivityLevel.Warning,
+                        _ => ActivityLevel.Trace,
+                    },
+                    $"{baseUrl.Host} — {step.Name}: {step.Detail}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log(ActivityLevel.Error, $"Could not test the site: {ex.Message}", ex.ToString());
+        }
+        finally
+        {
+            draft.IsTesting = false;
+        }
+    }
+
     [RelayCommand]
     private void SaveHost()
     {
