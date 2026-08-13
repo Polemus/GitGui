@@ -196,6 +196,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleConsole() => IsConsoleExpanded = !IsConsoleExpanded;
 
+    /// <summary>
+    /// Nothing in the UI calls this since the console header lost its Clear button, but
+    /// <see cref="ActivityLog"/> is the only thing holding those entries, so the way to
+    /// empty it stays here rather than being rebuilt from scratch later.
+    /// </summary>
     [RelayCommand]
     private void ClearLog()
     {
@@ -231,6 +236,11 @@ public partial class MainWindowViewModel : ViewModelBase
     public partial FileChangeViewModel? SelectedChange { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
+    [NotifyPropertyChangedFor(nameof(SelectedCommitAmendHint))]
+    [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CopyCommitShaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CopyCommitSummaryCommand))]
     public partial CommitInfo? SelectedCommit { get; set; }
 
     [ObservableProperty]
@@ -302,13 +312,17 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SyncCountLabel))]
     [NotifyPropertyChangedFor(nameof(HasSyncCount))]
     [NotifyPropertyChangedFor(nameof(CanAmend))]
-    [NotifyPropertyChangedFor(nameof(AmendHint))]
+    [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
+    [NotifyPropertyChangedFor(nameof(SelectedCommitAmendHint))]
+    [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
     public partial int Ahead { get; set; }
 
     /// <summary>False when the branch has never been pushed; see <see cref="CanAmend"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAmend))]
-    [NotifyPropertyChangedFor(nameof(AmendHint))]
+    [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
+    [NotifyPropertyChangedFor(nameof(SelectedCommitAmendHint))]
+    [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
     public partial bool HasUpstream { get; set; }
 
     [ObservableProperty]
@@ -363,14 +377,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>
     /// Amending rewrites history, so it is offered only while the last commit is still
     /// local. Once pushed, changing it would need a force-push, which is not something
-    /// to make available behind a checkbox.
+    /// to make available from a menu.
     /// </summary>
     public bool CanAmend => SelectedRepository is not null
                             && (Ahead > 0 || !HasUpstream);
-
-    public string AmendHint => CanAmend
-        ? "Replace the last commit instead of adding one."
-        : "The last commit is already pushed, so it can't be amended here.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanCommit))]
@@ -378,7 +388,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial bool IsAmending { get; set; }
 
-    /// <summary>Loads or clears the previous message as the checkbox is ticked.</summary>
+    /// <summary>Loads or clears the previous message as amend mode goes on and off.</summary>
     partial void OnIsAmendingChanged(bool value)
     {
         if (SelectedRepository is not { } repo)
@@ -889,6 +899,68 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private void ShowHistoryTab() => SelectedTabIndex = 1;
+
+    // ---- Commit history context menu ---------------------------------------
+
+    /// <summary>
+    /// Only ever the newest commit. Amending an older one means rewriting everything
+    /// after it, which is an interactive rebase and not something this app does.
+    /// </summary>
+    public bool CanAmendSelectedCommit => CanAmend
+                                          && SelectedCommit is { } commit
+                                          && History.FirstOrDefault()?.Sha == commit.Sha;
+
+    /// <summary>
+    /// Shown under the disabled menu item, because a greyed-out row with no reason is
+    /// the thing people file bugs about. Says what amending does either way.
+    /// </summary>
+    public string SelectedCommitAmendHint => CanAmendSelectedCommit
+        ? "Fixes this commit — its message, or a file you forgot — instead of adding a new one."
+        : SelectedCommit is not null && History.FirstOrDefault()?.Sha != SelectedCommit.Sha
+            ? "Only the newest commit can be fixed this way."
+            : "Fixes the last commit instead of adding a new one. Only possible until it is pushed.";
+
+    /// <summary>
+    /// Hands over to the commit box: that is where the message is edited and files are
+    /// staged, so amending has to happen on the Changes tab whatever started it. Ticking
+    /// the flag is what loads the old message into the boxes.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAmendSelectedCommit))]
+    private void AmendSelectedCommit()
+    {
+        SelectedTabIndex = 0;
+        IsAmending = true;
+    }
+
+    /// <summary>Setting the flag down is what clears the loaded message out of the boxes.</summary>
+    [RelayCommand]
+    private void CancelAmend() => IsAmending = false;
+
+    private bool HasSelectedCommit => SelectedCommit is not null;
+
+    [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
+    private async Task CopyCommitShaAsync()
+    {
+        if (SelectedCommit is not { } commit)
+            return;
+
+        if (await _shell.CopyTextAsync(commit.Sha))
+            Log(ActivityLevel.Info, $"Copied {commit.ShortSha} to the clipboard");
+        else
+            Log(ActivityLevel.Warning, "Could not reach the clipboard");
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
+    private async Task CopyCommitSummaryAsync()
+    {
+        if (SelectedCommit is not { } commit)
+            return;
+
+        if (await _shell.CopyTextAsync(commit.Summary))
+            Log(ActivityLevel.Info, "Copied the commit summary to the clipboard");
+        else
+            Log(ActivityLevel.Warning, "Could not reach the clipboard");
+    }
 
     // ---- Browse and clone --------------------------------------------------
 
