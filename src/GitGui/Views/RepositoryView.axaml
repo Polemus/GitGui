@@ -173,35 +173,46 @@
             <ScrollViewer IsVisible="{Binding IsHistoryTab}" Padding="18">
                 <StackPanel Spacing="14">
 
-                    <Border Classes="card"
-                            IsVisible="{Binding SelectedCommit, Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
-                            <Border Grid.Column="0" Width="40" Height="40" CornerRadius="20"
-                                    VerticalAlignment="Top"
-                                    Background="{Binding SelectedCommit.AvatarHex, Converter={StaticResource HexToBrush}}">
-                                <TextBlock Text="{Binding SelectedCommit.AuthorInitials}"
-                                           FontSize="14" FontWeight="Bold" Foreground="White"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
+                    <!-- A ContentControl, not a Border with IsVisible: the template isn't
+                         realised until SelectedCommit is non-null, so nothing binds against
+                         a null commit and the debug console stays quiet. -->
+                    <ContentControl Content="{Binding SelectedCommit}">
+                        <ContentControl.ContentTemplate>
+                            <DataTemplate x:DataType="m:CommitInfo">
+                                <Border Classes="card">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="20"
+                                                VerticalAlignment="Top"
+                                                Background="{Binding AvatarHex, Converter={StaticResource HexToBrush}}">
+                                            <TextBlock Text="{Binding AuthorInitials}"
+                                                       FontSize="14" FontWeight="Bold" Foreground="White"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
 
-                            <StackPanel Grid.Column="1" Spacing="5">
-                                <TextBlock Classes="h2" Text="{Binding SelectedCommit.Summary}"
-                                           TextWrapping="Wrap" />
-                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                    <TextBlock Classes="caption" Text="{Binding SelectedCommit.AuthorName}" />
-                                    <TextBlock Classes="muted" Text="committed" />
-                                    <TextBlock Classes="muted" Text="{Binding SelectedCommit.RelativeTime}" />
-                                    <TextBlock Classes="muted" Text="·" />
-                                    <TextBlock Classes="muted" Text="{Binding SelectedCommitFilesLabel}" />
-                                </StackPanel>
-                            </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="5">
+                                            <TextBlock Classes="h2" Text="{Binding Summary}"
+                                                       TextWrapping="Wrap" />
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <TextBlock Classes="caption" Text="{Binding AuthorName}" />
+                                                <TextBlock Classes="muted" Text="committed" />
+                                                <TextBlock Classes="muted" Text="{Binding RelativeTime}" />
+                                                <TextBlock Classes="muted" Text="·" />
+                                                <!-- Lives on the view model, not the commit, so it
+                                                     reaches back out of the template. -->
+                                                <TextBlock Classes="muted"
+                                                           Text="{Binding $parent[views:RepositoryView].((vm:MainWindowViewModel)DataContext).SelectedCommitFilesLabel}" />
+                                            </StackPanel>
+                                        </StackPanel>
 
-                            <Border Grid.Column="2" Classes="chip" VerticalAlignment="Top">
-                                <TextBlock Classes="mono" Foreground="{DynamicResource TextSecondary}"
-                                           Text="{Binding SelectedCommit.ShortSha}" />
-                            </Border>
-                        </Grid>
-                    </Border>
+                                        <Border Grid.Column="2" Classes="chip" VerticalAlignment="Top">
+                                            <TextBlock Classes="mono" Foreground="{DynamicResource TextSecondary}"
+                                                       Text="{Binding ShortSha}" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
 
                     <ItemsControl ItemsSource="{Binding SelectedCommitFiles}">
                         <ItemsControl.ItemTemplate>
