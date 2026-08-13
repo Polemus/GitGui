@@ -1,14 +1,15 @@
 # GitGui
 
 A desktop git client in the spirit of GitHub Desktop — except it isn't tied to GitHub.
-GitGui talks to **GitHub** and **Gitea** (including self-hosted instances behind your own
-domain), and to anything else you describe in a JSON file.
+GitGui talks to **GitHub**, **Gitea** and **GitLab** (including self-hosted instances
+behind your own domain), and to anything else you describe in a JSON file.
 
 Runs on **Linux, Windows and macOS** from a single codebase.
 
 > **Status: working, not finished.** GitGui reads and writes real repositories — branches,
-> working-tree status, diffs, history, commits — and signs in to hosting sites to browse,
-> clone, fetch, push and pull. Still missing: pull requests and issues.
+> working-tree status, diffs, history, commits, tags, reverts and resets — signs in to
+> hosting sites to browse, clone, fetch, push and pull, and finishes merges that stop on
+> conflicts. Still missing: pull requests and issues.
 
 **No git installation required.** The native libgit2 library ships inside the app, so
 users don't need git, .NET, or anything else installed. See [Does it need git?](#does-it-need-git).
@@ -18,20 +19,25 @@ users don't need git, .NET, or anything else installed. See [Does it need git?](
 ## Screenshots
 
 Every screenshot below is the app running against **real repositories** — including its
-own. They are out of date: taken before the activity console, the settings page, the
-three-pane history and the resizable panes.
+own. The one at the top is GitGui showing the edit to this very README.
 
 **Changes — working tree and unified diff**
 
 ![Changes tab, dark theme](docs/screenshots/changes-dark.png)
 
+**History — three panes, with tags shown against the commits that carry them**
+
+![History tab, dark theme](docs/screenshots/history-dark.png)
+
+**Finishing a revert that stopped on conflicts** — each file gets three answers, the
+commit box is pre-filled with the message git prepared, and committing stays disabled
+until nothing is conflicted
+
+![Conflict panel, dark theme](docs/screenshots/conflicts-dark.png)
+
 **Repository picker — grouped by the hosting site each clone actually came from**
 
 ![Repository picker](docs/screenshots/repository-picker.png)
-
-**History — commit list with per-file diffs**
-
-![History tab, dark theme](docs/screenshots/history-dark.png)
 
 **Light theme**
 
@@ -47,8 +53,11 @@ three-pane history and the resizable panes.
   at once, filtered by name or description. Cloning uses that site's own token, so private
   repositories need no terminal. Repositories you already have are marked rather than
   offered again, matched through the same URL parsing that groups them.
-- **Create branches**, and amend the last commit — right-click it in the history — while
-  it is still local.
+- **Right-click any commit in the history** to amend it while it's still local, move the
+  branch back to it, open it, undo it, branch from it, tag it, copy it onto another
+  branch, copy its sha, summary or tag, or open it on the site it came from. Resetting
+  explains its three modes in words rather than git's, and says which one destroys work.
+- **Create branches**, from the branch picker or from any commit in the history.
 - **Switching branches with uncommitted work asks first** rather than silently carrying it
   across. Bring everything, leave everything, or tick individual files — whatever is left
   behind is stashed against the branch you came from. Returning to that branch shows a bar
@@ -69,9 +78,16 @@ three-pane history and the resizable panes.
 - **Right-click a changed file** to discard it, add it to `.gitignore` (the file, its
   folder or its extension — only the ones that apply to that file are offered), copy its
   path, or open its folder. Discarding asks first, since nothing can bring it back.
-- **History tab** — real commit log, with each commit's diffs loaded on demand
-  (diffing 100 commits up front is far too slow for a list). Selecting a commit shows its
-  header, the files it touched, and the diff for whichever file you click.
+- **History tab** — real commit log in three panes, with each commit's diffs loaded on
+  demand (diffing 100 commits up front is far too slow for a list). Selecting a commit
+  shows its header, the files it touched, and the diff for whichever file you click.
+  Tagged commits carry their tag names as badges in the list.
+- **Conflicts are finished in the app.** When a merge, revert or cherry-pick stops on
+  something git can't merge itself, a panel on the Changes tab lists what's stuck and
+  offers each file three answers: keep mine, take theirs, or fix it by hand and mark it
+  resolved. Committing finishes the operation, using the message git prepared; abandoning
+  puts everything back. Committing is blocked until nothing is conflicted, so markers
+  can't reach a commit by accident.
 - **Resizable panes.** The sidebar, the commit file list and the activity console are all
   draggable, and the console remembers its height across collapsing.
 - **Refreshes itself.** A debounced file-system watcher notices work done outside the app,
@@ -192,20 +208,26 @@ src/GitGui/
   Models/        Domain types — hosts, accounts, repos, commits, diffs
   Services/
     GitService.cs          libgit2 implementation of IGitService
+    GitService.CommitOperations.cs
+                           tags, reverts, cherry-picks, resets and conflicts
     UnifiedDiffParser.cs   libgit2 patch text -> renderable diff rows
     HostResolver.cs        origin URL -> which hosting site a clone belongs to
+    WebLinks.cs            clone + commit -> the page to open in a browser
+    AccountStore.cs        accounts split between JSON and the keyring
+    CredentialStore.cs     keyring / Keychain / DPAPI, with a 0600 fallback
+    ActivityLog.cs         what the console shows
     RepositoryStore.cs     known-clone list, JSON in the app-data dir
     RepositoryWatcher.cs   notices work done outside the app, debounced
     FolderPicker.cs        native folder dialog via StorageProvider
     SystemShell.cs         open a browser, reach the clipboard
     MockData.cs            design-time sample content only
-  ViewModels/    MainWindowViewModel + per-item view models
+  ViewModels/    MainWindowViewModel + per-item view models and prompts
   Views/         MainWindow, RepositoryView, DiffView, CloneView, SettingsView
   Styles/        Tokens.axaml (theme colours + icons), Controls.axaml (control styles)
   Assets/        App icon
 tests/GitGui.Tests/
-                 xunit — pure functions, plus branch switching against real
-                 throwaway repositories. See "Tests" above.
+                 xunit — pure functions, plus branch switching, commit operations
+                 and conflicts against real throwaway repositories. See "Tests".
 build/
   linux/         package.sh, .desktop entry, hicolor icons
   windows/       package.ps1, Inno Setup script
@@ -236,19 +258,28 @@ F5 with a `.axaml` file focused *before* that config exists, VS Code offers to f
 dotnet test
 ```
 
-Most of them cover the pure functions, which are the parts that break silently: the
-unified-diff parser, the remote-URL resolution behind repository grouping, and the
-manifest field mapping — including the round trip through the settings form, since a lost
-field there would quietly mislabel every repository on a site.
+Some cover the pure functions, which are the parts that break silently: the unified-diff
+parser, the remote-URL resolution behind repository grouping, the commit-link builder, and
+the manifest field mapping — including the round trip through the settings form, since a
+lost field there would quietly mislabel every repository on a site.
 
-The exception is **branch switching**, which runs against real repositories created in a
-temp directory. Carrying only some uncommitted files across a checkout takes two stashes
-and six steps, and a mistake there loses work that was never committed — the one place in
-this codebase where a bug is unrecoverable, so it is verified rather than reasoned about.
-LibGit2Sharp bundles its own native library, so this still needs no git installed.
+The rest run against **real repositories** created in a temp directory, because what makes
+them worth writing is what libgit2 actually leaves behind:
 
-Nothing here talks to the network or the UI. Those are still checked by hand against a
-real server, as described in `CLAUDE.md`.
+- **Branch switching.** Carrying only some uncommitted files across a checkout takes two
+  stashes and six steps, and a mistake there loses work that was never committed — the one
+  place in this codebase where a bug is unrecoverable, so it is verified rather than
+  reasoned about.
+- **Commit operations.** Tagging, branching from an older commit, detaching onto a commit,
+  reverting, cherry-picking and all three reset modes — each asserted on the state left in
+  the repository, including the half-applied ones.
+- **Conflicts.** Keeping either side, marking resolved by hand, finishing with a commit and
+  abandoning outright, each checked against the index rather than the working tree.
+
+LibGit2Sharp bundles its own native library, so none of this needs git installed.
+
+Nothing here talks to the network or the UI. Those are still checked by hand against a real
+Gitea server — see the docker one-liner in [docs/architecture.md](docs/architecture.md).
 
 ## Building installers
 
@@ -256,14 +287,14 @@ Each script publishes a **self-contained** build, so end users don't need .NET i
 
 ```bash
 # Linux — .deb, .rpm, .tar.gz and .AppImage  (needs fpm: gem install fpm)
-./build/linux/package.sh linux-x64 0.1.0
-./build/linux/package.sh linux-arm64 0.1.0
+./build/linux/package.sh linux-x64 0.2.0
+./build/linux/package.sh linux-arm64 0.2.0
 
 # macOS — .app bundle inside a .dmg  (run on macOS)
-./build/macos/package.sh osx-arm64 0.1.0
+./build/macos/package.sh osx-arm64 0.2.0
 
 # Windows — portable .zip and an Inno Setup installer
-pwsh build/windows/package.ps1 -Rid win-x64 -Version 0.1.0
+pwsh build/windows/package.ps1 -Rid win-x64 -Version 0.2.0
 ```
 
 Artifacts land in `dist/`.
@@ -275,7 +306,7 @@ artifacts are still produced. Run the script on its own to rebuild only the AppI
 it reuses whatever `package.sh` last staged instead of publishing again:
 
 ```bash
-./build/linux/appimage.sh linux-x64 0.1.0
+./build/linux/appimage.sh linux-x64 0.2.0
 ```
 
 The architecture of the output comes from the runtime handed to `appimagetool`, not from
@@ -287,8 +318,8 @@ rest of the Linux artifacts.
 Tag and push:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag -a v0.2.0 -m "GitGui 0.2.0"
+git push origin v0.2.0
 ```
 
 `release.yml` runs the tests first — `ci.yml` only triggers on pushes to a branch, so
@@ -314,10 +345,13 @@ runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
   remote that isn't `github.com` as Gitea to pick a badge and colour for the sidebar. Sign-in
   does not work this way — that probes the server properly — so the consequence is a
   mislabelled group, not a failed connection.
-- **No undo.** The last commit can be amended while it is still local, but there is no
-  reset, revert or reflog rescue.
-- **Tests stop at the git layer.** The pure functions and branch switching are covered;
-  the network and the whole UI are still verified by hand, against a real Gitea server.
+- **No reordering commits, and no reflog rescue.** Everything else in GitHub Desktop's
+  commit menu is there, but reordering needs an interactive rebase, and libgit2 has no
+  todo-list rebase to drive — it would mean replaying commit by commit with conflict
+  handling at every step.
+- **Tests stop at the git layer.** The pure functions and everything that touches a
+  repository are covered; the network and the whole UI are still verified by hand,
+  against a real Gitea server.
 - **History is capped at 100 commits** with no paging yet.
 - **macOS builds are unsigned.** Gatekeeper will complain on first launch — right-click →
   Open. Signing and notarisation need an Apple Developer account.

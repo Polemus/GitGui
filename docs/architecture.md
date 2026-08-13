@@ -59,6 +59,30 @@ and returns a `SwitchResult` naming the files, leaving the working tree untouche
 "leave it behind" is still available. Same rule as `SyncResult`: expected conditions
 return values.
 
+**Acting on an old commit refuses a dirty working tree.** Reverting and cherry-picking
+both stop part-way when git can't merge something, leaving conflict markers in the files.
+If there were already uncommitted changes in those files, nothing afterwards could tell
+the two apart. `SwitchBranch` earns its stash dance because switching branches mid-edit is
+routine; reverting mid-edit is not, so it is refused with a message instead.
+
+**A cherry-pick switches to the target branch first, and stays there.** git applies a
+cherry-pick to whatever HEAD is on — "apply that commit to that other branch from here"
+does not exist. If it conflicts, the half-applied state is on the target branch, which is
+exactly where the user needs to be to finish it.
+
+**A stopped operation is read from the index, not the working tree.** A conflict is up to
+three index entries for one path — ancestor, ours, theirs — and the file may not exist in
+the tree at all if one side deleted it. `GetConflictedPaths` therefore reads
+`repo.Index.Conflicts`; resolving writes the chosen blob out and stages it, which is what
+collapses the three entries back into one.
+
+**Finishing cleans up after itself; abandoning has to be done by hand.** libgit2 has
+`git_repository_state_cleanup`, but LibGit2Sharp doesn't expose it. `Repository.Commit`
+calls it internally, so committing a resolved revert clears the state. `AbortOperation`
+gets no such help and deletes `MERGE_HEAD`, `REVERT_HEAD`, `CHERRY_PICK_HEAD`, `MERGE_MSG`,
+`MERGE_MODE` and `sequencer/` itself. Miss one and the app keeps showing a conflict banner
+over a clean tree.
+
 ## Why hosting sites are data, not code
 
 A host provider handles tokens that can read and write all of the user's source code.
@@ -137,3 +161,26 @@ commit files that no longer differed. `RepositoryWatcher` watches the working tr
 An automatic reload is deliberately quieter than a deliberate one: no busy strip, no log
 line, and the ticked files, selected file and selected commit are all preserved. The user
 didn't ask for it, so it shouldn't move anything under them.
+
+## What still gets checked by hand
+
+`dotnet test` covers the pure functions and everything that touches a repository. It does
+not cover the network or the UI, and a mock server would only prove we agree with
+ourselves — so host providers, sign-in, fetch and push are tried against a real Gitea:
+
+```bash
+docker run -d --name gitea-test -p 3333:3000 \
+  -e GITEA__security__INSTALL_LOCK=true -e GITEA__database__DB_TYPE=sqlite3 \
+  -e GITEA__server__ROOT_URL=http://localhost:3333/ gitea/gitea:1
+
+docker exec -u git gitea-test gitea admin user create \
+  --username tester --password 'Test-Pass-123!' --email t@example.com --admin
+```
+
+Create a token in that instance's UI with **write:user** and **write:repository** — both
+are needed to create repositories — and sign in to `http://localhost:3333` from the
+Accounts screen.
+
+The macOS and Windows credential backends are the other gap. They are written against the
+standard tools (`security`, DPAPI) but have never been executed, for want of machines to
+try them on.
