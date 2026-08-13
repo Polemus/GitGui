@@ -40,5 +40,10 @@
   "gitCredentials": {
     "username": "oauth2",
     "password": "{token}"
+  },
+
+  "//webUrls": "The one place GitLab's website differs in shape from everyone else's: a /-/ between the project and the page.",
+  "webUrls": {
+    "commit": "{base}/{owner}/{repo}/-/commit/{sha}"
   }
 }

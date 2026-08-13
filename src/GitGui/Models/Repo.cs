@@ -33,6 +33,23 @@ public sealed class RepositoryInfo
     /// <summary>Null when the clone has never been fetched from.</summary>
     public DateTimeOffset? LastFetched { get; init; }
 
+    /// <summary>
+    /// True when HEAD points straight at a commit rather than a branch, which is what
+    /// checking out an older commit leaves behind. Commits made here belong to no branch.
+    /// </summary>
+    public bool IsDetached { get; init; }
+
+    /// <summary>The commit HEAD is on. Empty in a repository with no commits yet.</summary>
+    public string HeadSha { get; init; } = string.Empty;
+
+    /// <summary>A merge, revert or cherry-pick git is part-way through.</summary>
+    public RepositoryOperation Operation { get; init; }
+
+    /// <summary>Paths git could not merge on its own, waiting on the user.</summary>
+    public int ConflictCount { get; init; }
+
+    public string HeadShortSha => HeadSha.Length > 7 ? HeadSha[..7] : HeadSha;
+
     public string FullName => string.IsNullOrEmpty(Owner) ? Name : $"{Owner}/{Name}";
 
     /// <summary>

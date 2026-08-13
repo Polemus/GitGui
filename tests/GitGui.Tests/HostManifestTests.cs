@@ -143,6 +143,27 @@ public class HostManifestTests
         Assert.Equal(original.RepositoriesEndpoint, reopened.RepositoriesEndpoint);
         Assert.Equal(original.RepoOwnerField, reopened.RepoOwnerField);
         Assert.Equal("private", reopened.RepoPrivateEquals);
+
+        // GitLab's commit pages sit behind a /-/, so losing this in the round trip
+        // would quietly send "View on GitLab" to a 404 after any edit.
+        Assert.Equal("{base}/{owner}/{repo}/-/commit/{sha}", reopened.CommitUrlTemplate);
+    }
+
+    [Fact]
+    public void AHostThatSaysNothingAboutItsWebsiteGetsTheUsualShape()
+    {
+        var manifest = JsonSerializer.Deserialize<HostManifest>(
+            """{ "id": "plain", "displayName": "Plain" }""", Read)!;
+
+        Assert.Equal("{base}/{owner}/{repo}/commit/{sha}", manifest.WebUrls.Commit);
+    }
+
+    [Fact]
+    public void ClearingTheCommitTemplateFallsBackRatherThanBreakingTheLink()
+    {
+        var draft = new HostDraftViewModel { Id = "x", DisplayName = "X", CommitUrlTemplate = "  " };
+
+        Assert.Equal("{base}/{owner}/{repo}/commit/{sha}", draft.ToManifest().WebUrls.Commit);
     }
 
     [Fact]

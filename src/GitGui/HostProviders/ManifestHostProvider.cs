@@ -132,6 +132,8 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
         Substitute(manifest.GitCredentials.Username, account),
         Substitute(manifest.GitCredentials.Password, account));
 
+    public string CommitUrlTemplate => manifest.WebUrls.Commit;
+
     // ---------------------------------------------------------------- helpers
 
     private async Task<JsonDocument> GetJsonAsync(Uri url, string token, CancellationToken cancellationToken)

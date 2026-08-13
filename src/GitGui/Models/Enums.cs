@@ -25,3 +25,46 @@ public enum DiffLineKind
     Removed,
     HunkHeader,
 }
+
+/// <summary>
+/// A multi-step git operation the repository is part-way through. Everything except
+/// <see cref="None"/> means git is waiting for the user to finish or abandon it, which
+/// is nearly always because something conflicted.
+/// </summary>
+public enum RepositoryOperation
+{
+    None,
+    Merge,
+    Revert,
+    CherryPick,
+    Rebase,
+
+    /// <summary>Something we don't model, e.g. a bisect. Reported, not acted on.</summary>
+    Other,
+}
+
+/// <summary>
+/// How much of the working tree a reset takes with it. Named Kind rather than Mode so
+/// it doesn't collide with libgit2's own <c>ResetMode</c> where both are in scope.
+/// </summary>
+public enum ResetKind
+{
+    /// <summary>Moves the branch only; every change stays staged.</summary>
+    Soft,
+
+    /// <summary>Moves the branch and unstages; the files themselves are untouched.</summary>
+    Mixed,
+
+    /// <summary>Moves the branch and throws the changes away. Unrecoverable.</summary>
+    Hard,
+}
+
+/// <summary>Which version of a conflicted file to keep.</summary>
+public enum ConflictSide
+{
+    /// <summary>What was already here — git's "ours".</summary>
+    Mine,
+
+    /// <summary>What the commit being applied brings — git's "theirs".</summary>
+    Theirs,
+}

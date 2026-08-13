@@ -409,6 +409,14 @@
                                                                  Text="{Binding GitPassword, Mode=TwoWay}" />
                                                     </Grid>
                                                 </StackPanel>
+
+                                                <StackPanel Spacing="6">
+                                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                                               Text="Where &quot;View on this site&quot; sends a browser. Leave it alone unless the site puts its commits somewhere unusual." />
+                                                    <TextBox Classes="commitBox"
+                                                             Text="{Binding CommitUrlTemplate, Mode=TwoWay}"
+                                                             PlaceholderText="{}{base}/{owner}/{repo}/commit/{sha}" />
+                                                </StackPanel>
                                             </StackPanel>
                                         </Expander>
 

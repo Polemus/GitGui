@@ -216,6 +216,9 @@ public sealed class GitHubProvider(HttpClient http, string? configuredClientId) 
     /// </summary>
     public GitCredentials GetGitCredentials(HostAccount account) => new(account.Login, account.Token);
 
+    /// <summary>GitHub, and Enterprise with it, uses the shape everything else copied.</summary>
+    public string CommitUrlTemplate => Services.WebLinks.DefaultCommitTemplate;
+
     // ---------------------------------------------------------------- helpers
 
     private async Task<HostAccount> FetchAccountAsync(Uri baseUrl, string token, CancellationToken cancellationToken)

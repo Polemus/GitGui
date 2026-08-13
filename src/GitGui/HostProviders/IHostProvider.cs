@@ -50,4 +50,12 @@ public interface IHostProvider
     /// GitHub wants the token as the password, GitLab wants a fixed username.
     /// </summary>
     GitCredentials GetGitCredentials(HostAccount account);
+
+    /// <summary>
+    /// Where a commit is shown on the site's website, as a template over
+    /// <c>{base}</c>, <c>{owner}</c>, <c>{repo}</c> and <c>{sha}</c>. A string rather
+    /// than a method so a manifest can supply it - GitLab's URLs differ from everyone
+    /// else's and that has to be describable without writing code.
+    /// </summary>
+    string CommitUrlTemplate { get; }
 }

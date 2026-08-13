@@ -20,7 +20,7 @@ namespace GitGui.Services;
 /// pooled background threads; opening per call is cheap next to the work each one
 /// does and removes the need for locking.
 /// </remarks>
-public sealed class GitService : IGitService
+public sealed partial class GitService : IGitService
 {
     /// <summary>How much of a file we read before deciding it is binary.</summary>
     private const int BinarySniffBytes = 8000;
@@ -61,6 +61,10 @@ public sealed class GitService : IGitService
             Behind = tracking?.BehindBy ?? 0,
             HasUpstream = head?.TrackedBranch is not null,
             LastFetched = LastFetchTime(repo.Info.Path),
+            IsDetached = repo.Info.IsHeadDetached,
+            HeadSha = head?.Tip?.Sha ?? string.Empty,
+            Operation = ToOperation(repo.Info.CurrentOperation),
+            ConflictCount = repo.Index.Conflicts.Count(),
         };
     }
 
@@ -311,7 +315,9 @@ public sealed class GitService : IGitService
     /// point does uncommitted work exist only in the working tree - if any later step
     /// fails, the changes are still recoverable from the stack.
     /// </remarks>
-    public SwitchResult SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths)
+    public SwitchResult SwitchBranch(
+        string path, string branchName, bool create, IReadOnlyList<string>? bringPaths,
+        string? startPoint = null)
     {
         using var repo = new Repository(Discover(path));
 
@@ -324,7 +330,7 @@ public sealed class GitService : IGitService
         // Checked before anything is stashed or reverted, so a refusal leaves the working
         // tree exactly as it was. Only the carried files can conflict - whatever is left
         // behind is stashed first, which makes it clean by the time checkout runs.
-        if (Conflicting(repo, bring, branchName, create) is { Count: > 0 } conflicts)
+        if (Conflicting(repo, bring, branchName, create, startPoint) is { Count: > 0 } conflicts)
         {
             var names = string.Join(", ", conflicts.Take(3))
                         + (conflicts.Count > 3 ? $" and {conflicts.Count - 3} more" : string.Empty);
@@ -339,7 +345,7 @@ public sealed class GitService : IGitService
         // Nothing uncommitted, or everything is coming along: git already does this.
         if (changed.Count == 0 || bringPaths is null)
         {
-            Switch(repo, branchName, create);
+            Switch(repo, branchName, create, startPoint);
             return SwitchResult.Ok();
         }
 
@@ -347,7 +353,7 @@ public sealed class GitService : IGitService
 
         if (leave.Count == 0)
         {
-            Switch(repo, branchName, create);
+            Switch(repo, branchName, create, startPoint);
             return SwitchResult.Ok();
         }
 
@@ -362,7 +368,7 @@ public sealed class GitService : IGitService
             repo.Stashes.Add(signature, $"GitGui: left behind when switching from {from}",
                 StashModifiers.IncludeUntracked);
 
-            Switch(repo, branchName, create);
+            Switch(repo, branchName, create, startPoint);
             return SwitchResult.Ok();
         }
 
@@ -382,24 +388,29 @@ public sealed class GitService : IGitService
         RevertPaths(repo, leave);
         repo.Stashes.Remove(1);
 
-        Switch(repo, branchName, create);
+        Switch(repo, branchName, create, startPoint);
         return SwitchResult.Ok();
     }
 
     /// <summary>
     /// Which of <paramref name="paths"/> git would refuse to carry across: those whose
-    /// committed contents differ between HEAD and the target branch. Compared by blob id
-    /// rather than by attempting the checkout, so the answer names the files and costs
-    /// nothing when there is no problem.
+    /// committed contents differ between HEAD and wherever we are about to end up.
+    /// Compared by blob id rather than by attempting the checkout, so the answer names
+    /// the files and costs nothing when there is no problem.
     /// </summary>
     private static List<string> Conflicting(
-        Repository repo, IEnumerable<string> paths, string branchName, bool create)
+        Repository repo, IEnumerable<string> paths, string branchName, bool create, string? startPoint)
     {
-        // A branch created here starts at HEAD, so nothing can differ across it.
-        if (create || repo.Head.Tip is not { } head)
+        if (repo.Head.Tip is not { } head)
             return [];
 
-        if (repo.Branches[branchName]?.Tip is not { } target)
+        // A branch created here starts at HEAD unless it was asked for somewhere else, so
+        // only a start point can make a created branch differ from what is in the tree.
+        var target = create
+            ? startPoint is null ? null : repo.Lookup<Commit>(startPoint)
+            : repo.Branches[branchName]?.Tip;
+
+        if (target is null)
             return [];
 
         return paths
@@ -408,7 +419,7 @@ public sealed class GitService : IGitService
             .ToList();
     }
 
-    private static void Switch(Repository repo, string branchName, bool create)
+    private static void Switch(Repository repo, string branchName, bool create, string? startPoint)
     {
         if (create)
         {
@@ -418,7 +429,12 @@ public sealed class GitService : IGitService
             if (repo.Branches[branchName] is not null)
                 throw new InvalidOperationException($"Branch '{branchName}' already exists.");
 
-            Commands.Checkout(repo, repo.CreateBranch(branchName));
+            // Without a start point this is "git checkout -b": branch from where we are.
+            var created = startPoint is null
+                ? repo.CreateBranch(branchName)
+                : repo.CreateBranch(branchName, Require(repo, startPoint));
+
+            Commands.Checkout(repo, created);
             return;
         }
 

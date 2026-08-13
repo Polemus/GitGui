@@ -626,4 +626,15 @@
         <Setter Property="Padding" Value="18" />
     </Style>
 
+    <!-- The panel inside a scrim. Every question the app stops to ask is this shape, so
+         the width and the padding are set once here rather than at each call site. -->
+    <Style Selector="Border.dialog">
+        <Setter Property="Background" Value="{DynamicResource ElevatedBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="22" />
+        <Setter Property="Width" Value="480" />
+    </Style>
+
 </Styles>

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using GitGui.HostProviders;
+using GitGui.Services;
 
 namespace GitGui.ViewModels;
 
@@ -69,6 +70,15 @@ public partial class HostDraftViewModel : ObservableObject
 
     [ObservableProperty] public partial string GitUsername { get; set; } = "{login}";
     [ObservableProperty] public partial string GitPassword { get; set; } = "{token}";
+
+    // ---- Links into the site's own website ----------------------------------
+
+    /// <summary>
+    /// Where "View on …" sends the browser. <c>{base}</c>, <c>{owner}</c>,
+    /// <c>{repo}</c> and <c>{sha}</c> are filled in from the clone's remote.
+    /// </summary>
+    [ObservableProperty]
+    public partial string CommitUrlTemplate { get; set; } = WebLinks.DefaultCommitTemplate;
 
     /// <summary>True when editing an existing host rather than adding one.</summary>
     [ObservableProperty]
@@ -144,6 +154,7 @@ public partial class HostDraftViewModel : ObservableObject
         RepoPrivateField = "visibility",
         RepoPrivateEquals = "private",
         RepoUpdatedAtField = "last_activity_at",
+        CommitUrlTemplate = "{base}/{owner}/{repo}/-/commit/{sha}",
     };
 
     public static HostDraftViewModel FromManifest(HostManifest manifest) => new()
@@ -170,6 +181,7 @@ public partial class HostDraftViewModel : ObservableObject
         RepoUpdatedAtField = manifest.RepositoryFields.UpdatedAt.Path,
         GitUsername = manifest.GitCredentials.Username,
         GitPassword = manifest.GitCredentials.Password,
+        CommitUrlTemplate = manifest.WebUrls.Commit,
     };
 
     public HostManifest ToManifest() => new()
@@ -208,6 +220,13 @@ public partial class HostDraftViewModel : ObservableObject
         {
             Username = GitUsername.Trim(),
             Password = GitPassword.Trim(),
+        },
+        WebUrls = new WebUrlTemplates
+        {
+            // Blanked in the form means "the shape everyone else uses", not "no link".
+            Commit = string.IsNullOrWhiteSpace(CommitUrlTemplate)
+                ? WebLinks.DefaultCommitTemplate
+                : CommitUrlTemplate.Trim(),
         },
     };
 }

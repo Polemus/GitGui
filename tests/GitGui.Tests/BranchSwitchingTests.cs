@@ -255,6 +255,91 @@ public class BranchSwitchingTests
         Assert.Equal("untracked locally\n", repo.Read("added.txt"));
     }
 
+    // ---- Branching from an older commit ------------------------------------
+    // A branch normally starts at HEAD, where nothing can differ. Given a start point it
+    // can start anywhere, so the same "would this overwrite my work" question applies -
+    // and did not, until the check learnt to look at the start point too.
+
+    /// <summary>Two commits, so there is an older one to branch from.</summary>
+    private static TempRepository RepoWithHistory(out string older)
+    {
+        var repo = RepoWithCommit();
+        older = repo.HeadSha();
+
+        repo.Write("kept.txt", "second version\n");
+        repo.Commit("second");
+
+        return repo;
+    }
+
+    [Fact]
+    public void BranchingFromAnOlderCommitStartsThere()
+    {
+        using var repo = RepoWithHistory(out var older);
+
+        var result = Git.SwitchBranch(repo.Path, "from-older", create: true, bringPaths: null, startPoint: older);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("from-older", repo.CurrentBranch());
+        Assert.Equal(older, repo.HeadSha());
+        Assert.Equal("original\n", repo.Read("kept.txt"));
+    }
+
+    [Fact]
+    public void CarryingAChangeToAFileThatDiffersAtTheStartPointIsRefused()
+    {
+        using var repo = RepoWithHistory(out var older);
+        repo.Write("kept.txt", "local edit\n");
+
+        var result = Git.SwitchBranch(repo.Path, "from-older", create: true, bringPaths: null, startPoint: older);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(["kept.txt"], result.ConflictingPaths);
+
+        // Refused before anything moved: still on the old branch, edit intact.
+        Assert.NotEqual("from-older", repo.CurrentBranch());
+        Assert.Equal("local edit\n", repo.Read("kept.txt"));
+    }
+
+    [Fact]
+    public void LeavingTheChangeBehindBranchesFromTheOlderCommitAnyway()
+    {
+        using var repo = RepoWithHistory(out var older);
+        repo.Write("kept.txt", "local edit\n");
+
+        var result = Git.SwitchBranch(repo.Path, "from-older", create: true, bringPaths: [], startPoint: older);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("from-older", repo.CurrentBranch());
+        Assert.Equal("original\n", repo.Read("kept.txt"));
+        Assert.Equal(1, repo.StashCount());
+    }
+
+    [Fact]
+    public void CarryingAChangeToAFileTheOlderCommitAgreesAboutStillWorks()
+    {
+        using var repo = RepoWithHistory(out var older);
+
+        // other.txt never changed between the two commits, so carrying it is safe even
+        // though kept.txt did.
+        repo.Write("other.txt", "local edit\n");
+
+        var result = Git.SwitchBranch(repo.Path, "from-older", create: true, bringPaths: null, startPoint: older);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("local edit\n", repo.Read("other.txt"));
+        Assert.Equal("original\n", repo.Read("kept.txt"));
+    }
+
+    [Fact]
+    public void BranchingFromACommitThatIsNotHereIsRefused()
+    {
+        using var repo = RepoWithHistory(out _);
+
+        Assert.Throws<InvalidOperationException>(() => Git.SwitchBranch(
+            repo.Path, "nowhere", create: true, bringPaths: null, startPoint: new string('b', 40)));
+    }
+
     [Fact]
     public void CarryingAFileThatIsTheSameOnBothBranchesStillWorks()
     {

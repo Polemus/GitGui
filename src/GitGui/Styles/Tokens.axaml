@@ -74,6 +74,10 @@
             <SolidColorBrush x:Key="BannerErrorBorder" Color="#F85149" />
             <SolidColorBrush x:Key="BannerInfoBackground" Color="#1A2233" />
             <SolidColorBrush x:Key="BannerInfoBorder" Color="#3399CC" />
+            <!-- Something is waiting on the user. Red would say it had gone wrong; a
+                 stopped merge has not gone wrong, it has stopped. -->
+            <SolidColorBrush x:Key="BannerWarningBackground" Color="#2A2213" />
+            <SolidColorBrush x:Key="BannerWarningBorder" Color="#D29922" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
@@ -126,6 +130,8 @@
             <SolidColorBrush x:Key="BannerErrorBorder" Color="#CF222E" />
             <SolidColorBrush x:Key="BannerInfoBackground" Color="#EAF1FB" />
             <SolidColorBrush x:Key="BannerInfoBorder" Color="#2B87B5" />
+            <SolidColorBrush x:Key="BannerWarningBackground" Color="#FFF8C5" />
+            <SolidColorBrush x:Key="BannerWarningBorder" Color="#9A6700" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>

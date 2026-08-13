@@ -230,6 +230,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CommitButtonLabel))]
+    [NotifyPropertyChangedFor(nameof(HeadLabel))]
     public partial BranchInfo? SelectedBranch { get; set; }
 
     [ObservableProperty]
@@ -238,8 +239,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
     [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
-    [NotifyCanExecuteChangedFor(nameof(CopyCommitShaCommand))]
-    [NotifyCanExecuteChangedFor(nameof(CopyCommitSummaryCommand))]
     public partial CommitInfo? SelectedCommit { get; set; }
 
     [ObservableProperty]
@@ -332,6 +331,66 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SyncDetailLabel))]
     public partial DateTimeOffset? LastFetched { get; set; }
 
+    /// <summary>
+    /// True while HEAD points at a commit rather than a branch, which is where opening
+    /// an older commit leaves you. Anything committed here belongs to no branch.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeadLabel))]
+    [NotifyPropertyChangedFor(nameof(HeadDetailLabel))]
+    [NotifyPropertyChangedFor(nameof(CommitButtonLabel))]
+    [NotifyPropertyChangedFor(nameof(CanAmend))]
+    [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
+    [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RevertSelectedCommitCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ResetToSelectedCommitCommand))]
+    public partial bool IsDetachedHead { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeadLabel))]
+    [NotifyPropertyChangedFor(nameof(HeadDetailLabel))]
+    public partial string HeadShortSha { get; set; } = string.Empty;
+
+    /// <summary>What the toolbar shows where the branch name goes.</summary>
+    public string HeadLabel => IsDetachedHead ? HeadShortSha : SelectedBranch?.Name ?? "—";
+
+    public string HeadDetailLabel => IsDetachedHead ? "Not on a branch" : "Current branch";
+
+    // ---- An operation git could not finish on its own ----------------------
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingOperation))]
+    [NotifyPropertyChangedFor(nameof(PendingOperationLabel))]
+    [NotifyPropertyChangedFor(nameof(CommitButtonLabel))]
+    public partial RepositoryOperation PendingOperation { get; set; }
+
+    /// <summary>Paths git left for the user to decide about, newest listing first.</summary>
+    public ObservableCollection<string> ConflictedPaths { get; } = [];
+
+    public bool HasPendingOperation => PendingOperation != RepositoryOperation.None;
+
+    public bool HasConflicts => ConflictedPaths.Count > 0;
+
+    public string PendingOperationName => PendingOperation switch
+    {
+        RepositoryOperation.Merge => "merge",
+        RepositoryOperation.Revert => "revert",
+        RepositoryOperation.CherryPick => "cherry-pick",
+        RepositoryOperation.Rebase => "rebase",
+        _ => "operation",
+    };
+
+    public string PendingOperationLabel => ConflictedPaths.Count switch
+    {
+        0 => $"The {PendingOperationName} went through — commit it to finish.",
+        1 => $"This {PendingOperationName} stopped on 1 file git could not merge on its own.",
+        var n => $"This {PendingOperationName} stopped on {n} files git could not merge on its own.",
+    };
+
+    public string ConflictHelpLabel =>
+        "Keep one side whole, or edit the file yourself and mark it resolved. "
+        + "Committing finishes the operation; abandoning puts everything back.";
+
     public string SyncActionLabel => Behind > 0 ? "Pull origin"
                                    : Ahead > 0 ? "Push origin"
                                    : "Fetch origin";
@@ -366,9 +425,11 @@ public partial class MainWindowViewModel : ViewModelBase
     };
 
     // Amending only needs a message; re-wording the last commit without touching any
-    // file is a perfectly ordinary thing to want.
+    // file is a perfectly ordinary thing to want. Conflicts are the one hard block:
+    // committing markers is the mistake this whole panel exists to prevent.
     public bool CanCommit => (StagedCount > 0 || IsAmending)
                              && !string.IsNullOrWhiteSpace(CommitSummary)
+                             && !HasConflicts
                              && !IsBusy;
 
     /// <summary>
@@ -377,6 +438,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// to make available from a menu.
     /// </summary>
     public bool CanAmend => SelectedRepository is not null
+                            && !IsDetachedHead
                             && (Ahead > 0 || !HasUpstream);
 
     [ObservableProperty]
@@ -426,6 +488,47 @@ public partial class MainWindowViewModel : ViewModelBase
     public partial BranchSwitchViewModel? PendingBranchSwitch { get; set; }
 
     public bool HasPendingBranchSwitch => PendingBranchSwitch is not null;
+
+    // ---- Questions asked about one commit ----------------------------------
+    // One property per prompt rather than one shared slot: they ask different things,
+    // and a shared slot would need a type test in every binding.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBranchFromCommit))]
+    public partial BranchFromCommitViewModel? BranchFromCommit { get; set; }
+
+    public bool HasBranchFromCommit => BranchFromCommit is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTagDraft))]
+    public partial TagDraftViewModel? TagDraft { get; set; }
+
+    public bool HasTagDraft => TagDraft is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCherryPickDraft))]
+    public partial CherryPickDraftViewModel? CherryPickDraft { get; set; }
+
+    public bool HasCherryPickDraft => CherryPickDraft is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasResetDraft))]
+    public partial ResetDraftViewModel? ResetDraft { get; set; }
+
+    public bool HasResetDraft => ResetDraft is not null;
+
+    /// <summary>
+    /// Set while abandoning an operation waits on confirmation. Abandoning resets hard,
+    /// so whatever was resolved by hand goes with it — the same kind of unrecoverable
+    /// step as discarding a file, and worth the same extra click.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AbortSummary))]
+    public partial bool IsConfirmingAbort { get; set; }
+
+    public string AbortSummary =>
+        $"Everything this {PendingOperationName} changed, including any conflicts you have already "
+        + "sorted out, goes back to the last commit. This cannot be undone.";
 
     // ---- Changed-file context menu -----------------------------------------
 
@@ -537,8 +640,9 @@ public partial class MainWindowViewModel : ViewModelBase
                                    && SelectedRepository is not null
                                    && !IsBusy;
 
-    public string CommitButtonLabel => IsAmending
-        ? "Amend last commit"
+    public string CommitButtonLabel => IsAmending ? "Amend last commit"
+        : HasPendingOperation ? $"Finish the {PendingOperationName}"
+        : IsDetachedHead ? $"Commit onto {HeadShortSha}"
         : $"Commit to {SelectedBranch?.Name ?? "branch"}";
 
     public string CommitSummaryPlaceholder
@@ -684,19 +788,28 @@ public partial class MainWindowViewModel : ViewModelBase
     /// asked what should happen to it first - git would silently carry it across, which
     /// is right often enough to be the default but wrong often enough to be worth asking.
     /// </summary>
-    private async Task BeginBranchSwitchAsync(string targetBranch, bool create)
+    /// <param name="startPoint">
+    /// Where a created branch begins. Null branches from HEAD, which is what the branch
+    /// picker asks for; a sha comes from the history's "create branch from this commit".
+    /// </param>
+    private async Task BeginBranchSwitchAsync(string targetBranch, bool create, string? startPoint = null)
     {
         if (SelectedRepository is null)
             return;
 
         if (Changes.Count == 0)
         {
-            await PerformBranchSwitchAsync(targetBranch, create, bringPaths: null);
+            await PerformBranchSwitchAsync(targetBranch, create, bringPaths: null, startPoint);
             return;
         }
 
-        PendingBranchSwitch = new BranchSwitchViewModel(
-            SelectedBranch?.Name ?? "this branch", targetBranch, create, Changes);
+        // What the changes are being carried away from, which is the commit rather than
+        // the branch when the branch is being started somewhere further back.
+        var from = startPoint is null
+            ? SelectedBranch?.Name ?? "this branch"
+            : startPoint.Length > 7 ? startPoint[..7] : startPoint;
+
+        PendingBranchSwitch = new BranchSwitchViewModel(from, targetBranch, create, Changes, startPoint);
     }
 
     [RelayCommand]
@@ -726,10 +839,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
         PendingBranchSwitch = null;
 
-        await PerformBranchSwitchAsync(pending.TargetBranch, pending.Create, pending.BringPaths());
+        await PerformBranchSwitchAsync(
+            pending.TargetBranch, pending.Create, pending.BringPaths(), pending.StartPoint);
     }
 
-    private async Task PerformBranchSwitchAsync(string targetBranch, bool create, IReadOnlyList<string>? bringPaths)
+    private async Task PerformBranchSwitchAsync(
+        string targetBranch, bool create, IReadOnlyList<string>? bringPaths, string? startPoint = null)
     {
         if (SelectedRepository is not { } repo)
             return;
@@ -739,7 +854,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         await RunAsync(async () =>
         {
-            var result = await Task.Run(() => _git.SwitchBranch(path, targetBranch, create, bringPaths));
+            var result = await Task.Run(() => _git.SwitchBranch(path, targetBranch, create, bringPaths, startPoint));
 
             // Refused rather than failed: the working tree is untouched and the user is
             // still on the branch they started on, so say what to do about it.
@@ -1052,6 +1167,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool HasSelectedCommit => SelectedCommit is not null;
 
+    /// <summary>
+    /// Reverting and resetting both need a branch to move or to write onto, and a
+    /// detached HEAD has neither.
+    /// </summary>
+    private bool CanChangeHistoryHere => SelectedCommit is not null && !IsDetachedHead;
+
+    private bool CanCopyCommitTag => SelectedCommit?.HasTags == true;
+
     [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
     private async Task CopyCommitShaAsync()
     {
@@ -1074,6 +1197,331 @@ public partial class MainWindowViewModel : ViewModelBase
             Log(ActivityLevel.Info, "Copied the commit summary to the clipboard");
         else
             Log(ActivityLevel.Warning, "Could not reach the clipboard");
+    }
+
+    /// <summary>Every tag on the commit, since a commit can carry more than one.</summary>
+    [RelayCommand(CanExecute = nameof(CanCopyCommitTag))]
+    private async Task CopyCommitTagAsync()
+    {
+        if (SelectedCommit is not { Tags.Count: > 0 } commit)
+            return;
+
+        await CopyAsync(string.Join(" ", commit.Tags), commit.Tags.Count == 1 ? "tag" : "tags");
+    }
+
+    // ---- Opening the commit on the site it came from ------------------------
+
+    public bool CanViewCommitOnHost => SelectedCommit is not null && CommitUrl(SelectedCommit) is not null;
+
+    /// <summary>Names the site, the way GitHub Desktop's "View on GitHub" does.</summary>
+    public string ViewOnHostLabel =>
+        $"View on {(SelectedRepository?.Host is { BaseUrl.Length: > 0 } host ? host.Name : "the hosting site")}";
+
+    /// <summary>
+    /// Where this commit lives on the web. A site we are signed in to describes its own
+    /// URL shape; for one we aren't, the shape nearly everything uses is still a better
+    /// answer than no link at all.
+    /// </summary>
+    private Uri? CommitUrl(CommitInfo commit)
+    {
+        if (SelectedRepository is not { Host.BaseUrl.Length: > 0 } repo)
+            return null;
+
+        var account = Accounts.FirstOrDefault(a =>
+            string.Equals(a.BaseUrl.Host, repo.Host.Id, StringComparison.OrdinalIgnoreCase));
+
+        var template = account is null ? null : _hosts.ById(account.ProviderId)?.CommitUrlTemplate;
+
+        if (account?.BaseUrl is { } signedInUrl)
+            return WebLinks.CommitUrl(signedInUrl, repo.Owner, repo.Name, commit.Sha, template);
+
+        return Uri.TryCreate(repo.Host.BaseUrl, UriKind.Absolute, out var baseUrl)
+            ? WebLinks.CommitUrl(baseUrl, repo.Owner, repo.Name, commit.Sha, template)
+            : null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanViewCommitOnHost))]
+    private async Task ViewCommitOnHostAsync()
+    {
+        if (SelectedCommit is not { } commit || CommitUrl(commit) is not { } url)
+            return;
+
+        if (!await _shell.OpenUrlAsync(url))
+            Log(ActivityLevel.Warning, $"Couldn't open a browser. The commit is at {url}");
+    }
+
+    // ---- Branching and tagging from a commit -------------------------------
+
+    [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
+    private void BranchFromSelectedCommit()
+    {
+        if (SelectedCommit is { } commit)
+            BranchFromCommit = new BranchFromCommitViewModel(commit);
+    }
+
+    /// <summary>
+    /// The way back out of a detached HEAD: the commit sitting there becomes a branch.
+    /// History is walked from HEAD, so its first entry is the commit we are on.
+    /// </summary>
+    [RelayCommand]
+    private void BranchFromHere()
+    {
+        if (History.FirstOrDefault() is { } head)
+            BranchFromCommit = new BranchFromCommitViewModel(head);
+    }
+
+    [RelayCommand]
+    private void CancelBranchFromCommit() => BranchFromCommit = null;
+
+    [RelayCommand]
+    private async Task ConfirmBranchFromCommitAsync()
+    {
+        if (BranchFromCommit is not { CanCreate: true } draft)
+            return;
+
+        var (name, sha) = (draft.Name.Trim(), draft.Sha);
+        BranchFromCommit = null;
+
+        await BeginBranchSwitchAsync(name, create: true, startPoint: sha);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
+    private void TagSelectedCommit()
+    {
+        if (SelectedCommit is { } commit)
+            TagDraft = new TagDraftViewModel(commit);
+    }
+
+    [RelayCommand]
+    private void CancelTag() => TagDraft = null;
+
+    [RelayCommand]
+    private async Task ConfirmTagAsync()
+    {
+        if (TagDraft is not { CanCreate: true } draft || SelectedRepository is not { } repo)
+            return;
+
+        var (name, message, sha) = (draft.Name.Trim(), draft.Message, draft.Sha);
+        var path = repo.LocalPath;
+        TagDraft = null;
+
+        await RunAsync(async () =>
+        {
+            var created = await Task.Run(() => _git.CreateTag(path, name, sha, message));
+
+            Log(ActivityLevel.Success, $"Tagged {sha[..7]} as {created}"
+                                       + (string.IsNullOrWhiteSpace(message) ? string.Empty : " (annotated)"));
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    // ---- Opening an older commit -------------------------------------------
+
+    [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
+    private async Task CheckoutSelectedCommitAsync()
+    {
+        if (SelectedCommit is not { } commit || SelectedRepository is not { } repo)
+            return;
+
+        var path = repo.LocalPath;
+        var sha = commit.Sha;
+
+        await RunAsync(async () =>
+        {
+            var result = await Task.Run(() => _git.CheckoutCommit(path, sha));
+
+            if (!result.Succeeded)
+            {
+                Log(ActivityLevel.Warning, result.Message);
+                return;
+            }
+
+            Log(ActivityLevel.Info,
+                $"Opened {commit.ShortSha}. You are not on a branch — make one here, or pick a "
+                + "branch to go back.");
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    // ---- Undoing and copying commits ---------------------------------------
+
+    [RelayCommand(CanExecute = nameof(CanChangeHistoryHere))]
+    private async Task RevertSelectedCommitAsync()
+    {
+        if (SelectedCommit is not { } commit || SelectedRepository is not { } repo)
+            return;
+
+        var path = repo.LocalPath;
+        var sha = commit.Sha;
+
+        await RunAsync(async () =>
+        {
+            ReportOperation(await Task.Run(() => _git.RevertCommit(path, sha)));
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
+    private void CherryPickSelectedCommit()
+    {
+        if (SelectedCommit is { } commit)
+        {
+            CherryPickDraft = new CherryPickDraftViewModel(
+                commit, Branches.Where(b => !b.IsCurrent).Select(b => b.Name));
+        }
+    }
+
+    [RelayCommand]
+    private void CancelCherryPick() => CherryPickDraft = null;
+
+    [RelayCommand]
+    private async Task ConfirmCherryPickAsync()
+    {
+        if (CherryPickDraft is not { CanApply: true } draft || SelectedRepository is not { } repo)
+            return;
+
+        var (sha, onto) = (draft.Sha, draft.TargetBranch!);
+        var path = repo.LocalPath;
+        CherryPickDraft = null;
+
+        await RunAsync(async () =>
+        {
+            ReportOperation(await Task.Run(() => _git.CherryPickCommit(path, sha, onto)));
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    // ---- Moving the branch back --------------------------------------------
+
+    [RelayCommand(CanExecute = nameof(CanChangeHistoryHere))]
+    private void ResetToSelectedCommit()
+    {
+        if (SelectedCommit is { } commit)
+            ResetDraft = new ResetDraftViewModel(commit);
+    }
+
+    [RelayCommand]
+    private void CancelReset() => ResetDraft = null;
+
+    [RelayCommand]
+    private async Task ConfirmResetAsync()
+    {
+        if (ResetDraft is not { } draft || SelectedRepository is not { } repo)
+            return;
+
+        var (sha, kind) = (draft.Sha, draft.Kind);
+        var path = repo.LocalPath;
+        ResetDraft = null;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.ResetToCommit(path, sha, kind));
+
+            Log(kind == ResetKind.Hard ? ActivityLevel.Warning : ActivityLevel.Success,
+                kind switch
+                {
+                    ResetKind.Soft => $"Moved the branch back to {sha[..7]} — the changes are staged",
+                    ResetKind.Hard => $"Reset to {sha[..7]} — everything after it was discarded",
+                    _ => $"Moved the branch back to {sha[..7]} — the changes are in your working tree",
+                });
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    /// <summary>
+    /// Reports how one of these ended. Conflicts move the user to the Changes tab, since
+    /// that is where the panel that resolves them lives and there is nothing else to do
+    /// until they are dealt with.
+    /// </summary>
+    private void ReportOperation(CommitOperationResult result)
+    {
+        Log(result.Outcome switch
+        {
+            CommitOperationOutcome.Succeeded => ActivityLevel.Success,
+            CommitOperationOutcome.NothingToDo => ActivityLevel.Info,
+            _ => ActivityLevel.Warning,
+        }, result.Message);
+
+        if (result.HasConflicts)
+            SelectedTabIndex = 0;
+    }
+
+    // ---- Finishing what git could not --------------------------------------
+
+    [RelayCommand]
+    private Task KeepMineAsync(string? path) => ResolveAsync(path, ConflictSide.Mine);
+
+    [RelayCommand]
+    private Task KeepTheirsAsync(string? path) => ResolveAsync(path, ConflictSide.Theirs);
+
+    private async Task ResolveAsync(string? file, ConflictSide side)
+    {
+        if (string.IsNullOrEmpty(file) || SelectedRepository is not { } repo)
+            return;
+
+        var local = repo.LocalPath;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.ResolveConflict(local, file, side));
+
+            Log(ActivityLevel.Info, side == ConflictSide.Mine
+                ? $"Kept your version of {file}"
+                : $"Took the incoming version of {file}");
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    [RelayCommand]
+    private async Task MarkResolvedAsync(string? file)
+    {
+        if (string.IsNullOrEmpty(file) || SelectedRepository is not { } repo)
+            return;
+
+        var local = repo.LocalPath;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.MarkConflictResolved(local, [file]));
+            Log(ActivityLevel.Info, $"Marked {file} as resolved");
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    [RelayCommand]
+    private void AskAbortOperation() => IsConfirmingAbort = true;
+
+    [RelayCommand]
+    private void CancelAbort() => IsConfirmingAbort = false;
+
+    [RelayCommand]
+    private async Task ConfirmAbortAsync()
+    {
+        if (SelectedRepository is not { } repo)
+            return;
+
+        var what = PendingOperationName;
+        var path = repo.LocalPath;
+        IsConfirmingAbort = false;
+
+        await RunAsync(async () =>
+        {
+            await Task.Run(() => _git.AbortOperation(path));
+            Log(ActivityLevel.Warning, $"Abandoned the {what} — everything is back as it was");
+        });
+
+        // The message git prepared belongs to the operation that no longer exists.
+        CommitSummary = string.Empty;
+        CommitDescription = string.Empty;
+
+        await OpenRepositoryAsync(repo);
     }
 
     // ---- Browse and clone --------------------------------------------------
@@ -1460,17 +1908,36 @@ public partial class MainWindowViewModel : ViewModelBase
         var selectedSha = SelectedCommit?.Sha;
         var selectedCommitFilePath = SelectedCommitFile?.Path;
 
-        var (info, branches, changes, history, stashes) = await Task.Run(() => (
+        var (info, branches, changes, history, stashes, conflicts) = await Task.Run(() => (
             _git.OpenRepository(path),
             _git.GetBranches(path),
             _git.GetWorkingChanges(path),
             _git.GetHistory(path, HistoryLimit),
-            _git.GetStashes(path)));
+            _git.GetStashes(path),
+            _git.GetConflictedPaths(path)));
 
         Ahead = info.Ahead;
         Behind = info.Behind;
         HasUpstream = info.HasUpstream;
         LastFetched = info.LastFetched;
+        IsDetachedHead = info.IsDetached;
+        HeadShortSha = info.HeadShortSha;
+
+        PendingOperation = info.Operation;
+        Replace(ConflictedPaths, conflicts);
+        OnPropertyChanged(nameof(HasConflicts));
+        OnPropertyChanged(nameof(PendingOperationLabel));
+
+        // git writes the message for the commit that finishes a merge or a revert. Only
+        // offered into an empty box, so an automatic refresh can't overwrite typing.
+        if (info.Operation != RepositoryOperation.None
+            && string.IsNullOrWhiteSpace(CommitSummary)
+            && !IsAmending
+            && await Task.Run(() => _git.GetPendingMessage(path)) is { } prepared)
+        {
+            CommitSummary = prepared.Summary;
+            CommitDescription = prepared.Description;
+        }
 
         Replace(Branches, branches);
         Replace(History, history);
@@ -1530,6 +1997,8 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>Commit diffs are loaded only when a commit is actually selected.</summary>
     partial void OnSelectedCommitChanged(CommitInfo? value)
     {
+        NotifyCommitCommandsChanged();
+
         if (_isDesignTime || value is null || SelectedRepository is not { } repo)
         {
             SelectedCommitFiles.Clear();
@@ -1615,6 +2084,28 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (e.PropertyName == nameof(FileChangeViewModel.IsStaged))
             NotifyChangeCountsChanged();
+    }
+
+    /// <summary>
+    /// Everything in the history's context menu acts on the selected commit. Done in one
+    /// place rather than as a stack of attributes on the property, which by the ninth
+    /// entry says less about what the menu offers than this does.
+    /// </summary>
+    private void NotifyCommitCommandsChanged()
+    {
+        CopyCommitShaCommand.NotifyCanExecuteChanged();
+        CopyCommitSummaryCommand.NotifyCanExecuteChanged();
+        CopyCommitTagCommand.NotifyCanExecuteChanged();
+        ViewCommitOnHostCommand.NotifyCanExecuteChanged();
+        BranchFromSelectedCommitCommand.NotifyCanExecuteChanged();
+        TagSelectedCommitCommand.NotifyCanExecuteChanged();
+        CheckoutSelectedCommitCommand.NotifyCanExecuteChanged();
+        RevertSelectedCommitCommand.NotifyCanExecuteChanged();
+        CherryPickSelectedCommitCommand.NotifyCanExecuteChanged();
+        ResetToSelectedCommitCommand.NotifyCanExecuteChanged();
+
+        OnPropertyChanged(nameof(CanViewCommitOnHost));
+        OnPropertyChanged(nameof(ViewOnHostLabel));
     }
 
     private void NotifyChangeCountsChanged()

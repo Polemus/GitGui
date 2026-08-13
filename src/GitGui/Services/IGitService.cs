@@ -44,11 +44,17 @@ public interface IGitService
     /// changed is stashed against the branch being left. Null brings everything, which
     /// is what a plain checkout does.
     /// </summary>
+    /// <param name="startPoint">
+    /// Where a created branch begins, when it should not begin at HEAD. Ignored unless
+    /// <paramref name="create"/> is true.
+    /// </param>
     /// <returns>
     /// <see cref="SwitchOutcome.Conflicts"/> when a carried file also differs on the
     /// target branch, in which case nothing was changed and the caller has to say so.
     /// </returns>
-    SwitchResult SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths);
+    SwitchResult SwitchBranch(
+        string path, string branchName, bool create, IReadOnlyList<string>? bringPaths,
+        string? startPoint = null);
 
     /// <summary>Stash entries, newest first, across all branches.</summary>
     IReadOnlyList<StashInfo> GetStashes(string path);
@@ -67,6 +73,58 @@ public interface IGitService
 
     /// <summary>The last commit's message, so an amend can start from what's there.</summary>
     (string Summary, string Description)? GetLastCommitMessage(string path);
+
+    // ---- Acting on a commit that already exists ----------------------------
+
+    /// <summary>
+    /// Tags a commit. Lightweight with no <paramref name="message"/>, annotated with one.
+    /// Returns the name git actually used.
+    /// </summary>
+    string CreateTag(string path, string name, string sha, string? message);
+
+    /// <summary>
+    /// Checks out a commit directly, leaving HEAD detached. Refuses while the working
+    /// tree is dirty, since those changes would follow onto a HEAD no branch points at.
+    /// </summary>
+    SwitchResult CheckoutCommit(string path, string sha);
+
+    /// <summary>Commits the inverse of a commit. Conflicts come back as a result.</summary>
+    CommitOperationResult RevertCommit(string path, string sha);
+
+    /// <summary>
+    /// Applies a commit's changes to <paramref name="ontoBranch"/>, switching to that
+    /// branch first. Empty means the branch already checked out.
+    /// </summary>
+    CommitOperationResult CherryPickCommit(string path, string sha, string ontoBranch);
+
+    /// <summary>
+    /// Moves the current branch to a commit. <see cref="ResetKind.Hard"/> discards
+    /// uncommitted work irrecoverably - the caller confirms before calling.
+    /// </summary>
+    void ResetToCommit(string path, string sha, ResetKind kind);
+
+    // ---- Finishing what git could not ---------------------------------------
+
+    /// <summary>Paths git left conflicted, from the index rather than the working tree.</summary>
+    IReadOnlyList<string> GetConflictedPaths(string path);
+
+    /// <summary>Resolves a conflicted file by keeping one side of it whole.</summary>
+    void ResolveConflict(string path, string file, ConflictSide side);
+
+    /// <summary>Accepts conflicted files as they now stand in the working tree.</summary>
+    void MarkConflictResolved(string path, IEnumerable<string> files);
+
+    /// <summary>
+    /// Abandons the merge, revert or cherry-pick in progress and resets to the last
+    /// commit. Uncommitted work goes with it, so the caller confirms first.
+    /// </summary>
+    void AbortOperation(string path);
+
+    /// <summary>
+    /// The message git prepared for the commit that would finish the operation in
+    /// progress, or null if there isn't one.
+    /// </summary>
+    (string Summary, string Description)? GetPendingMessage(string path);
 
     /// <summary>
     /// Throws away working-tree changes to these paths: tracked files go back to HEAD,

@@ -103,10 +103,12 @@
                         Classes="toolbarItem" Margin="0,0,8,0">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
                         <Path Grid.Column="0" Classes="icon" Data="{DynamicResource IconBranch}" />
+                        <!-- Says "Not on a branch" over a short sha while HEAD is
+                             detached, so the toolbar never claims a branch we are not on. -->
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Classes="muted" Text="Current branch" />
+                            <TextBlock Classes="muted" Text="{Binding HeadDetailLabel}" />
                             <TextBlock Classes="body" FontWeight="SemiBold"
-                                       Text="{Binding SelectedBranch.Name}" />
+                                       Text="{Binding HeadLabel}" />
                         </StackPanel>
                         <Path Grid.Column="2" Classes="icon" Data="{DynamicResource IconChevronDown}" />
                     </Grid>
@@ -219,9 +221,7 @@
                  pointer's resting place. -->
             <Border Background="{DynamicResource ScrimBackground}"
                     IsVisible="{Binding HasPendingDiscard}">
-                <Border Background="{DynamicResource ElevatedBackground}"
-                        BorderBrush="{DynamicResource BorderStrong}"
-                        BorderThickness="1" CornerRadius="10" Padding="22" Width="460"
+                <Border Classes="dialog"
                         HorizontalAlignment="Center" VerticalAlignment="Center">
                     <StackPanel Spacing="14">
                         <TextBlock Classes="h2" Text="Discard changes?" />
@@ -246,10 +246,8 @@
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
                     <ContentControl.ContentTemplate>
                         <DataTemplate x:DataType="vm:BranchSwitchViewModel">
-                            <Border Background="{DynamicResource ElevatedBackground}"
-                                    BorderBrush="{DynamicResource BorderStrong}"
-                                    BorderThickness="1" CornerRadius="10"
-                                    Padding="22" Width="560" MaxHeight="560">
+                            <!-- Wider than the rest, and capped: it carries a file list. -->
+                            <Border Classes="dialog" Width="560" MaxHeight="560">
                                 <StackPanel Spacing="14">
                                     <TextBlock Classes="h2" Text="{Binding Title}" />
                                     <TextBlock Classes="caption" TextWrapping="Wrap"
@@ -313,6 +311,190 @@
                         </DataTemplate>
                     </ContentControl.ContentTemplate>
                 </ContentControl>
+            </Border>
+
+            <!-- ============ Questions asked about one commit ============ -->
+            <!-- All four follow the branch-switch prompt's shape: a ContentControl so
+                 nothing binds against a null draft, a scrim so the question gets an
+                 answer, and the confirming button on the right. -->
+
+            <!-- Naming a branch that starts at an older commit. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasBranchFromCommit}">
+                <ContentControl Content="{Binding BranchFromCommit}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:BranchFromCommitViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="New branch from this commit" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+                                    <TextBox Classes="commitBox"
+                                             Text="{Binding Name, Mode=TwoWay}"
+                                             PlaceholderText="Branch name" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="The new branch starts here and is checked out. Nothing already committed changes." />
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelBranchFromCommitCommand}" />
+                                        <Button Classes="primary" Content="Create branch"
+                                                IsEnabled="{Binding CanCreate}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmBranchFromCommitCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Tagging a commit. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasTagDraft}">
+                <ContentControl Content="{Binding TagDraft}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:TagDraftViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="Tag this commit" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+                                    <TextBox Classes="commitBox"
+                                             Text="{Binding Name, Mode=TwoWay}"
+                                             PlaceholderText="Tag name, e.g. v1.2.0" />
+                                    <TextBox Classes="commitBox"
+                                             Text="{Binding Message, Mode=TwoWay}"
+                                             PlaceholderText="What it marks (optional)"
+                                             AcceptsReturn="True" TextWrapping="Wrap" Height="64" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="A message makes it an annotated tag, recording who made it and when. The tag stays local until you push." />
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelTagCommand}" />
+                                        <Button Classes="primary" Content="Create tag"
+                                                IsEnabled="{Binding CanCreate}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmTagCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Copying a commit onto another branch. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasCherryPickDraft}">
+                <ContentControl Content="{Binding CherryPickDraft}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:CherryPickDraftViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="Copy this commit to another branch" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              IsVisible="{Binding HasBranches}"
+                                              ItemsSource="{Binding Branches}"
+                                              SelectedItem="{Binding TargetBranch, Mode=TwoWay}" />
+
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               IsVisible="{Binding !HasBranches}"
+                                               Text="{Binding EmptyLabel}" />
+
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               IsVisible="{Binding HasBranches}"
+                                               Text="GitGui switches to that branch and applies the same change there as a new commit. If it clashes with what is already there, you finish it on the Changes tab." />
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelCherryPickCommand}" />
+                                        <Button Classes="primary" Content="Copy it across"
+                                                IsEnabled="{Binding CanApply}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmCherryPickCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Moving the branch back. One of the three choices destroys work, which is
+                 why this is a dialog with an explanation rather than a menu entry. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasResetDraft}">
+                <ContentControl Content="{Binding ResetDraft}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:ResetDraftViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="Move the branch back to this commit" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+
+                                    <StackPanel Spacing="8">
+                                        <RadioButton GroupName="ResetKind"
+                                                     IsChecked="{Binding IsSoft, Mode=OneWay}"
+                                                     Command="{Binding ChooseSoftCommand}"
+                                                     Content="Keep the changes, ready to commit" />
+                                        <RadioButton GroupName="ResetKind"
+                                                     IsChecked="{Binding IsMixed, Mode=OneWay}"
+                                                     Command="{Binding ChooseMixedCommand}"
+                                                     Content="Keep the changes in my working tree" />
+                                        <RadioButton GroupName="ResetKind"
+                                                     IsChecked="{Binding IsHard, Mode=OneWay}"
+                                                     Command="{Binding ChooseHardCommand}"
+                                                     Content="Throw the changes away" />
+                                    </StackPanel>
+
+                                    <Border Background="{DynamicResource BannerWarningBackground}"
+                                            BorderBrush="{DynamicResource BannerWarningBorder}"
+                                            BorderThickness="1" CornerRadius="8" Padding="11,9">
+                                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                   Text="{Binding Explanation}" />
+                                    </Border>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelResetCommand}" />
+                                        <Button Classes="primary" Content="{Binding ConfirmLabel}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmResetCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Abandoning a stopped merge or revert. Resets hard, so it asks first for
+                 the same reason discarding a file does. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding IsConfirmingAbort}">
+                <Border Classes="dialog" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel Spacing="14">
+                        <TextBlock Classes="h2" Text="Abandon this?" />
+                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                   Text="{Binding AbortSummary}" />
+                        <StackPanel Orientation="Horizontal" Spacing="9"
+                                    HorizontalAlignment="Right">
+                            <Button Classes="secondary" Content="Keep going"
+                                    Command="{Binding CancelAbortCommand}" />
+                            <Button Classes="primary" Content="Abandon it"
+                                    Command="{Binding ConfirmAbortCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </Border>
         </Panel>
 

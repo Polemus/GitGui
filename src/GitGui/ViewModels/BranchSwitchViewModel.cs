@@ -13,11 +13,13 @@ namespace GitGui.ViewModels;
 public partial class BranchSwitchViewModel : ObservableObject
 {
     public BranchSwitchViewModel(
-        string fromBranch, string targetBranch, bool create, IEnumerable<FileChangeViewModel> changes)
+        string fromBranch, string targetBranch, bool create, IEnumerable<FileChangeViewModel> changes,
+        string? startPoint = null)
     {
         FromBranch = fromBranch;
         TargetBranch = targetBranch;
         Create = create;
+        StartPoint = startPoint;
 
         foreach (var change in changes)
         {
@@ -35,6 +37,12 @@ public partial class BranchSwitchViewModel : ObservableObject
 
     /// <summary>True when the target branch doesn't exist yet.</summary>
     public bool Create { get; }
+
+    /// <summary>
+    /// The commit a created branch starts at, when that isn't HEAD. Carried through the
+    /// prompt so confirming it lands on the same commit the menu was opened over.
+    /// </summary>
+    public string? StartPoint { get; }
 
     /// <summary>The uncommitted files. IsStaged means "bring this one across".</summary>
     public ObservableCollection<FileChangeViewModel> Files { get; } = [];

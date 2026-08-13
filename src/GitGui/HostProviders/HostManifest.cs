@@ -39,6 +39,22 @@ public sealed class HostManifest
 
     /// <summary>What to hand libgit2 for HTTPS push/fetch.</summary>
     public CredentialTemplate GitCredentials { get; set; } = new();
+
+    /// <summary>Pages on the site a user might want to open in a browser.</summary>
+    public WebUrlTemplates WebUrls { get; set; } = new();
+}
+
+/// <summary>
+/// Where things live on the site's own website, as opposed to its API.
+/// </summary>
+/// <remarks>
+/// Templates rather than endpoints, because these are built from what a clone already
+/// knows - the remote URL - not fetched. <c>{base}</c>, <c>{owner}</c>, <c>{repo}</c>
+/// and <c>{sha}</c> are substituted.
+/// </remarks>
+public sealed class WebUrlTemplates
+{
+    public string Commit { get; set; } = Services.WebLinks.DefaultCommitTemplate;
 }
 
 /// <summary>Probe a path and check a field exists, e.g. /api/v1/version -> "version".</summary>
