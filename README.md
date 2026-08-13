@@ -65,12 +65,38 @@ its own.
 - **Ahead/behind** counts read from the branch's tracking details.
 - **Dark and light themes**, switchable at runtime.
 
+### Hosting sites are pluggable
+
+Adding a new hosting site normally needs **no code**. You write a JSON file describing
+the site's API — which URL lists repositories, which field holds the name — drop it in
+`~/.config/GitGui/hosts/`, and restart. See **[docs/host-manifests.md](docs/host-manifests.md)**.
+
+Manifests are data, not programs, so a site description can't execute anything or read
+the tokens held for other sites. A plugin DLL could, which is why this isn't one.
+
+| Site | How it's implemented |
+| --- | --- |
+| GitHub / GitHub Enterprise | C#, because its browser sign-in is a multi-step conversation |
+| Gitea (and Forgejo) | a built-in manifest |
+| GitLab | a built-in manifest |
+| anything else | a manifest you write |
+
+Gitea ships *as* a manifest deliberately: the format is exercised by GitGui's own code,
+so it can't rot into something that only works in theory. Verified end-to-end against a
+real Gitea 1.27 server — recognition, token sign-in, repository listing and credential
+templating — including a hand-written third-party manifest.
+
 ### Not yet
 
 - **Fetch, push, pull.** The button reads the right label from ahead/behind counts, but
-  pressing it explains that these need account support.
-- **The accounts screen is sample data.** Wiring it up means OAuth, tokens and secure
-  cross-platform storage — the next phase.
+  pressing it says these need account support.
+- **The accounts screen is still sample data.** The provider layer underneath it works;
+  the UI isn't wired to it yet.
+- **Token storage.** Tokens are not yet persisted; OS keychain integration comes next.
+- **GitHub browser sign-in needs an OAuth App client ID**, which identifies GitGui to
+  GitHub and can't be invented. Register one (Settings → Developer settings → OAuth Apps,
+  tick *Enable Device Flow*) and set `GITGUI_GITHUB_CLIENT_ID`. Personal access tokens
+  work without it.
 
 ## Does it need git?
 

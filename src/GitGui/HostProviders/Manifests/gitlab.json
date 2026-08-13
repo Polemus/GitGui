@@ -1,0 +1,44 @@
+{
+  "id": "gitlab",
+  "displayName": "GitLab",
+  "auth": ["token"],
+
+  "recognise": {
+    "path": "/api/v4/version",
+    "expectField": "version"
+  },
+
+  "//": "GitLab uses its own header rather than Authorization.",
+  "authHeader": {
+    "name": "PRIVATE-TOKEN",
+    "value": "{token}"
+  },
+
+  "endpoints": {
+    "currentUser": "/api/v4/user",
+    "repositories": "/api/v4/projects?membership=true&per_page=100"
+  },
+
+  "userFields": {
+    "login": "username",
+    "displayName": "name",
+    "avatarUrl": "avatar_url"
+  },
+
+  "//repositoryFields": "Note how little of this matches Gitea: different field names, a nested owner path, and a visibility string instead of a boolean.",
+  "repositoryFields": {
+    "name": "path",
+    "owner": "namespace.full_path",
+    "cloneUrl": "http_url_to_repo",
+    "defaultBranch": "default_branch",
+    "isPrivate": { "path": "visibility", "equals": "private" },
+    "description": "description",
+    "updatedAt": "last_activity_at"
+  },
+
+  "//gitCredentials": "GitLab wants a fixed username with the token as the password.",
+  "gitCredentials": {
+    "username": "oauth2",
+    "password": "{token}"
+  }
+}
