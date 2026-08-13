@@ -372,7 +372,6 @@ public sealed class GitService : IGitService
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
     }
-    
 
     private static void Switch(Repository repo, string branchName, bool create)
     {
