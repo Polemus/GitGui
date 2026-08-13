@@ -23,7 +23,4 @@ artifacts/
 Thumbs.db
 *~
 
-# Agent tooling, local to whoever is running it.
-# .vscode/ is deliberately absent from this file - launch.json is checked in.
-.claude/
-CLAUDE.md
+# .vscode/ is deliberately absent from this file — launch.json is checked in.
