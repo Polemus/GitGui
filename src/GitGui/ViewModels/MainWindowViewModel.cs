@@ -160,6 +160,34 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsConsoleExpanded { get; set; }
 
+    /// <summary>
+    /// Height of the console's row. Auto while collapsed, so the header alone sets it;
+    /// an absolute height once open, which is what makes the splitter able to drag it.
+    /// </summary>
+    [ObservableProperty]
+    public partial GridLength ConsoleHeight { get; set; } = GridLength.Auto;
+
+    /// <summary>Remembers how tall the user dragged it, so reopening returns there.</summary>
+    private GridLength _lastConsoleHeight = new(260);
+
+    /// <summary>
+    /// Hooked rather than done in the toggle command, because an error opens the console
+    /// on its own and would otherwise leave the row still sized for a collapsed one.
+    /// </summary>
+    partial void OnIsConsoleExpandedChanged(bool value)
+    {
+        if (value)
+        {
+            ConsoleHeight = _lastConsoleHeight;
+            return;
+        }
+
+        if (ConsoleHeight.IsAbsolute && ConsoleHeight.Value > 0)
+            _lastConsoleHeight = ConsoleHeight;
+
+        ConsoleHeight = GridLength.Auto;
+    }
+
     /// <summary>Most recent line, shown on the collapsed bar.</summary>
     public ActivityEntry? LatestEntry => _log.Entries.Count > 0 ? _log.Entries[^1] : null;
 

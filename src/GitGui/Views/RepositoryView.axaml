@@ -161,14 +161,16 @@
         <!-- ======================= Detail pane ======================= -->
         <Panel Grid.Column="2" Background="{DynamicResource AppBackground}">
 
-            <!-- Selected working-tree file -->
-            <ScrollViewer IsVisible="{Binding IsChangesTab}" Padding="18">
-                <!-- The visibility test has to live on a wrapper: DiffView's own
-                     DataContext is the FileChange, which knows nothing of selection. -->
-                <Panel IsVisible="{Binding SelectedChange, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <views:DiffView DataContext="{Binding SelectedChange.Model}" />
-                </Panel>
-            </ScrollViewer>
+            <!-- Selected working-tree file. No outer ScrollViewer: DiffView fills the
+                 pane and scrolls itself, so its scrollbars sit at the pane's edges. -->
+            <ContentControl IsVisible="{Binding IsChangesTab}" Margin="18"
+                            Content="{Binding SelectedChange}">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate x:DataType="vm:FileChangeViewModel">
+                        <views:DiffView DataContext="{Binding Model}" />
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
 
             <!-- Clean working tree -->
             <TextBlock IsVisible="{Binding IsChangesTab}"
@@ -270,15 +272,14 @@
 
                 <GridSplitter Grid.Row="1" Grid.Column="1" Classes="paneSplitter" />
 
-                <ScrollViewer Grid.Row="1" Grid.Column="2" Padding="18,12,18,18">
-                    <ContentControl Content="{Binding SelectedCommitFile}">
-                        <ContentControl.ContentTemplate>
-                            <DataTemplate x:DataType="m:FileChange">
-                                <views:DiffView />
-                            </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                    </ContentControl>
-                </ScrollViewer>
+                <ContentControl Grid.Row="1" Grid.Column="2" Margin="18,12,18,18"
+                                Content="{Binding SelectedCommitFile}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="m:FileChange">
+                            <views:DiffView />
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
             </Grid>
         </Panel>
     </Grid>

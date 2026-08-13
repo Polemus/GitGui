@@ -401,6 +401,22 @@
         <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     </Style>
 
+    <!-- Horizontal twin of the above, for dragging the activity console taller. -->
+    <Style Selector="GridSplitter.consoleSplitter">
+        <Setter Property="Height" Value="5" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="SizeNorthSouth" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel Background="{TemplateBinding Background}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="GridSplitter.consoleSplitter:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
     <!-- Severity dot on the collapsed bar. -->
     <Style Selector="Border.logDot">
         <Setter Property="Background" Value="{DynamicResource TextSecondary}" />
