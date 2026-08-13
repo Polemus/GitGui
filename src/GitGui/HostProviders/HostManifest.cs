@@ -98,12 +98,16 @@ public sealed class CredentialTemplate
 /// the shorthand alone would not have been enough.
 /// </remarks>
 [JsonConverter(typeof(FieldRefConverter))]
-public sealed class FieldRef(string path, string? equals = null)
+public sealed class FieldRef(string path, string? matchValue = null)
 {
     public string Path { get; } = path;
 
-    /// <summary>When set, the field's value is compared to this and a bool returned.</summary>
-    public string? Equals { get; } = equals;
+    /// <summary>
+    /// When set, the field's value is compared to this and a bool returned. Named
+    /// MatchValue rather than Equals so it doesn't shadow object.Equals; the JSON key
+    /// stays "equals".
+    /// </summary>
+    public string? MatchValue { get; } = matchValue;
 
     /// <summary>Walks the dotted path and returns the element, or null if absent.</summary>
     public JsonElement? Resolve(JsonElement root)
@@ -145,8 +149,8 @@ public sealed class FieldRef(string path, string? equals = null)
         if (Resolve(root) is not { } element)
             return false;
 
-        if (Equals is not null)
-            return string.Equals(element.GetString(), Equals, StringComparison.OrdinalIgnoreCase);
+        if (MatchValue is not null)
+            return string.Equals(element.GetString(), MatchValue, StringComparison.OrdinalIgnoreCase);
 
         return element.ValueKind switch
         {
@@ -194,7 +198,7 @@ public sealed class FieldRefConverter : JsonConverter<FieldRef>
 
     public override void Write(Utf8JsonWriter writer, FieldRef value, JsonSerializerOptions options)
     {
-        if (value.Equals is null)
+        if (value.MatchValue is null)
         {
             writer.WriteStringValue(value.Path);
             return;
@@ -202,7 +206,7 @@ public sealed class FieldRefConverter : JsonConverter<FieldRef>
 
         writer.WriteStartObject();
         writer.WriteString("path", value.Path);
-        writer.WriteString("equals", value.Equals);
+        writer.WriteString("equals", value.MatchValue);
         writer.WriteEndObject();
     }
 }
