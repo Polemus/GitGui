@@ -31,21 +31,3 @@ public sealed class GitHost
         _ => "Git",
     };
 }
-
-/// <summary>A signed-in identity on a specific <see cref="GitHost"/>.</summary>
-public sealed class Account
-{
-    public required string Login { get; init; }
-    public required string DisplayName { get; init; }
-    public required GitHost Host { get; init; }
-    public required string Initials { get; init; }
-    public required string AvatarHex { get; init; }
-
-    /// <summary>How the token was obtained — shown on the accounts screen.</summary>
-    public required string AuthMethod { get; init; }
-
-    public int RepositoryCount { get; init; }
-
-    public string Handle => $"@{Login}";
-    public string QualifiedName => $"{Login} on {Host.Name}";
-}

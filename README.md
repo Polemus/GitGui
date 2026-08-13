@@ -2,14 +2,14 @@
 
 A desktop git client in the spirit of GitHub Desktop — except it isn't tied to GitHub.
 GitGui talks to **GitHub** and **Gitea** (including self-hosted instances behind your own
-domain), with room for more forges later.
+domain), and to anything else you describe in a JSON file.
 
 Runs on **Linux, Windows and macOS** from a single codebase.
 
-> **Status: local git works; network does not yet.** GitGui reads and writes real
-> repositories — branches, working-tree status, diffs, history and commits are all
-> live. Fetch, push and pull are not wired up, because they need host credentials.
-> The accounts screen is still sample data for the same reason.
+> **Status: working, not finished.** GitGui reads and writes real repositories — branches,
+> working-tree status, diffs, history, commits — and signs in to hosting sites to fetch,
+> push and pull. Still missing: browsing and cloning remote repositories from the UI, and
+> pull requests.
 
 **No git installation required.** The native libgit2 library ships inside the app, so
 users don't need git, .NET, or anything else installed. See [Does it need git?](#does-it-need-git).
@@ -18,24 +18,20 @@ users don't need git, .NET, or anything else installed. See [Does it need git?](
 
 ## Screenshots
 
-Every screenshot below is the app running against **real repositories** — including
-its own.
+Every screenshot below is the app running against **real repositories** — including its
+own. They predate the activity console, so the bar along the bottom is missing from them.
 
 **Changes — working tree and unified diff**
 
 ![Changes tab, dark theme](docs/screenshots/changes-dark.png)
 
-**Repository picker — grouped by the forge each clone actually came from**
+**Repository picker — grouped by the hosting site each clone actually came from**
 
 ![Repository picker](docs/screenshots/repository-picker.png)
 
 **History — commit list with per-file diffs**
 
 ![History tab, dark theme](docs/screenshots/history-dark.png)
-
-**Accounts & hosts — the multi-forge story (still sample data)**
-
-![Accounts screen, dark theme](docs/screenshots/accounts-dark.png)
 
 **Light theme**
 
@@ -47,7 +43,7 @@ its own.
 
 - **Add any local clone** through a native folder picker. The list persists between
   launches.
-- **Repository picker grouped by forge.** The group a repo lands in is derived from its
+- **Repository picker grouped by hosting site.** The group a repo lands in is derived from its
   actual `origin` URL, so a GitHub clone and a self-hosted Gitea clone genuinely sort
   themselves apart. Handles `https://`, `ssh://` and scp-style `git@host:owner/repo`.
 - **Branch picker** listing real local branches with their last-commit summaries, and
@@ -64,6 +60,18 @@ its own.
   patch output.
 - **Ahead/behind** counts read from the branch's tracking details.
 - **Dark and light themes**, switchable at runtime.
+- **An activity console** docked at the bottom. Collapsed it shows the newest line with a
+  severity dot; expanded it is a timestamped, colour-coded log that auto-scrolls. It
+  expands itself when an error is logged, and carries trace output so a fetch or push
+  shows what it is actually doing:
+
+  ```
+  14:22:01  Fetching origin from https://github.com/Polemus/GitGui.git
+  14:22:02    30% — 41/136 objects, 82 KB
+  14:22:03  Fetched from origin — already up to date
+  ```
+
+  Operations inform rather than fail. Being signed out returns a result, not an exception.
 
 ### Hosting sites are pluggable
 
@@ -145,6 +153,14 @@ authenticate over HTTPS with tokens, HTTPS is the intended path.
 Avalonia renders with Skia rather than wrapping native controls, so the app looks and
 behaves identically on all three platforms.
 
+## Documentation
+
+| Document | What's in it |
+| --- | --- |
+| [CLAUDE.md](CLAUDE.md) | Working notes: build commands, decisions not to re-litigate, gotchas already paid for, and what's next |
+| [docs/architecture.md](docs/architecture.md) | The layers and *why* they're shaped this way |
+| [docs/host-manifests.md](docs/host-manifests.md) | How to add a hosting site by writing one JSON file |
+
 ## Project layout
 
 ```
@@ -153,7 +169,7 @@ src/GitGui/
   Services/
     GitService.cs          libgit2 implementation of IGitService
     UnifiedDiffParser.cs   libgit2 patch text -> renderable diff rows
-    HostResolver.cs        origin URL -> which forge a clone belongs to
+    HostResolver.cs        origin URL -> which hosting site a clone belongs to
     RepositoryStore.cs     known-clone list, JSON in the app-data dir
     FolderPicker.cs        native folder dialog via StorageProvider
     MockData.cs            design-time sample content only

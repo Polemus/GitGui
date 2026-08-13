@@ -160,7 +160,9 @@ jobs:
           **Windows** — run the \`-setup.exe\`, or unzip the portable build.
           **macOS** — open the \`.dmg\` and drag GitGui to Applications. The bundle is unsigned, so the first launch needs right-click → Open.
 
-          This is a UI mockup: the interface is complete but no git operations are wired up yet." \
+          No git installation is required — the native libgit2 library ships inside the app.
+
+          Add a local clone from the repository picker, and sign in on the Accounts screen to fetch and push. Hosting sites other than GitHub and Gitea can be added by dropping a JSON manifest in the hosts folder; see docs/host-manifests.md." \
               --target "$GITHUB_SHA"
           fi
 
