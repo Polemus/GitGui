@@ -3,6 +3,8 @@ bin/
 obj/
 dist/
 build/.stage-*/
+build/.appdir-*/
+build/.tools/
 
 # .NET
 *.user

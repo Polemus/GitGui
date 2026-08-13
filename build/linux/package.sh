@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 #
 # Builds Linux artifacts for one runtime identifier:
-#   dist/GitGui-<version>-<rid>.tar.gz   portable tarball
-#   dist/gitgui_<version>_<arch>.deb     Debian / Ubuntu / Mint
-#   dist/gitgui-<version>-1.<arch>.rpm   Fedora / RHEL / openSUSE
+#   dist/GitGui-<version>-<rid>.tar.gz     portable tarball
+#   dist/gitgui_<version>_<arch>.deb       Debian / Ubuntu / Mint
+#   dist/gitgui-<version>-1.<arch>.rpm     Fedora / RHEL / openSUSE
+#   dist/GitGui-<version>-<arch>.AppImage  everything else
 #
 # Usage: build/linux/package.sh <rid> [version]
 #   rid: linux-x64 | linux-arm64
 #
-# Requires: dotnet SDK, tar, and fpm (gem install fpm) for deb/rpm.
+# Requires: dotnet SDK, tar, and fpm (gem install fpm) for deb/rpm. The
+# AppImage additionally needs curl, and is skipped without it.
 set -euo pipefail
 
 RID="${1:?usage: package.sh <linux-x64|linux-arm64> [version]}"
@@ -55,6 +57,9 @@ install -Dm644 "$ROOT/src/GitGui/Assets/gitgui.svg" \
 
 echo "==> Portable tarball"
 tar -czf "$DIST/GitGui-$VERSION-$RID.tar.gz" -C "$STAGE/usr/lib" gitgui
+
+# Before the fpm check below, which exits when fpm is absent.
+"$ROOT/build/linux/appimage.sh" "$RID" "$VERSION" "$STAGE"
 
 if ! command -v fpm >/dev/null 2>&1; then
     echo "!! fpm not found - skipping .deb/.rpm (install with: gem install fpm)" >&2

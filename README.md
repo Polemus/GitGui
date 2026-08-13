@@ -249,7 +249,7 @@ real server, as described in `CLAUDE.md`.
 Each script publishes a **self-contained** build, so end users don't need .NET installed.
 
 ```bash
-# Linux — .deb, .rpm and .tar.gz  (needs fpm: gem install fpm)
+# Linux — .deb, .rpm, .tar.gz and .AppImage  (needs fpm: gem install fpm)
 ./build/linux/package.sh linux-x64 0.1.0
 ./build/linux/package.sh linux-arm64 0.1.0
 
@@ -261,6 +261,20 @@ pwsh build/windows/package.ps1 -Rid win-x64 -Version 0.1.0
 ```
 
 Artifacts land in `dist/`.
+
+The AppImage is built by `build/linux/appimage.sh`, which `package.sh` calls once the
+publish is staged. `appimagetool` and the AppImage runtime are downloaded on first use and
+cached in `build/.tools/`; without network access that step is skipped and the other three
+artifacts are still produced. Run the script on its own to rebuild only the AppImage —
+it reuses whatever `package.sh` last staged instead of publishing again:
+
+```bash
+./build/linux/appimage.sh linux-x64 0.1.0
+```
+
+The architecture of the output comes from the runtime handed to `appimagetool`, not from
+the machine running it, so the arm64 AppImage cross-builds from an x64 runner like the
+rest of the Linux artifacts.
 
 ## Releasing
 
@@ -277,7 +291,7 @@ attaches the results to a GitHub Release:
 
 | Platform | Artifacts |
 | --- | --- |
-| Linux x64 / arm64 | `.deb`, `.rpm`, `.tar.gz` |
+| Linux x64 / arm64 | `.deb`, `.rpm`, `.tar.gz`, `.AppImage` |
 | Windows x64 | `-setup.exe`, `.zip` |
 | macOS arm64 / x64 | `.dmg` |
 
@@ -304,8 +318,9 @@ runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
 - **Installers are ~45 MB** because each build bundles the .NET runtime. Enabling
   `PublishTrimmed` would cut that substantially, but Avalonia needs trimming feed
   configuration and `ViewLocator`'s reflection would have to go first.
-- **AppImage / Flatpak** aren't built yet; the `.tar.gz` covers distros without `.deb`
-  or `.rpm` for now.
+- **No Flatpak.** The `.AppImage` covers distros without `.deb` or `.rpm`. It carries no
+  AppStream metainfo yet, so it won't show up with a description in software centres that
+  index AppImages.
 
 ## Licence
 
