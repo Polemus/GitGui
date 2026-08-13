@@ -38,6 +38,18 @@ rather than dumped into the view as noise.
 Being signed out is an everyday condition for a git client — treating it as an exception
 muddles control flow and makes the debugger halt on it during every development run.
 
+**Partial stashing is built out of two whole ones.** Switching branches can carry only
+some uncommitted files across, but libgit2 has no way to stash a subset. `SwitchBranch`
+gets there by stashing everything, restoring it, reverting the files being carried,
+stashing the remainder, restoring the full stash, reverting the files being left, and
+dropping the full stash — after which a plain checkout moves what's left in the tree.
+
+The ordering matters more than the step count: **everything is stashed before anything is
+reverted**, so uncommitted work never exists only in the working tree. If any later step
+fails, the changes are still on the stash stack rather than gone. This is the one place in
+the codebase where a bug destroys work that was never committed, which is why it is
+covered by tests against real repositories instead of by reasoning.
+
 ## Why hosting sites are data, not code
 
 A host provider handles tokens that can read and write all of the user's source code.
@@ -103,3 +115,16 @@ plainly rather than implying safety it doesn't have.
 Git work runs via `Task.Run`; the `await` resumes on the UI thread, so collection updates
 after it are already marshalled. `ActivityLog` marshals explicitly because libgit2 progress
 callbacks fire on whichever thread is transferring, not a thread we chose.
+`RepositoryWatcher` does the same, for the same reason: `FileSystemWatcher` events arrive
+on a thread-pool thread.
+
+## Staying in step with the disk
+
+The app used to notice only its own work, so committing in a terminal left it offering to
+commit files that no longer differed. `RepositoryWatcher` watches the working tree and
+`.git` together, debounced, ignoring the paths that churn without meaning anything —
+`.git/objects`, reflogs, lock files, build output.
+
+An automatic reload is deliberately quieter than a deliberate one: no busy strip, no log
+line, and the ticked files, selected file and selected commit are all preserved. The user
+didn't ask for it, so it shouldn't move anything under them.

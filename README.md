@@ -198,7 +198,8 @@ src/GitGui/
   Styles/        Tokens.axaml (theme colours + icons), Controls.axaml (control styles)
   Assets/        App icon
 tests/GitGui.Tests/
-                 xunit over the pure functions — see "Tests" above
+                 xunit — pure functions, plus branch switching against real
+                 throwaway repositories. See "Tests" above.
 build/
   linux/         package.sh, .desktop entry, hicolor icons
   windows/       package.ps1, Inno Setup script
@@ -229,13 +230,19 @@ F5 with a `.axaml` file focused *before* that config exists, VS Code offers to f
 dotnet test
 ```
 
-They cover the pure functions, which are the parts that break silently: the unified-diff
-parser, the remote-URL resolution behind repository grouping, and the manifest field
-mapping — including the round trip through the settings form, since a lost field there
-would quietly mislabel every repository on a site.
+Most of them cover the pure functions, which are the parts that break silently: the
+unified-diff parser, the remote-URL resolution behind repository grouping, and the
+manifest field mapping — including the round trip through the settings form, since a lost
+field there would quietly mislabel every repository on a site.
 
-Nothing here talks to libgit2, the network or the UI. Those are still checked by hand
-against a real server, as described in `CLAUDE.md`.
+The exception is **branch switching**, which runs against real repositories created in a
+temp directory. Carrying only some uncommitted files across a checkout takes two stashes
+and six steps, and a mistake there loses work that was never committed — the one place in
+this codebase where a bug is unrecoverable, so it is verified rather than reasoned about.
+LibGit2Sharp bundles its own native library, so this still needs no git installed.
+
+Nothing here talks to the network or the UI. Those are still checked by hand against a
+real server, as described in `CLAUDE.md`.
 
 ## Building installers
 
@@ -287,9 +294,8 @@ runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
   mislabelled group, not a failed connection.
 - **No undo.** The last commit can be amended while it is still local, but there is no
   reset, revert or reflog rescue.
-- **Tests cover the pure functions only** — diff parsing, remote-URL resolution and the
-  manifest mapping. Anything touching libgit2, the network or the UI is still verified by
-  hand, against a real Gitea server.
+- **Tests stop at the git layer.** The pure functions and branch switching are covered;
+  the network and the whole UI are still verified by hand, against a real Gitea server.
 - **History is capped at 100 commits** with no paging yet.
 - **macOS builds are unsigned.** Gatekeeper will complain on first launch — right-click →
   Open. Signing and notarisation need an Apple Developer account.
