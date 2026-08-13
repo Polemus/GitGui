@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using GitGui.HostProviders;
 using GitGui.Models;
 using GitGui.Services;
 
@@ -23,26 +24,53 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IGitService _git;
     private readonly IRepositoryStore _store;
     private readonly IFolderPicker _picker;
+    private readonly HostProviderRegistry _hosts;
+    private readonly IAccountStore _accountStore;
+    private readonly ICredentialStore _credentials;
     private readonly bool _isDesignTime;
 
     /// <summary>Design-time constructor. Fills the previewer from sample data only.</summary>
     public MainWindowViewModel()
-        : this(new GitService(), new RepositoryStore(), new FolderPicker(), designTime: true)
+        : this(new GitService(), new RepositoryStore(), new FolderPicker(),
+               HostProviderRegistry.Create(new System.Net.Http.HttpClient()),
+               new AccountStore(new FileCredentialStore()), new FileCredentialStore(),
+               designTime: true)
     {
         LoadDesignTimeData();
     }
 
-    public MainWindowViewModel(IGitService git, IRepositoryStore store, IFolderPicker picker)
-        : this(git, store, picker, designTime: false)
+    public MainWindowViewModel(
+        IGitService git,
+        IRepositoryStore store,
+        IFolderPicker picker,
+        HostProviderRegistry hosts,
+        IAccountStore accountStore,
+        ICredentialStore credentials)
+        : this(git, store, picker, hosts, accountStore, credentials, designTime: false)
     {
     }
 
-    private MainWindowViewModel(IGitService git, IRepositoryStore store, IFolderPicker picker, bool designTime)
+    private MainWindowViewModel(
+        IGitService git,
+        IRepositoryStore store,
+        IFolderPicker picker,
+        HostProviderRegistry hosts,
+        IAccountStore accountStore,
+        ICredentialStore credentials,
+        bool designTime)
     {
         _git = git;
         _store = store;
         _picker = picker;
+        _hosts = hosts;
+        _accountStore = accountStore;
+        _credentials = credentials;
         _isDesignTime = designTime;
+
+        foreach (var provider in hosts.Providers)
+            Providers.Add(provider);
+
+        SelectedProvider = Providers.FirstOrDefault();
     }
 
     public ObservableCollection<RepositoryInfo> Repositories { get; } = [];
@@ -52,9 +80,48 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<FileChangeViewModel> Changes { get; } = [];
     public ObservableCollection<FileChange> SelectedCommitFiles { get; } = [];
 
-    // Accounts stay sample-only until host APIs land.
-    public ObservableCollection<Account> Accounts { get; } = new(MockData.Accounts);
+    public ObservableCollection<HostAccount> Accounts { get; } = [];
+    public ObservableCollection<IHostProvider> Providers { get; } = [];
     public ObservableCollection<GitHost> Hosts { get; } = [];
+
+    // ---- Sign-in -----------------------------------------------------------
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanUseBrowserLogin))]
+    [NotifyPropertyChangedFor(nameof(TokenHelpText))]
+    public partial IHostProvider? SelectedProvider { get; set; }
+
+    [ObservableProperty]
+    public partial string SignInServerUrl { get; set; } = "https://github.com";
+
+    [ObservableProperty]
+    public partial string SignInToken { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial DeviceLogin? PendingDeviceLogin { get; set; }
+
+    public bool HasPendingDeviceLogin => PendingDeviceLogin is not null;
+
+    public bool CanUseBrowserLogin
+        => SelectedProvider is GitHubProvider { CanUseBrowserLogin: true };
+
+    public string TokenHelpText => SelectedProvider is null
+        ? string.Empty
+        : $"Create a token on {SelectedProvider.DisplayName} and paste it here. "
+          + "It is stored in " + _credentials.Description + ".";
+
+    public string CredentialBackendLabel => $"Tokens are stored in {_credentials.Description}.";
+
+    public bool CredentialBackendIsWeak => !_credentials.IsSecure;
+
+    public bool HasAccounts => Accounts.Count > 0;
+
+    /// <summary>Manifest problems worth telling the user about.</summary>
+    public string? HostWarnings => _hosts.Warnings.Count == 0
+        ? null
+        : string.Join("  ", _hosts.Warnings);
+
+    public bool HasHostWarnings => HostWarnings is not null;
 
     // ---- Loading / errors --------------------------------------------------
 
@@ -188,6 +255,11 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_isDesignTime)
             return;
 
+        foreach (var account in await _accountStore.LoadAsync())
+            Accounts.Add(account);
+
+        OnPropertyChanged(nameof(HasAccounts));
+
         var paths = await Task.Run(() => _store.Load());
 
         foreach (var path in paths)
@@ -295,10 +367,127 @@ public partial class MainWindowViewModel : ViewModelBase
         await OpenRepositoryAsync(repo);
     }
 
+    /// <summary>
+    /// Performs whatever the sync button says: pull when behind, push when ahead,
+    /// otherwise fetch.
+    /// </summary>
     [RelayCommand]
-    private void Sync()
-        => StatusMessage = "Fetch, push and pull arrive with account support — "
-                         + "they need credentials for the host.";
+    private async Task SyncAsync()
+    {
+        if (SelectedRepository is not { } repo)
+            return;
+
+        var path = repo.LocalPath;
+        var behind = Behind;
+        var ahead = Ahead;
+
+        await RunAsync(async () =>
+        {
+            var credentials = await Task.Run(() => CredentialsFor(_git.GetRemoteUrl(path)));
+
+            StatusMessage = await Task.Run(() => behind > 0 ? _git.Pull(path, credentials)
+                                              : ahead > 0 ? _git.Push(path, credentials)
+                                              : _git.Fetch(path, credentials));
+        });
+
+        await OpenRepositoryAsync(repo);
+    }
+
+    /// <summary>
+    /// Finds the signed-in account matching a remote URL's domain and asks its provider
+    /// for git credentials. Null is fine - public HTTPS remotes need no sign-in.
+    /// </summary>
+    private GitCredentials? CredentialsFor(string? remoteUrl)
+    {
+        if (HostResolver.Parse(remoteUrl) is not { } identity)
+            return null;
+
+        var account = Accounts.FirstOrDefault(a =>
+            string.Equals(a.BaseUrl.Host, identity.Host.Id, StringComparison.OrdinalIgnoreCase));
+
+        if (account is null)
+            return null;
+
+        return _hosts.ById(account.ProviderId)?.GetGitCredentials(account);
+    }
+
+    [RelayCommand]
+    private async Task SignInWithTokenAsync()
+    {
+        if (SelectedProvider is not { } provider)
+            return;
+
+        if (!Uri.TryCreate(SignInServerUrl, UriKind.Absolute, out var baseUrl))
+        {
+            ErrorMessage = "Enter a full server URL, including https://";
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var account = await provider.SignInWithTokenAsync(baseUrl, SignInToken.Trim(), default);
+            await AddAccountAsync(account);
+
+            SignInToken = string.Empty;
+            StatusMessage = $"Signed in to {provider.DisplayName} as {account.Login}";
+        });
+    }
+
+    [RelayCommand]
+    private async Task StartBrowserLoginAsync()
+    {
+        if (SelectedProvider is not { } provider)
+            return;
+
+        if (!Uri.TryCreate(SignInServerUrl, UriKind.Absolute, out var baseUrl))
+        {
+            ErrorMessage = "Enter a full server URL, including https://";
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var login = await provider.StartBrowserLoginAsync(baseUrl, default);
+            PendingDeviceLogin = login;
+            OnPropertyChanged(nameof(HasPendingDeviceLogin));
+
+            try
+            {
+                var account = await provider.CompleteBrowserLoginAsync(baseUrl, login, default);
+                await AddAccountAsync(account);
+                StatusMessage = $"Signed in to {provider.DisplayName} as {account.Login}";
+            }
+            finally
+            {
+                PendingDeviceLogin = null;
+                OnPropertyChanged(nameof(HasPendingDeviceLogin));
+            }
+        });
+    }
+
+    [RelayCommand]
+    private async Task SignOutAsync(HostAccount account)
+    {
+        await RunAsync(async () =>
+        {
+            await _accountStore.RemoveAsync(account);
+            Accounts.Remove(account);
+            OnPropertyChanged(nameof(HasAccounts));
+            StatusMessage = $"Signed out {account.Login}";
+        });
+    }
+
+    private async Task AddAccountAsync(HostAccount account)
+    {
+        await _accountStore.SaveAsync(account);
+
+        // Signing in again with a fresh token replaces the old entry.
+        if (Accounts.FirstOrDefault(a => a.Key == account.Key) is { } existing)
+            Accounts.Remove(existing);
+
+        Accounts.Add(account);
+        OnPropertyChanged(nameof(HasAccounts));
+    }
 
     [RelayCommand]
     private void ShowChangesTab() => SelectedTabIndex = 0;

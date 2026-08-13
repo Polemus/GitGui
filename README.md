@@ -86,17 +86,37 @@ so it can't rot into something that only works in theory. Verified end-to-end ag
 real Gitea 1.27 server — recognition, token sign-in, repository listing and credential
 templating — including a hand-written third-party manifest.
 
+### Signing in, fetching and pushing
+
+Sign in on the Accounts screen with a personal access token, and fetch/push/pull work.
+The sync button performs whatever its label says — pull when behind, push when ahead,
+otherwise fetch — and sets the upstream on a branch's first push so you don't have to
+drop to the command line for a branch you just created.
+
+**Tokens go to the OS keychain**, never into a settings file:
+
+| Platform | Where tokens are stored |
+| --- | --- |
+| Linux | system keyring via `secret-tool` (libsecret) |
+| macOS | login Keychain via `security` |
+| Windows | DPAPI, encrypted to your login |
+| fallback | a `0600` file — the app says so plainly when it has to use this |
+
+`accounts.json` holds only the harmless half (site, login, display name). Verified: the
+token is present in the keyring and absent from the JSON.
+
+Verified end-to-end against a real Gitea 1.27 server — sign in through the UI, then push
+a commit whose remote URL carried no credentials, confirmed server-side.
+
 ### Not yet
 
-- **Fetch, push, pull.** The button reads the right label from ahead/behind counts, but
-  pressing it says these need account support.
-- **The accounts screen is still sample data.** The provider layer underneath it works;
-  the UI isn't wired to it yet.
-- **Token storage.** Tokens are not yet persisted; OS keychain integration comes next.
 - **GitHub browser sign-in needs an OAuth App client ID**, which identifies GitGui to
   GitHub and can't be invented. Register one (Settings → Developer settings → OAuth Apps,
-  tick *Enable Device Flow*) and set `GITGUI_GITHUB_CLIENT_ID`. Personal access tokens
-  work without it.
+  tick *Enable Device Flow*) and set `GITGUI_GITHUB_CLIENT_ID`. The button stays hidden
+  until it is set. Personal access tokens work without any of that.
+- **Browsing and cloning remote repositories.** The provider layer already lists them;
+  the UI doesn't show them yet.
+- **Pull requests and issues.**
 
 ## Does it need git?
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using GitGui.HostProviders;
 using GitGui.Models;
 
 namespace GitGui.Services;
@@ -29,4 +30,19 @@ public interface IGitService
     string Commit(string path, IEnumerable<string> paths, string summary, string description);
 
     void CheckoutBranch(string path, string branchName);
+
+    /// <summary>The origin URL, so callers can work out which account to authenticate with.</summary>
+    string? GetRemoteUrl(string path);
+
+    /// <summary>Fetches from origin. Returns a short description of what happened.</summary>
+    string Fetch(string path, GitCredentials? credentials);
+
+    /// <summary>Fetches and merges the tracked upstream branch.</summary>
+    string Pull(string path, GitCredentials? credentials);
+
+    /// <summary>
+    /// Pushes the current branch, setting its upstream on first push so the user
+    /// doesn't have to run git themselves for a freshly created branch.
+    /// </summary>
+    string Push(string path, GitCredentials? credentials);
 }
