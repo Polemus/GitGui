@@ -260,8 +260,14 @@ public sealed class GitService : IGitService
                      ?? throw new InvalidOperationException("This repository has no remote to fetch from.");
 
         var refSpecs = remote.FetchRefSpecs.Select(r => r.Specification).ToList();
+        var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
 
-        Commands.Fetch(repo, remote.Name, refSpecs, BuildFetchOptions(credentials), "fetch by GitGui");
+        RunNetwork(probe, () =>
+        {
+            Commands.Fetch(repo, remote.Name, refSpecs,
+                BuildFetchOptions(credentials, probe), "fetch by GitGui");
+            return true;
+        });
 
         var tracking = repo.Head?.TrackingDetails;
         var behind = tracking?.BehindBy ?? 0;
@@ -278,11 +284,18 @@ public sealed class GitService : IGitService
         var signature = repo.Config.BuildSignature(DateTimeOffset.Now)
                         ?? new Signature("GitGui", "gitgui@localhost", DateTimeOffset.Now);
 
-        var result = Commands.Pull(repo, signature, new PullOptions
+        var remote = repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault();
+        var probe = new AuthProbe
         {
-            FetchOptions = BuildFetchOptions(credentials),
+            Host = remote is null ? "the remote" : HostOf(remote),
+            HadCredentials = credentials is not null,
+        };
+
+        var result = RunNetwork(probe, () => Commands.Pull(repo, signature, new PullOptions
+        {
+            FetchOptions = BuildFetchOptions(credentials, probe),
             MergeOptions = new MergeOptions { FailOnConflict = false },
-        });
+        }));
 
         return result.Status switch
         {
@@ -317,45 +330,112 @@ public sealed class GitService : IGitService
             branch = repo.Branches[branch.FriendlyName];
         }
 
+        var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
         var pushed = 0;
+
         var options = new PushOptions
         {
-            CredentialsProvider = CredentialsFor(credentials),
+            CredentialsProvider = CredentialsFor(credentials, probe),
             OnPushStatusError = error =>
                 throw new InvalidOperationException($"{remote.Name} rejected {error.Reference}: {error.Message}"),
             OnPackBuilderProgress = (_, current, _) => { pushed = current; return true; },
         };
 
-        repo.Network.Push(branch, options);
+        RunNetwork(probe, () =>
+        {
+            repo.Network.Push(branch, options);
+            return true;
+        });
 
         return $"Pushed {branch.FriendlyName} to {remote.Name}"
                + (pushed > 0 ? $" ({pushed} objects)" : string.Empty);
     }
 
-    private static FetchOptions BuildFetchOptions(GitCredentials? credentials) => new()
+    /// <summary>
+    /// Records what libgit2 asked for during one network call, so the failure can be
+    /// explained afterwards instead of from inside the callback.
+    /// </summary>
+    private sealed class AuthProbe
     {
-        CredentialsProvider = CredentialsFor(credentials),
+        public bool WasAsked { get; set; }
+        public bool HadCredentials { get; init; }
+        public required string Host { get; init; }
+    }
+
+    private static FetchOptions BuildFetchOptions(GitCredentials? credentials, AuthProbe probe) => new()
+    {
+        CredentialsProvider = CredentialsFor(credentials, probe),
         TagFetchMode = TagFetchMode.Auto,
         Prune = true,
     };
 
     /// <summary>
-    /// Supplies credentials to libgit2. Returning null for a missing account lets
-    /// public repositories over HTTPS keep working without any sign-in at all.
+    /// Supplies credentials to libgit2.
     /// </summary>
-    private static CredentialsHandler? CredentialsFor(GitCredentials? credentials)
+    /// <remarks>
+    /// A handler is always installed, even with no account. libgit2 only invokes it when
+    /// the server actually demands authentication, which gives exactly the behaviour we
+    /// want: a public remote never calls it and keeps working signed-out, while a private
+    /// one calls it and gets a message naming the host. Returning null here instead - the
+    /// original mistake - made libgit2 fail with "remote authentication required but no
+    /// callback set", which tells the user nothing about what to do.
+    /// </remarks>
+    private static CredentialsHandler CredentialsFor(GitCredentials? credentials, AuthProbe probe)
     {
-        if (credentials is null)
-            return null;
+        return (_, _, types) =>
+        {
+            // Only note that authentication was demanded. Throwing here would have to
+            // travel back out through native libgit2 frames, which the debugger reports
+            // as an unhandled exception and breaks on every time. The failure is
+            // explained in RunNetwork instead, once we are back in managed code.
+            probe.WasAsked = true;
 
-        return (_, _, types) => types.HasFlag(SupportedCredentialTypes.UsernamePassword)
-            ? new UsernamePasswordCredentials
-            {
-                Username = credentials.Username,
-                Password = credentials.Password,
-            }
-            : new DefaultCredentials();
+            if (credentials is null)
+                return new DefaultCredentials();
+
+            return types.HasFlag(SupportedCredentialTypes.UsernamePassword)
+                ? new UsernamePasswordCredentials
+                {
+                    Username = credentials.Username,
+                    Password = credentials.Password,
+                }
+                : new DefaultCredentials();
+        };
     }
+
+    /// <summary>Domain of a remote, for use in messages.</summary>
+    private static string HostOf(Remote remote)
+        => HostResolver.Parse(remote.Url)?.Host.Id ?? remote.Url;
+
+    /// <summary>
+    /// Runs a network operation and turns libgit2's terse failures into something that
+    /// says what to do about it, using what the credentials callback observed.
+    /// </summary>
+    private static T RunNetwork<T>(AuthProbe probe, Func<T> operation)
+    {
+        try
+        {
+            return operation();
+        }
+        catch (LibGit2SharpException ex) when (probe.WasAsked || IsAuthFailure(ex.Message))
+        {
+            // The callback fired, so the server wanted credentials. Which message is
+            // right depends on whether we had any to give it.
+            var message = probe.HadCredentials
+                ? $"{probe.Host} rejected the saved credentials. The token may have expired "
+                  + "or lost its scopes — sign in again on the Accounts screen."
+                : $"{probe.Host} needs you to be signed in. Open the Accounts screen and add "
+                  + $"an account for {probe.Host}, then try again.";
+
+            throw new InvalidOperationException(message, ex);
+        }
+    }
+
+    private static bool IsAuthFailure(string message)
+        => message.Contains("authentication", StringComparison.OrdinalIgnoreCase)
+           || message.Contains("401", StringComparison.Ordinal)
+           || message.Contains("403", StringComparison.Ordinal)
+           || message.Contains("credentials", StringComparison.OrdinalIgnoreCase);
 
     private static string Short(Commit? commit)
         => commit?.Sha is { Length: >= 7 } sha ? sha[..7] : "HEAD";
