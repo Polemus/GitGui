@@ -162,6 +162,8 @@ public sealed class GitService : IGitService
         if (repo.Head?.Tip is null)
             return [];
 
+        var tags = TagsBySha(repo);
+
         return repo.Commits
             .QueryBy(new CommitFilter
             {
@@ -182,8 +184,41 @@ public sealed class GitService : IGitService
                 // Counting changed files per commit means diffing every one of them,
                 // which is far too slow for a list. It's filled in on selection.
                 FilesChanged = 0,
+                Tags = tags.TryGetValue(c.Sha, out var names) ? names : [],
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// Every tag, grouped by the commit it ends up on. Built once per history load rather
+    /// than looked up per commit: a repository has few tags and many commits, and this is
+    /// the only shape that avoids walking the tag list once for every row.
+    /// </summary>
+    private static Dictionary<string, IReadOnlyList<string>> TagsBySha(Repository repo)
+    {
+        var byCommit = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
+        foreach (var tag in repo.Tags)
+        {
+            // An annotated tag points at a tag object, not the commit, so it has to be
+            // peeled first. Lightweight tags already point straight at the commit.
+            if ((tag.PeeledTarget ?? tag.Target) is not Commit commit)
+                continue;
+
+            if (!byCommit.TryGetValue(commit.Sha, out var names))
+                byCommit[commit.Sha] = names = [];
+
+            names.Add(tag.FriendlyName);
+        }
+
+        return byCommit.ToDictionary(
+            pair => pair.Key,
+            pair =>
+            {
+                pair.Value.Sort(StringComparer.OrdinalIgnoreCase);
+                return (IReadOnlyList<string>)pair.Value;
+            },
+            StringComparer.Ordinal);
     }
 
     public IReadOnlyList<FileChange> GetCommitFiles(string path, string sha)
