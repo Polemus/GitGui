@@ -52,7 +52,9 @@ three-pane history and the resizable panes.
 - **Switching branches with uncommitted work asks first** rather than silently carrying it
   across. Bring everything, leave everything, or tick individual files — whatever is left
   behind is stashed against the branch you came from. Returning to that branch shows a bar
-  above the commit box offering to restore it.
+  above the commit box offering to restore it. A file that has also changed on the branch
+  you're heading to can't be carried across at all — that's refused with the file named,
+  and nothing is moved, rather than failing part-way.
 - **Repository picker grouped by hosting site.** The group a repo lands in is derived from its
   actual `origin` URL, so a GitHub clone and a self-hosted Gitea clone genuinely sort
   themselves apart. Handles `https://`, `ssh://` and scp-style `git@host:owner/repo`.

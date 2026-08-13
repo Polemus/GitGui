@@ -171,4 +171,103 @@ public class BranchSwitchingTests
         Assert.Throws<InvalidOperationException>(
             () => Git.SwitchBranch(repo.Path, "nope", create: false, bringPaths: null));
     }
+
+    // ---- Files that differ on both branches --------------------------------
+    // git only carries uncommitted work across when the file is identical on the target
+    // branch. When it isn't, libgit2 refuses with a CheckoutConflictException - which is
+    // a question for the user, not a fault, so it comes back as a result.
+
+    /// <summary>Two branches whose copies of <c>kept.txt</c> have diverged.</summary>
+    private static TempRepository RepoWithDivergedFile(out string original, out string other)
+    {
+        var repo = RepoWithCommit();
+        original = repo.CurrentBranch();
+
+        Git.SwitchBranch(repo.Path, "feature", create: true, bringPaths: null);
+        repo.Write("kept.txt", "feature version\n");
+        repo.Commit("feature edit");
+
+        Git.SwitchBranch(repo.Path, original, create: false, bringPaths: null);
+        other = "feature";
+        return repo;
+    }
+
+    [Fact]
+    public void CarryingAFileThatDiffersOnTheTargetIsRefused()
+    {
+        using var repo = RepoWithDivergedFile(out _, out var feature);
+        repo.Write("kept.txt", "local edit\n");
+
+        var result = Git.SwitchBranch(repo.Path, feature, create: false, bringPaths: null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(SwitchOutcome.Conflicts, result.Outcome);
+        Assert.Equal(["kept.txt"], result.ConflictingPaths);
+    }
+
+    [Fact]
+    public void ARefusedSwitchLeavesTheWorkingTreeAlone()
+    {
+        using var repo = RepoWithDivergedFile(out var original, out var feature);
+        repo.Write("kept.txt", "local edit\n");
+        repo.Write("other.txt", "also edited\n");
+
+        Git.SwitchBranch(repo.Path, feature, create: false, bringPaths: null);
+
+        Assert.Equal(original, repo.CurrentBranch());
+        Assert.Equal("local edit\n", repo.Read("kept.txt"));
+        Assert.Equal("also edited\n", repo.Read("other.txt"));
+        Assert.Equal(0, repo.StashCount());
+    }
+
+    [Fact]
+    public void LeavingTheConflictingFileBehindStashesItAndSwitches()
+    {
+        using var repo = RepoWithDivergedFile(out _, out var feature);
+        repo.Write("kept.txt", "local edit\n");
+
+        var result = Git.SwitchBranch(repo.Path, feature, create: false, bringPaths: []);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(feature, repo.CurrentBranch());
+        Assert.Equal("feature version\n", repo.Read("kept.txt"));
+        Assert.Equal(1, repo.StashCount());
+    }
+
+    [Fact]
+    public void CarryingAnUntrackedFileTheTargetBranchAlreadyHasIsRefused()
+    {
+        using var repo = RepoWithCommit();
+        var original = repo.CurrentBranch();
+
+        Git.SwitchBranch(repo.Path, "feature", create: true, bringPaths: null);
+        repo.Write("added.txt", "committed on feature\n");
+        repo.Commit("adds a file");
+        Git.SwitchBranch(repo.Path, original, create: false, bringPaths: null);
+
+        // Untracked here, but committed over there - checkout would overwrite it.
+        repo.Write("added.txt", "untracked locally\n");
+
+        var result = Git.SwitchBranch(repo.Path, "feature", create: false, bringPaths: null);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(["added.txt"], result.ConflictingPaths);
+        Assert.Equal("untracked locally\n", repo.Read("added.txt"));
+    }
+
+    [Fact]
+    public void CarryingAFileThatIsTheSameOnBothBranchesStillWorks()
+    {
+        using var repo = RepoWithDivergedFile(out _, out var feature);
+
+        // other.txt never diverged, so carrying it across is fine even though
+        // kept.txt differs - kept.txt just isn't dirty here.
+        repo.Write("other.txt", "local edit\n");
+
+        var result = Git.SwitchBranch(repo.Path, feature, create: false, bringPaths: null);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(feature, repo.CurrentBranch());
+        Assert.Equal("local edit\n", repo.Read("other.txt"));
+    }
 }

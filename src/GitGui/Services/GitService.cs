@@ -276,26 +276,44 @@ public sealed class GitService : IGitService
     /// point does uncommitted work exist only in the working tree - if any later step
     /// fails, the changes are still recoverable from the stack.
     /// </remarks>
-    public void SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths)
+    public SwitchResult SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths)
     {
         using var repo = new Repository(Discover(path));
 
         var changed = ChangedPaths(repo);
 
+        var bring = bringPaths is null
+            ? changed.ToHashSet(StringComparer.Ordinal)
+            : bringPaths.ToHashSet(StringComparer.Ordinal);
+
+        // Checked before anything is stashed or reverted, so a refusal leaves the working
+        // tree exactly as it was. Only the carried files can conflict - whatever is left
+        // behind is stashed first, which makes it clean by the time checkout runs.
+        if (Conflicting(repo, bring, branchName, create) is { Count: > 0 } conflicts)
+        {
+            var names = string.Join(", ", conflicts.Take(3))
+                        + (conflicts.Count > 3 ? $" and {conflicts.Count - 3} more" : string.Empty);
+
+            return new SwitchResult(
+                SwitchOutcome.Conflicts,
+                $"{names} changed on both branches, so bringing it across would overwrite "
+                + $"work on {branchName}. Leave it behind to stash it instead.",
+                conflicts);
+        }
+
         // Nothing uncommitted, or everything is coming along: git already does this.
         if (changed.Count == 0 || bringPaths is null)
         {
             Switch(repo, branchName, create);
-            return;
+            return SwitchResult.Ok();
         }
 
-        var bring = bringPaths.ToHashSet(StringComparer.Ordinal);
         var leave = changed.Where(p => !bring.Contains(p)).ToList();
 
         if (leave.Count == 0)
         {
             Switch(repo, branchName, create);
-            return;
+            return SwitchResult.Ok();
         }
 
         var signature = repo.Config.BuildSignature(DateTimeOffset.Now)
@@ -310,7 +328,7 @@ public sealed class GitService : IGitService
                 StashModifiers.IncludeUntracked);
 
             Switch(repo, branchName, create);
-            return;
+            return SwitchResult.Ok();
         }
 
         // Everything, so the work is safe on the stack from here on.
@@ -330,6 +348,29 @@ public sealed class GitService : IGitService
         repo.Stashes.Remove(1);
 
         Switch(repo, branchName, create);
+        return SwitchResult.Ok();
+    }
+
+    /// <summary>
+    /// Which of <paramref name="paths"/> git would refuse to carry across: those whose
+    /// committed contents differ between HEAD and the target branch. Compared by blob id
+    /// rather than by attempting the checkout, so the answer names the files and costs
+    /// nothing when there is no problem.
+    /// </summary>
+    private static List<string> Conflicting(
+        Repository repo, IEnumerable<string> paths, string branchName, bool create)
+    {
+        // A branch created here starts at HEAD, so nothing can differ across it.
+        if (create || repo.Head.Tip is not { } head)
+            return [];
+
+        if (repo.Branches[branchName]?.Tip is not { } target)
+            return [];
+
+        return paths
+            .Where(p => head[p]?.Target.Id != target[p]?.Target.Id)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static void Switch(Repository repo, string branchName, bool create)

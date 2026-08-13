@@ -50,6 +50,15 @@ fails, the changes are still on the stash stack rather than gone. This is the on
 the codebase where a bug destroys work that was never committed, which is why it is
 covered by tests against real repositories instead of by reasoning.
 
+**A carried file that also differs on the target branch is refused, not attempted.** git
+only carries uncommitted work across when the file is identical on both sides; when it
+isn't, libgit2 raises `CheckoutConflictException`, which travels back through native
+frames and halts the debugger on what is really a question for the user. `SwitchBranch`
+therefore compares blob ids between HEAD and the target branch *before* touching anything
+and returns a `SwitchResult` naming the files, leaving the working tree untouched so
+"leave it behind" is still available. Same rule as `SyncResult`: expected conditions
+return values.
+
 ## Why hosting sites are data, not code
 
 A host provider handles tokens that can read and write all of the user's source code.

@@ -739,7 +739,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
         await RunAsync(async () =>
         {
-            await Task.Run(() => _git.SwitchBranch(path, targetBranch, create, bringPaths));
+            var result = await Task.Run(() => _git.SwitchBranch(path, targetBranch, create, bringPaths));
+
+            // Refused rather than failed: the working tree is untouched and the user is
+            // still on the branch they started on, so say what to do about it.
+            if (!result.Succeeded)
+            {
+                Log(ActivityLevel.Warning, result.Message);
+                return;
+            }
 
             Log(ActivityLevel.Success, create
                 ? $"Created and switched to branch {targetBranch}"
