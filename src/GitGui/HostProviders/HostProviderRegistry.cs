@@ -167,6 +167,14 @@ public sealed class HostProviderRegistry
         return null;
     }
 
+    /// <summary>
+    /// Runs a manifest against a real server without saving it, so the host editor can
+    /// say what is wrong while the form is still open.
+    /// </summary>
+    public Task<HostConnectionReport> TestAsync(
+        HostManifest manifest, Uri baseUrl, string? token, CancellationToken cancellationToken)
+        => new HostConnectionTester(_http).RunAsync(manifest, baseUrl, token, cancellationToken);
+
     private void LoadBuiltInManifests(HttpClient http)
     {
         var assembly = Assembly.GetExecutingAssembly();
