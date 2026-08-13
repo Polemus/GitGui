@@ -7,7 +7,7 @@
              x:Class="GitGui.Views.DiffView"
              x:DataType="m:FileChange">
 
-    <!-- One file's unified diff, filling whatever pane it is given. It owns both
+    <!--  One file's unified diff, filling whatever pane it is given. It owns both
          scroll directions, so the scrollbars sit against the edges of the pane rather
          than against the end of the text. -->
     <Border Background="{DynamicResource SurfaceBackground}"
