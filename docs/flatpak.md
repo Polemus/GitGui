@@ -27,7 +27,7 @@ flatpak install flathub org.flatpak.Builder \
     org.freedesktop.Sdk//25.08 \
     org.freedesktop.Sdk.Extension.dotnet10//25.08
 
-./build/linux/flatpak/package.sh 0.2.0 --install
+./build/linux/flatpak/package.sh 0.3.0 --install
 flatpak run io.github.polemus.GitGui
 ```
 
@@ -36,7 +36,7 @@ installed. A `.flatpak` bundle installs with no remote involved, which is what
 makes it worth attaching to a release:
 
 ```bash
-flatpak install --user ./dist/GitGui-0.2.0-x86_64.flatpak
+flatpak install --user ./dist/GitGui-0.3.0-x86_64.flatpak
 ```
 
 **The Flatpak is the one Linux artifact that cannot be cross-built.** The `.deb`,

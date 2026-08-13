@@ -329,17 +329,17 @@ Each script publishes a **self-contained** build, so end users don't need .NET i
 
 ```bash
 # Linux — .deb, .rpm, .tar.gz and .AppImage  (needs fpm: gem install fpm)
-./build/linux/package.sh linux-x64 0.2.0
-./build/linux/package.sh linux-arm64 0.2.0
+./build/linux/package.sh linux-x64 0.3.0
+./build/linux/package.sh linux-arm64 0.3.0
 
 # Linux — .flatpak  (needs flatpak: flatpak install flathub org.flatpak.Builder)
-./build/linux/flatpak/package.sh 0.2.0
+./build/linux/flatpak/package.sh 0.3.0
 
 # macOS — .app bundle inside a .dmg  (run on macOS)
-./build/macos/package.sh osx-arm64 0.2.0
+./build/macos/package.sh osx-arm64 0.3.0
 
 # Windows — portable .zip and an Inno Setup installer
-pwsh build/windows/package.ps1 -Rid win-x64 -Version 0.2.0
+pwsh build/windows/package.ps1 -Rid win-x64 -Version 0.3.0
 ```
 
 Artifacts land in `dist/`.
@@ -351,7 +351,7 @@ artifacts are still produced. Run the script on its own to rebuild only the AppI
 it reuses whatever `package.sh` last staged instead of publishing again:
 
 ```bash
-./build/linux/appimage.sh linux-x64 0.2.0
+./build/linux/appimage.sh linux-x64 0.3.0
 ```
 
 The architecture of the output comes from the runtime handed to `appimagetool`, not from
@@ -371,8 +371,8 @@ why, and how a release reaches Flathub.
 Tag and push:
 
 ```bash
-git tag -a v0.2.0 -m "GitGui 0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.0 -m "GitGui 0.3.0"
+git push origin v0.3.0
 ```
 
 `release.yml` runs the tests first — `ci.yml` only triggers on pushes to a branch, so

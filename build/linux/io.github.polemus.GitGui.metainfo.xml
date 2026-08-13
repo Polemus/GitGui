@@ -130,6 +130,15 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.3.0" date="2026-08-14">
+      <url type="details">https://github.com/Polemus/GitGui/releases/tag/v0.3.0</url>
+      <description>
+        <p>
+          GitGui now ships as a Flatpak, and every Linux package carries the
+          description and screenshots a software centre shows.
+        </p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-08-13">
       <url type="details">https://github.com/Polemus/GitGui/releases/tag/v0.2.0</url>
       <description>

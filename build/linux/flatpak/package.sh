@@ -7,7 +7,7 @@
 #   --install  also install the bundle for the current user, so you can run it
 #
 # A .flatpak bundle installs without a remote:
-#     flatpak install --user ./GitGui-0.2.0-x86_64.flatpak
+#     flatpak install --user ./GitGui-0.3.0-x86_64.flatpak
 # which is what the release attaches. Flathub installs the same manifest from
 # its own build servers instead - see docs/flatpak.md.
 #
@@ -19,12 +19,19 @@
 #     flatpak install flathub org.flatpak.Builder
 set -euo pipefail
 
-VERSION="${1:-0.2.0}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
+# The csproj is the only thing that decides what the app reports - the build
+# never passes -p:Version, because Flathub would not either - so it is also what
+# the default should be. Hard-coding one here just meant a stale number that made
+# the check below fail on the first release after a bump.
+CSPROJ_VERSION="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$ROOT/src/GitGui/GitGui.csproj")"
+
+VERSION="${1:-$CSPROJ_VERSION}"
 INSTALL=no
 [ "${2:-}" = "--install" ] && INSTALL=yes
 
 APP_ID=io.github.polemus.GitGui
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 HERE="$ROOT/build/linux/flatpak"
 DIST="$ROOT/dist"
 STATE="$ROOT/build/.flatpak-builder"
@@ -61,11 +68,8 @@ if [ ! -s "$HERE/nuget-sources-$ARCH.json" ]; then
     exit 1
 fi
 
-# The version the bundle is named after has to be the one the app reports, and
-# the app takes its version from the csproj rather than from a build argument -
-# there is no -p:Version in the manifest, on purpose, because Flathub builds it
-# without ever passing one.
-CSPROJ_VERSION="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$ROOT/src/GitGui/GitGui.csproj")"
+# Only reachable when a version was passed explicitly, since the default is the
+# csproj's. Release CI always passes one, which is the case this is for.
 if [ "$CSPROJ_VERSION" != "$VERSION" ]; then
     echo "!! asked for $VERSION but src/GitGui/GitGui.csproj says $CSPROJ_VERSION" >&2
     echo "   the Flatpak build has no way to override it - update the csproj first" >&2
