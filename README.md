@@ -32,10 +32,20 @@ users don't need git, .NET, or anything else installed. See [Does it need git?](
 
 Both x64 and arm64 are built for Linux and macOS; Windows is x64.
 
-**The builds are unsigned**, so the first launch needs a nudge past the OS: on macOS
-right-click → Open rather than double-clicking, on Windows "More info" → "Run anyway".
+**The builds are unsigned**, so the first launch needs a nudge past the OS — once, then
+never again:
+
+- **macOS 15 and later** — open GitGui, let it be blocked, then **System Settings →
+  Privacy & Security**, scroll to the bottom, **Open Anyway**. The old right-click trick
+  was removed in macOS 15 and no longer helps.
+- **macOS 14 and earlier** — Control-click GitGui in Applications → **Open** → **Open**.
+  It has to be the right-click menu; double-clicking won't offer the choice.
+- **Windows** — "More info" → "Run anyway". For the portable `.zip`, you may also need
+  right-click the `.exe` → Properties → **Unblock**.
+
 Signing needs an Apple Developer account and a code-signing certificate, and neither
-exists yet. Download only from the Releases page linked above.
+exists yet. Download only from the Releases page linked above — everything there is built
+by GitHub Actions from a tagged commit in this repository, with a public build log.
 
 ---
 
@@ -389,8 +399,11 @@ would mostly buy you a longer wait for the same answer.
   repository are covered; the network and the whole UI are still verified by hand,
   against a real Gitea server.
 - **History is capped at 100 commits** with no paging yet.
-- **macOS builds are unsigned.** Gatekeeper will complain on first launch — right-click →
-  Open. Signing and notarisation need an Apple Developer account.
+- **macOS and Windows builds are unsigned.** Gatekeeper and SmartScreen both complain on
+  first launch; [Download](#download) has the steps past each. On macOS 15 and later this
+  costs a trip into System Settings, because Apple removed the right-click → Open escape
+  hatch that used to make it one click. Signing and notarisation need an Apple Developer
+  account and a Windows certificate.
 - **Installers are ~45 MB** because each build bundles the .NET runtime. Enabling
   `PublishTrimmed` would cut that substantially, but Avalonia needs trimming feed
   configuration and `ViewLocator`'s reflection would have to go first.
