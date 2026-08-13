@@ -24,7 +24,7 @@
         <conv:HexToBrushConverter x:Key="HexToBrush" />
     </Window.Resources>
 
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
 
         <!-- ============================ Toolbar ============================ -->
         <Border Grid.Row="0"
@@ -67,11 +67,18 @@
                     <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedLeft"
                                 FlyoutPresenterClasses="picker">
-                            <Grid Width="380" RowDefinitions="Auto,Auto,*">
+                            <Grid Width="380" RowDefinitions="Auto,Auto,*,Auto,Auto">
                                 <TextBlock Grid.Row="0" Classes="sectionLabel" Text="REPOSITORIES"
                                            Margin="10,6,10,8" />
                                 <Border Grid.Row="1" Classes="divider" Margin="0,0,0,6" />
-                                <ScrollViewer Grid.Row="2" MaxHeight="420">
+
+                                <TextBlock Grid.Row="2" Classes="caption" Margin="10,8"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding !HasRepositories}"
+                                           Text="No repositories yet. Add a local clone to get started." />
+
+                                <ScrollViewer Grid.Row="2" MaxHeight="420"
+                                              IsVisible="{Binding HasRepositories}">
                                     <ItemsControl ItemsSource="{Binding RepositoryGroups}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:HostGroupViewModel">
@@ -110,7 +117,8 @@
                                                                             <TextBlock Classes="muted"
                                                                                        Text="{Binding FullName}" />
                                                                         </StackPanel>
-                                                                        <Border Grid.Column="2" Classes="chip">
+                                                                        <Border Grid.Column="2" Classes="chip"
+                                                                                IsVisible="{Binding HasVisibility}">
                                                                             <TextBlock Classes="muted"
                                                                                        Text="{Binding VisibilityLabel}" />
                                                                         </Border>
@@ -124,6 +132,17 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                 </ScrollViewer>
+
+                                <Border Grid.Row="3" Classes="divider" Margin="0,6" />
+
+                                <Button Grid.Row="4" Classes="rowButton"
+                                        Click="OnRepositoryRowClick"
+                                        Command="{Binding AddRepositoryCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="9">
+                                        <Path Classes="icon" Data="{DynamicResource IconPlus}" />
+                                        <TextBlock Classes="body" Text="Add local repository…" />
+                                    </StackPanel>
+                                </Button>
                             </Grid>
                         </Flyout>
                     </Button.Flyout>
@@ -210,8 +229,46 @@
             </Grid>
         </Border>
 
+        <!-- Indeterminate strip while a git operation runs. -->
+        <ProgressBar Grid.Row="1" Height="2" IsIndeterminate="True"
+                     Background="Transparent"
+                     Foreground="{DynamicResource AccentBrush}"
+                     IsVisible="{Binding IsBusy}" />
+
+        <!-- ============================ Banners ============================ -->
+        <StackPanel Grid.Row="2">
+            <Border Background="{DynamicResource BannerErrorBackground}"
+                    BorderBrush="{DynamicResource BannerErrorBorder}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,10"
+                    IsVisible="{Binding HasError}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Grid.Column="0" Classes="body" TextWrapping="Wrap"
+                               Foreground="{DynamicResource StatusDeleted}"
+                               Text="{Binding ErrorMessage}" />
+                    <Button Grid.Column="1" Classes="iconButton" Width="24" Height="24"
+                            Padding="4" Command="{Binding DismissErrorCommand}"
+                            Content="✕" FontSize="11" />
+                </Grid>
+            </Border>
+
+            <Border Background="{DynamicResource BannerInfoBackground}"
+                    BorderBrush="{DynamicResource BannerInfoBorder}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,10"
+                    IsVisible="{Binding HasStatus}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Grid.Column="0" Classes="body" TextWrapping="Wrap"
+                               Text="{Binding StatusMessage}" />
+                    <Button Grid.Column="1" Classes="iconButton" Width="24" Height="24"
+                            Padding="4" Command="{Binding DismissStatusCommand}"
+                            Content="✕" FontSize="11" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
         <!-- ============================ Content ============================ -->
-        <Panel Grid.Row="1">
+        <Panel Grid.Row="3">
             <views:RepositoryView IsVisible="{Binding !IsAccountsPageVisible}" />
             <views:AccountsView IsVisible="{Binding IsAccountsPageVisible}" />
         </Panel>

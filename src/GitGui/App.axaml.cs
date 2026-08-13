@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using FluentAvalonia.Styling;
+using GitGui.Services;
 using GitGui.ViewModels;
 using GitGui.Views;
 
@@ -43,10 +44,16 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = new MainWindowViewModel(),
-            };
+            var viewModel = new MainWindowViewModel(
+                new GitService(),
+                new RepositoryStore(),
+                new FolderPicker());
+
+            desktop.MainWindow = new MainWindow { DataContext = viewModel };
+
+            // Loading repositories touches the disk, so it happens after the window
+            // is up rather than blocking first paint.
+            desktop.MainWindow.Opened += async (_, _) => await viewModel.InitialiseAsync();
         }
 
         base.OnFrameworkInitializationCompleted();

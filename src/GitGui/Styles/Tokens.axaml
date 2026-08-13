@@ -66,6 +66,12 @@
             <SolidColorBrush x:Key="StatusModified" Color="#D29922" />
             <SolidColorBrush x:Key="StatusDeleted" Color="#F85149" />
             <SolidColorBrush x:Key="StatusRenamed" Color="#58A6FF" />
+
+            <!-- Banners -->
+            <SolidColorBrush x:Key="BannerErrorBackground" Color="#2A1416" />
+            <SolidColorBrush x:Key="BannerErrorBorder" Color="#F85149" />
+            <SolidColorBrush x:Key="BannerInfoBackground" Color="#1A2233" />
+            <SolidColorBrush x:Key="BannerInfoBorder" Color="#3399CC" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
@@ -110,6 +116,12 @@
             <SolidColorBrush x:Key="StatusModified" Color="#9A6700" />
             <SolidColorBrush x:Key="StatusDeleted" Color="#CF222E" />
             <SolidColorBrush x:Key="StatusRenamed" Color="#0969DA" />
+
+            <!-- Banners -->
+            <SolidColorBrush x:Key="BannerErrorBackground" Color="#FFEBE9" />
+            <SolidColorBrush x:Key="BannerErrorBorder" Color="#CF222E" />
+            <SolidColorBrush x:Key="BannerInfoBackground" Color="#EAF1FB" />
+            <SolidColorBrush x:Key="BannerInfoBorder" Color="#2B87B5" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>

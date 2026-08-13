@@ -164,7 +164,6 @@ public static class MockData
             AvatarHex = "#3399CC",
             CommittedAt = DateTimeOffset.Now.AddMinutes(-35),
             FilesChanged = 4,
-            Files = [WorkingChanges[1], WorkingChanges[0]],
         },
         new CommitInfo
         {
@@ -175,7 +174,6 @@ public static class MockData
             AvatarHex = "#3399CC",
             CommittedAt = DateTimeOffset.Now.AddHours(-3),
             FilesChanged = 7,
-            Files = [WorkingChanges[3]],
         },
         new CommitInfo
         {
@@ -186,7 +184,6 @@ public static class MockData
             AvatarHex = "#3399CC",
             CommittedAt = DateTimeOffset.Now.AddHours(-9),
             FilesChanged = 3,
-            Files = [WorkingChanges[4]],
         },
         new CommitInfo
         {
@@ -197,7 +194,6 @@ public static class MockData
             AvatarHex = "#3399CC",
             CommittedAt = DateTimeOffset.Now.AddDays(-1),
             FilesChanged = 2,
-            Files = [WorkingChanges[2]],
         },
         new CommitInfo
         {
