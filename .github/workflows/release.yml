@@ -4,10 +4,15 @@ name: Release
 # GitHub Release.
 #
 # Triggered only by a version tag or a manual dispatch - never on ordinary
-# pushes, because this repo is private and macOS runners bill at 10x.
+# pushes. Packaging twelve artifacts across three operating systems takes tens of
+# minutes, and none of it tells you anything ci.yml hasn't already.
 #
-# Cost note: both Linux RIDs are cross-published from one ubuntu runner, and
-# both macOS RIDs from one macos runner, so this is 3 jobs rather than 5.
+# Both Linux RIDs are cross-published from one ubuntu runner, and both macOS RIDs
+# from one macos runner, so this is 3 jobs rather than 5.
+#
+# contents: write below is the only elevated permission in this repository, and it
+# is why this workflow must never gain a pull_request trigger - that would hand a
+# release-publishing token to code from a fork.
 on:
   push:
     tags:

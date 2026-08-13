@@ -73,7 +73,7 @@ COMMON_ARGS=(
     --version "$VERSION"
     --license MIT
     --vendor Polemus
-    --maintainer "Polemus <dusty.roberts101@gmail.com>"
+    --maintainer "Polemus <112549+Polemus@users.noreply.github.com>"
     --url "https://github.com/Polemus/GitGui"
     --description "Desktop git client for GitHub, Gitea and other forges."
     --force

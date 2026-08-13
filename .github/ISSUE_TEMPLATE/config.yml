@@ -1,0 +1,20 @@
+# Two templates cover bugs and features. Everything else has a better home than the
+# issue tracker, so it gets a link rather than a blank issue.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Question, or something you're not sure is a bug
+    url: https://github.com/Polemus/GitGui/discussions
+    about: Ask here. Issues are for things that are definitely broken or definitely missing.
+
+  - name: Security vulnerability
+    url: https://github.com/Polemus/GitGui/security/advisories/new
+    about: Report it privately instead. Anything touching tokens, the credential store or sign-in belongs here, not in a public issue.
+
+  - name: Adding a hosting site
+    url: https://github.com/Polemus/GitGui/blob/main/docs/host-manifests.md
+    about: Sites other than GitHub are described by a JSON manifest, and can be added from Settings without writing any code.
+
+  - name: Building and contributing
+    url: https://github.com/Polemus/GitGui/blob/main/.github/CONTRIBUTING.md
+    about: How to build it, how to run the tests, and what a good pull request looks like.

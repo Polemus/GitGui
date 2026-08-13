@@ -1,5 +1,9 @@
 # GitGui
 
+[![CI](https://github.com/Polemus/GitGui/actions/workflows/ci.yml/badge.svg)](https://github.com/Polemus/GitGui/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Polemus/GitGui?sort=semver)](https://github.com/Polemus/GitGui/releases/latest)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
 A desktop git client in the spirit of GitHub Desktop — except it isn't tied to GitHub.
 GitGui talks to **GitHub**, **Gitea** and **GitLab** (including self-hosted instances
 behind your own domain), and to anything else you describe in a JSON file.
@@ -13,6 +17,25 @@ Runs on **Linux, Windows and macOS** from a single codebase.
 
 **No git installation required.** The native libgit2 library ships inside the app, so
 users don't need git, .NET, or anything else installed. See [Does it need git?](#does-it-need-git).
+
+## Download
+
+**[Latest release →](https://github.com/Polemus/GitGui/releases/latest)**
+
+| Platform | Take this one |
+| --- | --- |
+| Debian, Ubuntu, Mint | `.deb` |
+| Fedora, RHEL, openSUSE | `.rpm` |
+| Any other Linux | `.AppImage` — `chmod +x` it and run it, nothing to install |
+| Windows | `-setup.exe`, or the `.zip` for a portable copy |
+| macOS | `.dmg` — drag GitGui to Applications |
+
+Both x64 and arm64 are built for Linux and macOS; Windows is x64.
+
+**The builds are unsigned**, so the first launch needs a nudge past the OS: on macOS
+right-click → Open rather than double-clicking, on Windows "More info" → "Run anyway".
+Signing needs an Apple Developer account and a code-signing certificate, and neither
+exists yet. Download only from the Releases page linked above.
 
 ---
 
@@ -199,7 +222,10 @@ behaves identically on all three platforms.
 | Document | What's in it |
 | --- | --- |
 | [docs/architecture.md](docs/architecture.md) | The layers and *why* they're shaped this way |
+| [docs/notes.md](docs/notes.md) | Decisions that look arbitrary and aren't, plus every Avalonia and libgit2 trap already paid for |
 | [docs/host-manifests.md](docs/host-manifests.md) | How to add a hosting site by writing one JSON file |
+| [CONTRIBUTING.md](.github/CONTRIBUTING.md) | Building it, running the tests, and what a good pull request looks like |
+| [SECURITY.md](.github/SECURITY.md) | Reporting a vulnerability privately, and what's in scope |
 
 ## Project layout
 
@@ -343,10 +369,11 @@ tool as a skip and still exit 0, and `gh release upload` has exited 0 having qui
 uploaded two of the twelve. Every one of those failures has happened, and all of them
 looked like a green build.
 
-**On Actions minutes:** this repo is private, so minutes are billed — and macOS runners
-bill at 10x. The release workflow therefore runs **only** on tags or manual dispatch, and
+**On CI shape:** the release workflow runs **only** on tags or manual dispatch, and
 cross-publishes both Linux RIDs from one Linux runner and both macOS RIDs from one macOS
-runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
+runner — 3 jobs instead of 5. Everyday CI is Linux-only and build-only, because this is
+one codebase with no per-platform branches, so a three-platform matrix on every push
+would mostly buy you a longer wait for the same answer.
 
 ## Known gaps
 
@@ -371,6 +398,22 @@ runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
   AppStream metainfo yet, so it won't show up with a description in software centres that
   index AppImages.
 
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](.github/CONTRIBUTING.md) covers
+building it, running the tests against a throwaway Gitea, and the couple of places where
+a mistake is expensive. The gaps listed above are the honest backlog — say so in an issue
+before starting on one, so two people don't write it twice.
+
+Found a security problem? Don't open an issue —
+[report it privately](https://github.com/Polemus/GitGui/security/advisories/new). See
+[SECURITY.md](.github/SECURITY.md).
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
+Release builds are self-contained, so they bundle the .NET runtime, Avalonia, Skia and
+libgit2. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists all of it. The one worth
+knowing about is **libgit2**, which is GPLv2 — under a linking exception that explicitly
+permits exactly this, so it places no obligation on GitGui's own source or yours.

@@ -1,0 +1,87 @@
+name: Bug report
+description: Something GitGui does that it shouldn't
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before anything else: **never paste an access token, and check your screenshots
+        for one.** If you think you've found a security problem, close this and use the
+        [private report form](https://github.com/Polemus/GitGui/security/advisories/new)
+        instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I switched branches with three files modified, chose "bring them with me", and
+        one of the three was missing afterwards.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      description: >
+        Step by step, starting from a fresh launch. If it only happens against a
+        particular repository or hosting site, say which — and whether the repository is
+        public.
+      placeholder: |
+        1. Open a repository with uncommitted changes in two files
+        2. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: GitGui version
+      description: From the release you downloaded, or the commit sha if you built it yourself.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - Windows
+        - macOS
+    validations:
+      required: true
+
+  - type: input
+    id: os-detail
+    attributes:
+      label: Which version, and how you installed it
+      description: >
+        Distribution and version on Linux, plus the package format — `.deb`, `.rpm`,
+        `.AppImage`, `.tar.gz`, the installer, the `.dmg`, or built from source.
+      placeholder: "Fedora 44, .rpm"
+    validations:
+      required: true
+
+  - type: textarea
+    id: activity-log
+    attributes:
+      label: Activity console
+      description: >
+        Open the console at the bottom of the window and paste anything it said around
+        the failure. It renders as a code block, so no backticks needed. **Read it
+        through first** — it records URLs and account names.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this isn't one of them
+          required: true
+        - label: There is no token or other credential in anything I've pasted or attached
+          required: true

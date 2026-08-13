@@ -1,0 +1,47 @@
+name: Feature request
+description: Something GitGui should do and doesn't
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The [known gaps](https://github.com/Polemus/GitGui#known-gaps) in the README and
+        the list at the end of `CLAUDE.md` are the honest backlog — worth a look first,
+        since the big absences (pull requests, issues, reordering commits, history
+        paging) are already known.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        The problem, not the solution. What you were trying to get done, and where GitGui
+        stopped being useful.
+      placeholder: >
+        I keep a fork and an upstream on the same repository, and there's no way to see
+        which remote a branch is tracking without leaving the app.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should it do instead?
+      description: If you have a shape in mind, describe it. A sketch or a screenshot from another client is fine.
+    validations:
+      required: true
+
+  - type: input
+    id: hosting-site
+    attributes:
+      label: Which hosting site, if it matters
+      description: >
+        GitHub, Gitea, GitLab, something self-hosted, or something GitGui doesn't support
+        yet. Note that a new site usually needs no code at all — see
+        [docs/host-manifests.md](https://github.com/Polemus/GitGui/blob/main/docs/host-manifests.md).
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What are you doing about it now?
+      description: The terminal command you drop out to, or the other client you switch to. This says a lot about how much it costs you.

@@ -1,0 +1,47 @@
+# Two ecosystems, both grouped into one PR per week rather than one per package.
+# Avalonia alone is nine packages that must all move together, so ungrouped updates
+# would arrive as a wall of PRs that don't build individually.
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      # Matches this repository's style: a sentence, no conventional-commit prefix.
+      prefix: "Update"
+    groups:
+      avalonia:
+        patterns:
+          - "Avalonia*"
+          - "FluentAvaloniaUI"
+      test-tooling:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+      everything-else:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "Avalonia*"
+          - "FluentAvaloniaUI"
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+
+  # The workflows pin actions by major tag, so this only fires when a new major
+  # ships - which is exactly when someone should read the changelog.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "Update"
+    groups:
+      actions:
+        patterns:
+          - "*"

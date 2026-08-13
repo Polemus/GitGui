@@ -1,8 +1,11 @@
 name: CI
 
-# Deliberately Linux-only and build-only. This repo is private, so Actions
-# minutes are metered - the expensive multi-platform matrix lives in
-# release.yml and only runs on a tag or a manual dispatch.
+# Deliberately Linux-only and build-only. Actions minutes are free on a public
+# repo, but a three-platform matrix on every push still costs several minutes of
+# waiting for a result that is almost always identical - the code is one codebase
+# with no per-platform branches. The full matrix lives in release.yml, where a
+# platform-specific break would actually ship, and runs on a tag or a manual
+# dispatch.
 on:
   push:
     branches: [main]
@@ -12,6 +15,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+# Nothing here writes to the repository. Stated explicitly rather than left to the
+# repository default, because pull_request runs from forks execute contributor code
+# and the token they get should be able to do nothing but read.
+permissions:
+  contents: read
 
 # A newer push to the same branch cancels the older run instead of paying for both.
 concurrency:
