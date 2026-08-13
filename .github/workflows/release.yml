@@ -183,7 +183,7 @@ jobs:
 
           ## Getting started
 
-          Add a clone you already have from the repository picker, or sign in under **Settings → Accounts** and clone one straight from the picker's *Clone from a hosting site…* entry. GitHub supports browser sign-in; anywhere else takes a personal access token. Tokens go to your OS keychain, never to a settings file.
+          Add a clone you already have from the **+** in the header, or sign in under **Settings → Accounts** and clone one straight from that menu's *Clone from a hosting site…* entry. GitHub supports browser sign-in; anywhere else takes a personal access token. Tokens go to your OS keychain, never to a settings file.
 
           Beyond the usual staging, committing, branching and fetch/push/pull: switching branches with uncommitted work asks whether to bring it along or stash it, the app notices changes made outside it, and hosting sites other than GitHub, Gitea and GitLab can be added under **Settings → Hosting sites** without writing any code — or by hand, see docs/host-manifests.md.
 

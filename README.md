@@ -41,13 +41,14 @@ three-pane history and the resizable panes.
 
 ## What works
 
-- **Add any local clone** through a native folder picker. The list persists between
-  launches.
+- **Add any local clone** through a native folder picker, from the **+** in the header.
+  The list persists between launches.
 - **Browse and clone** everything your signed-in accounts can see, from every hosting site
   at once, filtered by name or description. Cloning uses that site's own token, so private
   repositories need no terminal. Repositories you already have are marked rather than
   offered again, matched through the same URL parsing that groups them.
-- **Create branches**, and amend the last commit while it is still local.
+- **Create branches**, and amend the last commit — right-click it in the history — while
+  it is still local.
 - **Switching branches with uncommitted work asks first** rather than silently carrying it
   across. Bring everything, leave everything, or tick individual files — whatever is left
   behind is stashed against the branch you came from. Returning to that branch shows a bar
@@ -63,6 +64,9 @@ three-pane history and the resizable panes.
   detected and skipped rather than dumped as noise.
 - **Commit** — tick the files you want, write a summary, commit. Staging is selective,
   deletions stage correctly, and the author comes from that repository's own git config.
+- **Right-click a changed file** to discard it, add it to `.gitignore` (the file, its
+  folder or its extension — only the ones that apply to that file are offered), copy its
+  path, or open its folder. Discarding asks first, since nothing can bring it back.
 - **History tab** — real commit log, with each commit's diffs loaded on demand
   (diffing 100 commits up front is far too slow for a list). Selecting a commit shows its
   header, the files it touched, and the diff for whichever file you click.

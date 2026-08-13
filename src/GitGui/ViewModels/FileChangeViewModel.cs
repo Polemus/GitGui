@@ -35,4 +35,34 @@ public partial class FileChangeViewModel : ViewModelBase
     public bool IsConflicted => Model.IsConflicted;
 
     public bool HasDirectory => !string.IsNullOrEmpty(Model.Directory);
+
+    // ---- Context menu ------------------------------------------------------
+    // The menu offers only what applies to this file, so each entry carries both the
+    // pattern it would write and whether it is worth showing at all.
+
+    /// <summary>The path itself, which is what ignoring one file means.</summary>
+    public string IgnoreFilePattern => Model.Path;
+
+    /// <summary>Trailing slash, so the pattern matches the directory and not a file of the same name.</summary>
+    public string IgnoreFolderPattern => $"{Model.Directory}/";
+
+    public string IgnoreFolderLabel => $"Ignore folder ({Model.Directory}/)";
+
+    /// <summary>Empty for a file with no extension, e.g. LICENSE or Makefile.</summary>
+    public string Extension
+    {
+        get
+        {
+            var dot = Model.FileName.LastIndexOf('.');
+            return dot > 0 && dot < Model.FileName.Length - 1
+                ? Model.FileName[(dot + 1)..]
+                : string.Empty;
+        }
+    }
+
+    public bool HasExtension => Extension.Length > 0;
+
+    public string IgnoreExtensionPattern => $"*.{Extension}";
+
+    public string IgnoreExtensionLabel => $"Ignore all .{Extension} files";
 }

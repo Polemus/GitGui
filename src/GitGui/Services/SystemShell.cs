@@ -6,6 +6,9 @@ using Avalonia.Controls.ApplicationLifetimes;
 // Avalonia 12 moved the clipboard to IDataTransfer; SetTextAsync survives as an extension here.
 using Avalonia.Input.Platform;
 
+// LaunchDirectoryInfoAsync is an extension on ILauncher, not a member of it.
+using Avalonia.Platform.Storage;
+
 namespace GitGui.Services;
 
 /// <summary>
@@ -19,6 +22,12 @@ public interface ISystemShell
 
     /// <summary>Puts text on the clipboard. False if the platform gave us no clipboard.</summary>
     Task<bool> CopyTextAsync(string text);
+
+    /// <summary>
+    /// Opens the folder containing <paramref name="filePath"/> in the desktop's file
+    /// manager. False if there was nothing to open it with.
+    /// </summary>
+    Task<bool> ShowInFileManagerAsync(string filePath);
 }
 
 /// <summary>
@@ -60,6 +69,30 @@ public sealed class SystemShell : ISystemShell
         {
             // On Linux the clipboard is a running process that owns the selection; if
             // nothing holds it, the set can fail outright.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Opens the containing folder rather than selecting the file inside it. Selecting is
+    /// per-platform shell work (<c>explorer /select</c>, <c>open -R</c>) that Avalonia
+    /// doesn't wrap, and opening the folder is what the label promises.
+    /// </summary>
+    public async Task<bool> ShowInFileManagerAsync(string filePath)
+    {
+        if (MainWindow is not { } window)
+            return false;
+
+        var folder = System.IO.Path.GetDirectoryName(filePath);
+        if (string.IsNullOrEmpty(folder) || !System.IO.Directory.Exists(folder))
+            return false;
+
+        try
+        {
+            return await window.Launcher.LaunchDirectoryInfoAsync(new System.IO.DirectoryInfo(folder));
+        }
+        catch (Exception)
+        {
             return false;
         }
     }

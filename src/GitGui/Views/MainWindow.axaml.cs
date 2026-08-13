@@ -42,11 +42,11 @@ public partial class MainWindow : Window
     // DataContext and makes CommandParameter re-evaluate to null. Deferring the hide
     // to the next dispatcher pass lets the command run first, with its parameter
     // still intact.
-    private void OnRepositoryRowClick(object? sender, RoutedEventArgs e)
-        => Dispatcher.UIThread.Post(() => RepositoryPickerButton.Flyout?.Hide());
-
     private void OnBranchRowClick(object? sender, RoutedEventArgs e)
         => Dispatcher.UIThread.Post(() => BranchPickerButton.Flyout?.Hide());
+
+    private void OnAddRepositoryRowClick(object? sender, RoutedEventArgs e)
+        => Dispatcher.UIThread.Post(() => AddRepositoryButton.Flyout?.Hide());
 
     private void OnToggleTheme(object? sender, RoutedEventArgs e)
     {

@@ -8,6 +8,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
              x:Class="GitGui.Views.RepositoryView"
+             x:Name="SidebarRoot"
              x:DataType="vm:MainWindowViewModel">
 
     <Design.DataContext>
@@ -30,10 +31,113 @@
 
         <!-- ======================= Sidebar ======================= -->
         <Border Grid.Column="0" Background="{DynamicResource SidebarBackground}">
-            <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
+
+                <!-- Current repository. Expands in place rather than into a flyout, so
+                     the list appears where the repositories are rather than floating
+                     over the tabs, and the tabs move down out of its way. -->
+                <Button Grid.Row="0" Classes="repoPicker"
+                        Command="{Binding ToggleRepositoryPickerCommand}">
+                    <!-- No host badge: the hosting site is named on the line above, which
+                         is what a coloured square was standing in for. "Current
+                         repository" is gone with it - the chevron and the position at the
+                         top of the sidebar say that already, and the line is worth more
+                         carrying the owner and the site the clone came from. -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="9">
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Classes="muted" TextTrimming="CharacterEllipsis"
+                                       Text="{Binding SelectedRepository.OriginLabel}" />
+                            <TextBlock Classes="body" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       Text="{Binding SelectedRepository.Name}" />
+                        </StackPanel>
+
+                        <!-- Points down closed, up open. Two Paths rather than a rotation
+                             so there is no transform to animate or get stuck. -->
+                        <Path Grid.Column="1" Classes="icon"
+                              Data="{DynamicResource IconChevronDown}"
+                              IsVisible="{Binding !IsRepositoryPickerOpen}" />
+                        <Path Grid.Column="1" Classes="icon"
+                              Data="{DynamicResource IconChevronDown}"
+                              RenderTransformOrigin="50%,50%"
+                              RenderTransform="rotate(180deg)"
+                              IsVisible="{Binding IsRepositoryPickerOpen}" />
+                    </Grid>
+                </Button>
+
+                <!-- The expanded list. Capped and scrollable: a long list must not push
+                     the tabs and the commit box off the bottom of the sidebar. -->
+                <Border Grid.Row="1" Background="{DynamicResource SurfaceBackground}"
+                        IsVisible="{Binding IsRepositoryPickerOpen}">
+                    <Grid RowDefinitions="Auto,Auto">
+                        <Border Grid.Row="0" Classes="divider" />
+
+                        <TextBlock Grid.Row="1" Classes="caption" Margin="14,10"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding !HasRepositories}"
+                                   Text="No repositories yet. Use + in the header to add or clone one." />
+
+                        <ScrollViewer Grid.Row="1" MaxHeight="320" Padding="0,4,0,8"
+                                      IsVisible="{Binding HasRepositories}">
+                            <ItemsControl ItemsSource="{Binding RepositoryGroups}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:HostGroupViewModel">
+                                        <StackPanel Margin="0,0,0,6">
+
+                                            <!-- Host group header. Deliberately not shaped
+                                                 like the rows beneath it: a badge the same
+                                                 size as a row's icon made a single-repo
+                                                 group read as two repositories. -->
+                                            <StackPanel Orientation="Horizontal" Spacing="6"
+                                                        Margin="14,6,10,4">
+                                                <TextBlock Classes="groupLabel"
+                                                           Text="{Binding Header}" />
+                                                <TextBlock Classes="groupLabel"
+                                                           Text="{Binding SubHeader}" />
+                                            </StackPanel>
+
+                                            <!-- Repositories on this host. No Click handler
+                                                 now: there is no popup to dismiss, so the
+                                                 CommandParameter cannot be torn down under
+                                                 the command. -->
+                                            <ItemsControl ItemsSource="{Binding Repositories}"
+                                                          Margin="14,0,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="m:RepositoryInfo">
+                                                        <Button Classes="rowButton"
+                                                                Command="{Binding #SidebarRoot.((vm:MainWindowViewModel)DataContext).SelectRepositoryCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                                                                <Path Grid.Column="0" Classes="icon"
+                                                                      Data="{DynamicResource IconRepo}" />
+                                                                <StackPanel Grid.Column="1">
+                                                                    <TextBlock Classes="body"
+                                                                               Text="{Binding Name}" />
+                                                                    <TextBlock Classes="muted"
+                                                                               Text="{Binding FullName}" />
+                                                                </StackPanel>
+                                                                <Border Grid.Column="2" Classes="chip"
+                                                                        IsVisible="{Binding HasVisibility}">
+                                                                    <TextBlock Classes="muted"
+                                                                               Text="{Binding VisibilityLabel}" />
+                                                                </Border>
+                                                            </Grid>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2" Classes="divider" />
 
                 <!-- Changes / History tabs -->
-                <Grid Grid.Row="0" ColumnDefinitions="*,*">
+                <Grid Grid.Row="3" ColumnDefinitions="*,*">
                     <Button Grid.Column="0" Classes="tab"
                             Classes.active="{Binding IsChangesTab}"
                             Command="{Binding ShowChangesTabCommand}">
@@ -50,15 +154,15 @@
                             Content="History" />
                 </Grid>
 
-                <Border Grid.Row="1" Classes="divider" />
+                <Border Grid.Row="4" Classes="divider" />
 
                 <!-- Tab body -->
-                <Panel Grid.Row="2">
+                <Panel Grid.Row="5">
 
                     <!-- Working-tree changes -->
                     <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsChangesTab}">
                         <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="9"
-                              Margin="14,11">
+                              Margin="14,8">
                             <CheckBox Grid.Column="0" IsChecked="{Binding AreAllStaged, Mode=TwoWay}" />
                             <TextBlock Grid.Column="1" Classes="caption" VerticalAlignment="Center"
                                        Text="{Binding StagedCountLabel}" />
@@ -66,13 +170,53 @@
 
                         <Border Grid.Row="1" Classes="divider" />
 
+                        <!-- Same right-click handling as the history list: select the row
+                             under the pointer, then open the flyout ourselves. -->
                         <ListBox Grid.Row="2" Classes="plain"
                                  ItemsSource="{Binding Changes}"
-                                 SelectedItem="{Binding SelectedChange, Mode=TwoWay}">
+                                 SelectedItem="{Binding SelectedChange, Mode=TwoWay}"
+                                 ContextRequested="OnChangesContextRequested"
+                                 PointerReleased="OnChangesPointerReleased">
+                            <ListBox.ContextFlyout>
+                                <MenuFlyout Placement="Pointer">
+                                    <MenuItem Header="Discard changes"
+                                              Command="{Binding AskDiscardChangesCommand}"
+                                              CommandParameter="{Binding SelectedChange}" />
+                                    <Separator />
+
+                                    <!-- Each ignore entry is offered only where it means
+                                         something: no folder entry for a file at the root,
+                                         no extension entry for a Makefile. -->
+                                    <MenuItem Header="Ignore file (add to .gitignore)"
+                                              Command="{Binding IgnoreCommand}"
+                                              CommandParameter="{Binding SelectedChange.IgnoreFilePattern}" />
+                                    <MenuItem Header="{Binding SelectedChange.IgnoreFolderLabel}"
+                                              IsVisible="{Binding SelectedChange.HasDirectory, FallbackValue=False}"
+                                              Command="{Binding IgnoreCommand}"
+                                              CommandParameter="{Binding SelectedChange.IgnoreFolderPattern}" />
+                                    <MenuItem Header="{Binding SelectedChange.IgnoreExtensionLabel}"
+                                              IsVisible="{Binding SelectedChange.HasExtension, FallbackValue=False}"
+                                              Command="{Binding IgnoreCommand}"
+                                              CommandParameter="{Binding SelectedChange.IgnoreExtensionPattern}" />
+                                    <Separator />
+
+                                    <MenuItem Header="Copy file path"
+                                              Command="{Binding CopyFilePathCommand}"
+                                              CommandParameter="{Binding SelectedChange}" />
+                                    <MenuItem Header="Copy relative file path"
+                                              Command="{Binding CopyRelativeFilePathCommand}"
+                                              CommandParameter="{Binding SelectedChange}" />
+                                    <Separator />
+
+                                    <MenuItem Header="Show in your file manager"
+                                              Command="{Binding ShowInFileManagerCommand}"
+                                              CommandParameter="{Binding SelectedChange}" />
+                                </MenuFlyout>
+                            </ListBox.ContextFlyout>
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:FileChangeViewModel">
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="9"
-                                          Margin="14,7">
+                                          Margin="14,4">
                                         <CheckBox Grid.Column="0"
                                                   IsChecked="{Binding IsStaged, Mode=TwoWay}"
                                                   VerticalAlignment="Center" />
@@ -130,7 +274,7 @@
                         </ListBox.ContextFlyout>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="m:CommitInfo">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="14,10">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="14,7">
                                     <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14"
                                             VerticalAlignment="Top"
                                             Background="{Binding AvatarHex, Converter={StaticResource HexToBrush}}">
@@ -155,7 +299,7 @@
                 </Panel>
 
                 <!-- Commit box (Changes tab only) -->
-                <StackPanel Grid.Row="3" Spacing="9" Margin="14"
+                <StackPanel Grid.Row="6" Spacing="9" Margin="14"
                             IsVisible="{Binding IsChangesTab}">
                     <Border Classes="divider" Margin="-14,0,-14,4" />
 

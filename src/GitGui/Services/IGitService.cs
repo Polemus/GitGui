@@ -64,6 +64,21 @@ public interface IGitService
     /// <summary>The last commit's message, so an amend can start from what's there.</summary>
     (string Summary, string Description)? GetLastCommitMessage(string path);
 
+    /// <summary>
+    /// Throws away working-tree changes to these paths: tracked files go back to HEAD,
+    /// untracked files are deleted. Unrecoverable by design - the caller confirms first.
+    /// </summary>
+    void DiscardChanges(string path, IEnumerable<string> paths);
+
+    /// <summary>
+    /// Appends a pattern to the repository's root <c>.gitignore</c>, creating the file if
+    /// it isn't there. A pattern already present is not added twice.
+    /// </summary>
+    void AddToGitignore(string path, string pattern);
+
+    /// <summary>The working tree's root directory, for resolving a change's full path.</summary>
+    string GetWorkingDirectory(string path);
+
     /// <summary>The origin URL, so callers can work out which account to authenticate with.</summary>
     string? GetRemoteUrl(string path);
 

@@ -34,6 +34,15 @@ public sealed class RepositoryInfo
     public DateTimeOffset? LastFetched { get; init; }
 
     public string FullName => string.IsNullOrEmpty(Owner) ? Name : $"{Owner}/{Name}";
+
+    /// <summary>
+    /// Where this clone came from, for the line above the name in the picker. Owner and
+    /// host rather than <see cref="FullName"/> and host, which would repeat the name
+    /// printed directly underneath it.
+    /// </summary>
+    public string OriginLabel => string.IsNullOrEmpty(Owner)
+        ? Host.Name
+        : $"{Owner} · {Host.Name}";
     public bool HasVisibility => IsPrivate.HasValue;
     public string VisibilityLabel => IsPrivate == true ? "Private" : "Public";
 
