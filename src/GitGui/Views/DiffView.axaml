@@ -7,15 +7,15 @@
              x:Class="GitGui.Views.DiffView"
              x:DataType="m:FileChange">
 
-    <!-- One file's unified diff. Scrolls horizontally on its own; the containing
-         page owns vertical scrolling so several of these can stack. -->
+    <!-- One file's unified diff, filling whatever pane it is given. It owns both
+         scroll directions, so the scrollbars sit against the edges of the pane rather
+         than against the end of the text. -->
     <Border Background="{DynamicResource SurfaceBackground}"
             BorderBrush="{DynamicResource BorderSubtle}"
             BorderThickness="1"
             CornerRadius="8"
-            Margin="0,0,0,14"
             ClipToBounds="True">
-        <Grid RowDefinitions="Auto,Auto,Auto">
+        <Grid RowDefinitions="Auto,Auto,*">
 
             <!-- File header -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9" Margin="13,10">
@@ -47,7 +47,7 @@
             <!-- Unified diff body -->
             <ScrollViewer Grid.Row="2"
                           HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Disabled">
+                          VerticalScrollBarVisibility="Auto">
                 <ItemsControl ItemsSource="{Binding Diff}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="m:DiffLine">

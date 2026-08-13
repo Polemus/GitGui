@@ -25,7 +25,16 @@
         <conv:HexToBrushConverter x:Key="HexToBrush" />
     </Window.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />              <!-- toolbar -->
+            <RowDefinition Height="Auto" />              <!-- busy strip -->
+            <RowDefinition Height="*" MinHeight="220" /> <!-- content -->
+            <RowDefinition Height="Auto" />              <!-- console drag handle -->
+            <!-- Auto while collapsed, absolute once open. MinHeight keeps the header
+                 visible no matter how far the splitter is dragged down. -->
+            <RowDefinition Height="{Binding ConsoleHeight, Mode=TwoWay}" MinHeight="34" />
+        </Grid.RowDefinitions>
 
         <!-- ============================ Toolbar ============================ -->
         <Border Grid.Row="0"
@@ -252,7 +261,12 @@
         </Panel>
 
         <!-- ======================= Activity console ======================= -->
-        <Grid Grid.Row="3" RowDefinitions="Auto,Auto,Auto"
+        <!-- Drag handle. Only there when the console is open; collapsed, the header is
+             already the full-width toggle and a handle on top of it would fight it. -->
+        <GridSplitter Grid.Row="3" Classes="consoleSplitter"
+                      IsVisible="{Binding IsConsoleExpanded}" />
+
+        <Grid Grid.Row="4" RowDefinitions="Auto,Auto,*"
               Background="{DynamicResource ToolbarBackground}">
 
             <Border Grid.Row="0" Classes="divider" />
@@ -292,8 +306,8 @@
                         IsVisible="{Binding IsConsoleExpanded}" />
             </Grid>
 
-            <!-- Expanded log -->
-            <Grid Grid.Row="2" RowDefinitions="*" Height="240"
+            <!-- Expanded log. No fixed height: the row it sits in is what's dragged. -->
+            <Grid Grid.Row="2" RowDefinitions="*"
                   IsVisible="{Binding IsConsoleExpanded}">
 
                 <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
