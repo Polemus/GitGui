@@ -2,6 +2,23 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
+        THE brand colour. Single source of truth - declared outside the theme
+        dictionaries because it is variant-independent.
+
+        App.Initialize() reads this key and pushes it into FluentAvaloniaTheme's
+        CustomAccentColor, which regenerates the SystemAccentColor* palette that
+        stock controls (CheckBox, ToggleSwitch, Slider, focus rings) draw from.
+        So changing this one value restyles both our own styles and every stock
+        control - there is no second place to update.
+
+        The per-variant AccentBrush values below are the ramp our own styles use.
+        Light deliberately deepens the brand colour so white text on it clears
+        WCAG AA; that lands at #2B87B5, within 8/255 of the #2B82AD FluentAvalonia
+        independently derives for light theme, so stock and custom controls match.
+    -->
+    <Color x:Key="BrandAccentColor">#3399CC</Color>
+
+    <!--
         Every colour the app uses is declared here once per theme variant.
         Views reference these with DynamicResource so switching Dark/Light at
         runtime repaints without a restart.
