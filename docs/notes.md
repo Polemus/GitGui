@@ -145,6 +145,16 @@ socket only when the app has *no* Wayland socket. Pair it with `--socket=wayland
 almost every Flatpak does, and X11 gets withheld from exactly the desktops that need it:
 the app dies at startup with `XOpenDisplay failed`. `--socket=x11`, and nothing else.
 
+**Nothing can `flatpak run` without a session bus, and the error never says so.** A
+CI runner has no session D-Bus. Without one, every `flatpak run` dies in bwrap with
+`Can't find source path /run/user/1000/doc/by-app/<id>` — the document portal isn't
+running to be mounted. `org.flatpak.Builder` fails differently and worse: its entry
+point calls `flatpak-spawn --host which flatpak`, which needs the bus, so it silently
+finds nothing and reports `Failed to init: Unable to find sdk org.freedesktop.Sdk
+version 25.08` — naming a runtime that is installed and present. Both flatpak scripts
+re-exec themselves under `dbus-run-session` when `DBUS_SESSION_BUS_ADDRESS` is unset.
+Reproduce either locally with `env -u DBUS_SESSION_BUS_ADDRESS`.
+
 **A Flatpak build has no network, so `nuget-sources-*.json` is part of the source.** Bump
 a `PackageReference` without regenerating it and every other artifact still builds; the
 Flatpak fails partway through a release with a restore error. `check-nuget-sources.sh`

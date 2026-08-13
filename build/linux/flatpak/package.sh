@@ -19,6 +19,12 @@
 #     flatpak install flathub org.flatpak.Builder
 set -euo pipefail
 
+# Nothing here can run a Flatpak without a session bus - see the note in
+# docs/notes.md. A CI runner has none, so make one and start again inside it.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-run-session >/dev/null 2>&1; then
+    exec dbus-run-session -- "$0" "$@"
+fi
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 # The csproj is the only thing that decides what the app reports - the build
@@ -50,7 +56,8 @@ if ! command -v flatpak >/dev/null 2>&1; then
 fi
 
 # org.flatpak.Builder is itself a Flatpak, which is how this works the same way
-# on a distro whose flatpak-builder package is too old to know about 25.08.
+# on a distro whose flatpak-builder package is too old to know about 25.08 - and
+# it means the build a release runs is the same one you ran locally.
 BUILDER=(flatpak run org.flatpak.Builder)
 if ! flatpak info org.flatpak.Builder >/dev/null 2>&1; then
     if command -v flatpak-builder >/dev/null 2>&1; then

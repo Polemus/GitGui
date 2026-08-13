@@ -127,7 +127,9 @@ jobs:
       - name: Install flatpak and the builder
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak
+          # dbus for dbus-run-session: a runner has no session bus, and every
+          # flatpak run needs one. Both scripts make their own with it.
+          sudo apt-get install -y --no-install-recommends flatpak dbus
           flatpak remote-add --user --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub \

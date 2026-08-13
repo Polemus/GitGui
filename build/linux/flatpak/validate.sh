@@ -17,6 +17,13 @@
 # you are not building a Flatpak.
 set -euo pipefail
 
+# Every check below is a `flatpak run`, and none of them work without a session
+# bus - see the note in docs/notes.md. A CI runner has none, so make one and
+# start again inside it.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-run-session >/dev/null 2>&1; then
+    exec dbus-run-session -- "$0" "$@"
+fi
+
 APP_ID=io.github.polemus.GitGui
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SDK=org.freedesktop.Sdk//25.08
@@ -107,15 +114,21 @@ lint manifest "$MANIFEST" "$HOME_ACCESS"
 if [ "${1:-}" = "--repo" ]; then
     REPO="$ROOT/build/.flatpak-repo"
     if [ -d "$REPO" ]; then
-        # The two screenshot complaints are artefacts of building here rather
-        # than on Flathub: their pipeline downloads the screenshots this metainfo
-        # points at, mirrors them to dl.flathub.org and rewrites the URLs into
-        # the repo. Nothing we build locally can have done that, so the check
-        # cannot pass on this machine and its failing says nothing.
+        # Every screenshot complaint here is an artefact of building outside
+        # Flathub. Their pipeline downloads the screenshots this metainfo points
+        # at, mirrors them to dl.flathub.org and rewrites the URLs into the repo;
+        # a local build reaches raw.githubusercontent.com or it doesn't, and
+        # which of the three you get depends on how much of that succeeded. None
+        # of it says anything about the manifest.
+        #
+        # Allowing appstream-missing-screenshots is safe because it is not the
+        # check that would catch a metainfo with no screenshots in it - the
+        # appstreamcli run above is, and it does not need network to do it.
         lint repo "$REPO" \
             "$HOME_ACCESS" \
             appstream-external-screenshot-url \
-            appstream-screenshots-not-mirrored-in-ostree
+            appstream-screenshots-not-mirrored-in-ostree \
+            appstream-missing-screenshots
     else
         echo "!! $REPO does not exist - run build/linux/flatpak/package.sh first" >&2
         status=1
