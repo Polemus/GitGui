@@ -119,18 +119,8 @@
                              PointerReleased="OnHistoryPointerReleased">
                         <ListBox.ContextFlyout>
                             <MenuFlyout Placement="Pointer">
-                                <!-- Two lines, because "amend" explains nothing to anyone
-                                     who has not already met the word. -->
-                                <MenuItem Command="{Binding AmendSelectedCommitCommand}">
-                                    <MenuItem.Header>
-                                        <StackPanel Spacing="1">
-                                            <TextBlock Text="Amend this commit…" />
-                                            <TextBlock Classes="muted" MaxWidth="260"
-                                                       TextWrapping="Wrap"
-                                                       Text="{Binding SelectedCommitAmendHint}" />
-                                        </StackPanel>
-                                    </MenuItem.Header>
-                                </MenuItem>
+                                <MenuItem Header="Amend this commit…"
+                                          Command="{Binding AmendSelectedCommitCommand}" />
                                 <Separator />
                                 <MenuItem Header="Copy SHA"
                                           Command="{Binding CopyCommitShaCommand}" />

@@ -237,7 +237,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
-    [NotifyPropertyChangedFor(nameof(SelectedCommitAmendHint))]
     [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopyCommitShaCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopyCommitSummaryCommand))]
@@ -313,7 +312,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(HasSyncCount))]
     [NotifyPropertyChangedFor(nameof(CanAmend))]
     [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
-    [NotifyPropertyChangedFor(nameof(SelectedCommitAmendHint))]
     [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
     public partial int Ahead { get; set; }
 
@@ -321,7 +319,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAmend))]
     [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
-    [NotifyPropertyChangedFor(nameof(SelectedCommitAmendHint))]
     [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
     public partial bool HasUpstream { get; set; }
 
@@ -909,16 +906,6 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool CanAmendSelectedCommit => CanAmend
                                           && SelectedCommit is { } commit
                                           && History.FirstOrDefault()?.Sha == commit.Sha;
-
-    /// <summary>
-    /// Shown under the disabled menu item, because a greyed-out row with no reason is
-    /// the thing people file bugs about. Says what amending does either way.
-    /// </summary>
-    public string SelectedCommitAmendHint => CanAmendSelectedCommit
-        ? "Fixes this commit — its message, or a file you forgot — instead of adding a new one."
-        : SelectedCommit is not null && History.FirstOrDefault()?.Sha != SelectedCommit.Sha
-            ? "Only the newest commit can be fixed this way."
-            : "Fixes the last commit instead of adding a new one. Only possible until it is pushed.";
 
     /// <summary>
     /// Hands over to the commit box: that is where the message is edited and files are
