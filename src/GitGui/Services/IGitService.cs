@@ -51,6 +51,12 @@ public interface IGitService
     string? GetRemoteUrl(string path);
 
     /// <summary>
+    /// Clones into <paramref name="targetPath"/>, which must not already hold anything.
+    /// Authentication problems come back as a <see cref="SyncResult"/> like the others.
+    /// </summary>
+    SyncResult Clone(string url, string targetPath, GitCredentials? credentials, Action<string>? trace = null);
+
+    /// <summary>
     /// Fetches from origin. Authentication problems come back as a
     /// <see cref="SyncResult"/> rather than an exception - being signed out is an
     /// ordinary condition, not a fault.

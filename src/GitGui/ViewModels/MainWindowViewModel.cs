@@ -241,6 +241,32 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsChangesTab => SelectedTabIndex == 0;
     public bool IsHistoryTab => SelectedTabIndex == 1;
 
+    // ---- Browse and clone --------------------------------------------------
+
+    [ObservableProperty]
+    public partial bool IsClonePageVisible { get; set; }
+
+    /// <summary>What the list is filtered down to. Rebuilt rather than filtered in the view.</summary>
+    public ObservableCollection<RemoteRepositoryViewModel> RemoteRepositories { get; } = [];
+
+    /// <summary>Everything fetched, before the filter is applied.</summary>
+    private readonly List<RemoteRepositoryViewModel> _allRemotes = [];
+
+    [ObservableProperty]
+    public partial bool IsLoadingRemotes { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRemoteResults))]
+    public partial string RemoteFilter { get; set; } = string.Empty;
+
+    partial void OnRemoteFilterChanged(string value) => ApplyRemoteFilter();
+
+    public bool HasRemoteResults => RemoteRepositories.Count > 0;
+
+    public string RemoteEmptyLabel => _allRemotes.Count == 0
+        ? "Sign in to a hosting site to browse what you can clone."
+        : "Nothing matches that filter.";
+
     // ---- Settings ----------------------------------------------------------
 
     [ObservableProperty]
@@ -752,15 +778,172 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ShowHistoryTab() => SelectedTabIndex = 1;
 
+    // ---- Browse and clone --------------------------------------------------
+
+    [RelayCommand]
+    private async Task ShowCloneAsync()
+    {
+        IsClonePageVisible = true;
+
+        if (_allRemotes.Count == 0)
+            await LoadRemoteRepositoriesAsync();
+    }
+
+    [RelayCommand]
+    private void CloseClone() => IsClonePageVisible = false;
+
+    /// <summary>
+    /// Asks every signed-in account what it can see. Sites are queried in parallel
+    /// because one slow server shouldn't hold up the rest of the list.
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadRemoteRepositoriesAsync()
+    {
+        if (IsLoadingRemotes)
+            return;
+
+        IsLoadingRemotes = true;
+
+        try
+        {
+            var known = Repositories
+                .Select(r => _git.GetRemoteUrl(r.LocalPath))
+                .Where(u => u is not null)
+                .Select(NormaliseUrl!)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var loaded = new List<RemoteRepositoryViewModel>();
+
+            var lookups = Accounts
+                .Select(account => (account, provider: _hosts.ById(account.ProviderId)))
+                .Where(pair => pair.provider is not null)
+                .Select(async pair =>
+                {
+                    try
+                    {
+                        var repositories = await pair.provider!.ListRepositoriesAsync(pair.account, default);
+                        return (pair.account, repositories, error: (string?)null);
+                    }
+                    catch (Exception ex)
+                    {
+                        // One unreachable site must not empty the whole list.
+                        return (pair.account, (IReadOnlyList<RemoteRepository>)[], error: ex.Message);
+                    }
+                })
+                .ToList();
+
+            foreach (var (account, repositories, error) in await Task.WhenAll(lookups))
+            {
+                if (error is not null)
+                {
+                    Log(ActivityLevel.Warning, $"Could not list repositories for {account.Handle}: {error}");
+                    continue;
+                }
+
+                foreach (var repository in repositories)
+                {
+                    loaded.Add(new RemoteRepositoryViewModel(
+                        repository, account, known.Contains(NormaliseUrl(repository.CloneUrl))));
+                }
+            }
+
+            _allRemotes.Clear();
+            _allRemotes.AddRange(loaded
+                .OrderByDescending(r => r.Model.UpdatedAt ?? DateTimeOffset.MinValue)
+                .ThenBy(r => r.FullName, StringComparer.OrdinalIgnoreCase));
+
+            ApplyRemoteFilter();
+
+            if (_allRemotes.Count > 0)
+                Log(ActivityLevel.Info, $"Found {_allRemotes.Count} repositories you can clone");
+        }
+        finally
+        {
+            IsLoadingRemotes = false;
+        }
+    }
+
+    /// <summary>
+    /// Clone URLs vary by spelling for the same repository - trailing .git, scp form,
+    /// case - so they are compared through <see cref="HostResolver"/> instead.
+    /// </summary>
+    private static string NormaliseUrl(string url)
+        => HostResolver.Parse(url) is { } identity
+            ? $"{identity.Host.Id}/{identity.Owner}/{identity.Name}"
+            : url;
+
+    private void ApplyRemoteFilter()
+    {
+        var filter = RemoteFilter.Trim();
+
+        RemoteRepositories.Clear();
+
+        foreach (var repository in _allRemotes)
+        {
+            if (filter.Length == 0
+                || repository.FullName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || repository.Description.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            {
+                RemoteRepositories.Add(repository);
+            }
+        }
+
+        OnPropertyChanged(nameof(HasRemoteResults));
+        OnPropertyChanged(nameof(RemoteEmptyLabel));
+    }
+
+    [RelayCommand]
+    private async Task CloneRepositoryAsync(RemoteRepositoryViewModel repository)
+    {
+        var parent = await _picker.PickAsync($"Where should {repository.Name} go?");
+        if (string.IsNullOrEmpty(parent))
+            return;
+
+        var target = System.IO.Path.Combine(parent, repository.Name);
+        var url = repository.CloneUrl;
+        var credentials = _hosts.ById(repository.Account.ProviderId)
+            ?.GetGitCredentials(repository.Account);
+
+        var cloned = false;
+
+        await RunAsync(async () =>
+        {
+            void Trace(string line) => _log.Write(ActivityLevel.Trace, line);
+
+            var result = await Task.Run(() => _git.Clone(url, target, credentials, Trace));
+
+            Log(result.Succeeded ? ActivityLevel.Success : ActivityLevel.Error, result.Message);
+            cloned = result.Succeeded;
+        });
+
+        if (!cloned)
+            return;
+
+        var added = await AddRepositoryPathAsync(target, persist: true);
+
+        IsClonePageVisible = false;
+
+        if (added is not null)
+            await OpenRepositoryAsync(added);
+
+        // The row should now offer to open rather than clone again.
+        await LoadRemoteRepositoriesAsync();
+    }
+
     [RelayCommand]
     private void ShowSettings()
     {
         RefreshHostEntries();
+        IsClonePageVisible = false;
         IsSettingsPageVisible = true;
     }
 
     [RelayCommand]
-    private void ShowRepository() => IsSettingsPageVisible = false;
+    private void ShowRepository()
+    {
+        IsSettingsPageVisible = false;
+        IsClonePageVisible = false;
+    }
 
     [RelayCommand]
     private void ShowSettingsSection(int section)

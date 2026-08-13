@@ -315,6 +315,50 @@ public sealed class GitService : IGitService
         return (repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault())?.Url;
     }
 
+    public SyncResult Clone(string url, string targetPath, GitCredentials? credentials, Action<string>? trace = null)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return new SyncResult(SyncOutcome.Failed, "A clone URL is required.");
+
+        // Refusing up front beats letting libgit2 half-write into someone's folder.
+        if (Directory.Exists(targetPath) && Directory.EnumerateFileSystemEntries(targetPath).Any())
+            return new SyncResult(SyncOutcome.Failed, $"{targetPath} already exists and isn't empty.");
+
+        var probe = new AuthProbe
+        {
+            Host = HostResolver.Parse(url)?.Host.Id ?? url,
+            HadCredentials = credentials is not null,
+        };
+
+        trace?.Invoke($"Cloning {url} into {targetPath}");
+
+        var options = new CloneOptions(BuildFetchOptions(credentials, probe, trace));
+
+        if (RunNetwork(probe, () => Repository.Clone(url, targetPath, options)) is { } failure)
+        {
+            // A failed clone leaves a partial directory behind, which would then block
+            // a retry with "already exists and isn't empty".
+            TryRemove(targetPath);
+            return failure;
+        }
+
+        return SyncResult.Ok($"Cloned into {targetPath}");
+    }
+
+    /// <summary>Best-effort cleanup of a half-written clone; failing to tidy is not an error.</summary>
+    private static void TryRemove(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The user can delete it themselves; saying so twice helps nobody.
+        }
+    }
+
     public SyncResult Fetch(string path, GitCredentials? credentials, Action<string>? trace = null)
     {
         using var repo = new Repository(Discover(path));

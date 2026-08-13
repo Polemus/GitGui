@@ -154,14 +154,25 @@
 
                                 <Border Grid.Row="3" Classes="divider" Margin="0,6" />
 
-                                <Button Grid.Row="4" Classes="rowButton"
-                                        Click="OnRepositoryRowClick"
-                                        Command="{Binding AddRepositoryCommand}">
-                                    <StackPanel Orientation="Horizontal" Spacing="9">
-                                        <Path Classes="icon" Data="{DynamicResource IconPlus}" />
-                                        <TextBlock Classes="body" Text="Add local repository…" />
-                                    </StackPanel>
-                                </Button>
+                                <StackPanel Grid.Row="4">
+                                    <Button Classes="rowButton"
+                                            Click="OnRepositoryRowClick"
+                                            Command="{Binding AddRepositoryCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <Path Classes="icon" Data="{DynamicResource IconPlus}" />
+                                            <TextBlock Classes="body" Text="Add local repository…" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Classes="rowButton"
+                                            Click="OnRepositoryRowClick"
+                                            Command="{Binding ShowCloneCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <Path Classes="icon" Data="{DynamicResource IconRepo}" />
+                                            <TextBlock Classes="body" Text="Clone from a hosting site…" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                             </Grid>
                         </Flyout>
                     </Button.Flyout>
@@ -270,7 +281,16 @@
 
         <!-- ============================ Content ============================ -->
         <Panel Grid.Row="2">
-            <views:RepositoryView IsVisible="{Binding !IsSettingsPageVisible}" />
+            <views:RepositoryView>
+                <views:RepositoryView.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="!IsSettingsPageVisible" />
+                        <Binding Path="!IsClonePageVisible" />
+                    </MultiBinding>
+                </views:RepositoryView.IsVisible>
+            </views:RepositoryView>
+
+            <views:CloneView IsVisible="{Binding IsClonePageVisible}" />
             <views:SettingsView IsVisible="{Binding IsSettingsPageVisible}" />
         </Panel>
 
