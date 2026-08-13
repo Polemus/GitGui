@@ -43,6 +43,21 @@
         <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
     </Style>
 
+    <!--
+        FluentAvalonia's Button theme animates the ContentPresenter's background
+        between states. Our classes set their own hover colours on top of that,
+        so the interpolation between the two reads as a bright flash on pointer
+        enter. Dropping the transition makes hover switch instantly.
+    -->
+    <Style Selector="Button.toolbarItem /template/ ContentPresenter,
+                     Button.iconButton /template/ ContentPresenter,
+                     Button.rowButton /template/ ContentPresenter,
+                     Button.primary /template/ ContentPresenter,
+                     Button.secondary /template/ ContentPresenter,
+                     Button.tab /template/ ContentPresenter">
+        <Setter Property="Transitions" Value="{x:Null}" />
+    </Style>
+
     <!-- ===================== Toolbar ===================== -->
 
     <!-- The wide dropdown buttons: repository picker, branch picker, sync. -->

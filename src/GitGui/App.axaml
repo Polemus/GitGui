@@ -18,7 +18,14 @@
     </Application.Resources>
 
     <Application.Styles>
-        <sty:FluentAvaloniaTheme PreferSystemTheme="False" />
+        <!--
+            CustomAccentColor regenerates the whole SystemAccentColor* palette that
+            stock controls (CheckBox, ToggleSwitch, Slider, focus rings) pull from.
+            Without it those controls keep FluentAvalonia's default indigo while our
+            own styles use AccentBrush - which is how the checkboxes ended up purple.
+        -->
+        <sty:FluentAvaloniaTheme PreferSystemTheme="False"
+                                 CustomAccentColor="#3399CC" />
         <StyleInclude Source="avares://GitGui/Styles/Controls.axaml" />
     </Application.Styles>
 </Application>
