@@ -266,6 +266,186 @@ public sealed class GitService : IGitService
         return branch.FriendlyName;
     }
 
+    /// <summary>
+    /// Switching branches with uncommitted work. Git's own behaviour is to carry
+    /// everything across, so "bring all" is a plain checkout and needs no stash at all.
+    /// </summary>
+    /// <remarks>
+    /// Bringing only *some* files is the awkward case: libgit2 has no way to stash a
+    /// subset. It is done with two stashes instead. Everything is stashed first, so at no
+    /// point does uncommitted work exist only in the working tree - if any later step
+    /// fails, the changes are still recoverable from the stack.
+    /// </remarks>
+    public void SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var changed = ChangedPaths(repo);
+
+        // Nothing uncommitted, or everything is coming along: git already does this.
+        if (changed.Count == 0 || bringPaths is null)
+        {
+            Switch(repo, branchName, create);
+            return;
+        }
+
+        var bring = bringPaths.ToHashSet(StringComparer.Ordinal);
+        var leave = changed.Where(p => !bring.Contains(p)).ToList();
+
+        if (leave.Count == 0)
+        {
+            Switch(repo, branchName, create);
+            return;
+        }
+
+        var signature = repo.Config.BuildSignature(DateTimeOffset.Now)
+                        ?? new Signature("GitGui", "gitgui@localhost", DateTimeOffset.Now);
+
+        var from = repo.Head.FriendlyName;
+
+        // Nothing is coming across, so one stash is enough.
+        if (bring.Count == 0 || changed.All(p => !bring.Contains(p)))
+        {
+            repo.Stashes.Add(signature, $"GitGui: left behind when switching from {from}",
+                StashModifiers.IncludeUntracked);
+
+            Switch(repo, branchName, create);
+            return;
+        }
+
+        // Everything, so the work is safe on the stack from here on.
+        repo.Stashes.Add(signature, $"GitGui: switching from {from}", StashModifiers.IncludeUntracked);
+
+        // Restore it, strip out what is being carried, and stash the remainder. That
+        // second stash is the one the user gets back when they return to this branch.
+        repo.Stashes.Apply(0);
+        RevertPaths(repo, bring);
+        repo.Stashes.Add(signature, $"GitGui: left behind when switching from {from}",
+            StashModifiers.IncludeUntracked);
+
+        // The full stash has shifted to 1. Restore it, strip out what is being left, and
+        // drop it - leaving only the carried files in the tree for checkout to move.
+        repo.Stashes.Apply(1);
+        RevertPaths(repo, leave);
+        repo.Stashes.Remove(1);
+
+        Switch(repo, branchName, create);
+    }
+
+    private static void Switch(Repository repo, string branchName, bool create)
+    {
+        if (create)
+        {
+            if (repo.Head.Tip is null)
+                throw new InvalidOperationException("Commit something before creating a branch.");
+
+            if (repo.Branches[branchName] is not null)
+                throw new InvalidOperationException($"Branch '{branchName}' already exists.");
+
+            Commands.Checkout(repo, repo.CreateBranch(branchName));
+            return;
+        }
+
+        var branch = repo.Branches[branchName]
+                     ?? throw new InvalidOperationException($"Branch '{branchName}' not found.");
+
+        Commands.Checkout(repo, branch);
+    }
+
+    /// <summary>Every path with uncommitted work, tracked or not.</summary>
+    private static List<string> ChangedPaths(Repository repo)
+        => repo.RetrieveStatus(new StatusOptions { IncludeUntracked = true, RecurseUntrackedDirs = true })
+            .Where(e => e.State != FileStatus.Unaltered && e.State != FileStatus.Ignored)
+            .Select(e => e.FilePath)
+            .ToList();
+
+    /// <summary>
+    /// Undoes the working-tree changes for these paths. Untracked files have no committed
+    /// version to check out, so they are deleted instead.
+    /// </summary>
+    private static void RevertPaths(Repository repo, IEnumerable<string> paths)
+    {
+        var tracked = new List<string>();
+
+        foreach (var file in paths)
+        {
+            if (repo.RetrieveStatus(file).HasFlag(FileStatus.NewInWorkdir))
+            {
+                var full = Path.Combine(repo.Info.WorkingDirectory, file);
+
+                if (File.Exists(full))
+                    File.Delete(full);
+
+                continue;
+            }
+
+            tracked.Add(file);
+        }
+
+        if (tracked.Count == 0 || repo.Head.Tip is null)
+            return;
+
+        repo.CheckoutPaths(repo.Head.Tip.Sha, tracked, new CheckoutOptions
+        {
+            CheckoutModifiers = CheckoutModifiers.Force,
+        });
+    }
+
+    public IReadOnlyList<StashInfo> GetStashes(string path)
+    {
+        using var repo = new Repository(Discover(path));
+
+        return repo.Stashes.Select((stash, index) => new StashInfo
+        {
+            Index = index,
+            Message = stash.Message ?? string.Empty,
+            BranchName = BranchFromStashMessage(stash.Message),
+            CreatedAt = stash.WorkTree?.Committer?.When ?? DateTimeOffset.Now,
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Git writes "WIP on main: 1234567 summary" or "On main: message". The branch is
+    /// only recorded there, so it is read back out rather than stored separately.
+    /// </summary>
+    private static string BranchFromStashMessage(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+            return string.Empty;
+
+        var text = message.StartsWith("WIP on ", StringComparison.Ordinal) ? message[7..]
+            : message.StartsWith("On ", StringComparison.Ordinal) ? message[3..]
+            : null;
+
+        if (text is null)
+            return string.Empty;
+
+        var colon = text.IndexOf(':');
+        return colon < 0 ? text.Trim() : text[..colon].Trim();
+    }
+
+    public void PopStash(string path, int index)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var status = repo.Stashes.Pop(index);
+
+        if (status == StashApplyStatus.Conflicts)
+            throw new InvalidOperationException("Restoring the stash caused conflicts — resolve them before continuing.");
+
+        if (status == StashApplyStatus.UncommittedChanges)
+            throw new InvalidOperationException("Commit or revert your current changes before restoring the stash.");
+
+        if (status == StashApplyStatus.NotFound)
+            throw new InvalidOperationException("That stash no longer exists.");
+    }
+
+    public void DropStash(string path, int index)
+    {
+        using var repo = new Repository(Discover(path));
+        repo.Stashes.Remove(index);
+    }
+
     public string AmendCommit(string path, IEnumerable<string> paths, string summary, string description)
     {
         if (string.IsNullOrWhiteSpace(summary))

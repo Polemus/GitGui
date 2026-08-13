@@ -142,6 +142,27 @@
                 <StackPanel Grid.Row="3" Spacing="9" Margin="14"
                             IsVisible="{Binding IsChangesTab}">
                     <Border Classes="divider" Margin="-14,0,-14,4" />
+
+                    <!-- Stashed work waiting on this branch. Sits above the message boxes
+                         so it is seen before anything new is written. -->
+                    <Border Background="{DynamicResource BannerInfoBackground}"
+                            BorderBrush="{DynamicResource BannerInfoBorder}"
+                            BorderThickness="1" CornerRadius="8" Padding="11,9"
+                            IsVisible="{Binding HasBranchStashes}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Classes="caption" TextWrapping="Wrap"
+                                       Text="{Binding StashLabel}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Classes="secondary" Padding="9,4" FontSize="12"
+                                        Content="Restore"
+                                        Command="{Binding RestoreStashCommand}" />
+                                <Button Classes="secondary" Padding="9,4" FontSize="12"
+                                        Content="Discard"
+                                        Command="{Binding DiscardStashCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <TextBox Classes="commitBox"
                              PlaceholderText="{Binding CommitSummaryPlaceholder}"
                              Text="{Binding CommitSummary, Mode=TwoWay}" />

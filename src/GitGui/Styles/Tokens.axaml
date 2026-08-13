@@ -32,6 +32,8 @@
             <SolidColorBrush x:Key="SidebarBackground" Color="#1A1D23" />
             <SolidColorBrush x:Key="SurfaceBackground" Color="#121418" />
             <SolidColorBrush x:Key="ElevatedBackground" Color="#20242C" />
+            <!-- Dims the app behind a prompt that has to be answered. -->
+            <SolidColorBrush x:Key="ScrimBackground" Color="#0B0D11" Opacity="0.66" />
             <SolidColorBrush x:Key="BorderSubtle" Color="#2A2F3A" />
             <SolidColorBrush x:Key="BorderStrong" Color="#3A404E" />
 
@@ -81,6 +83,8 @@
             <SolidColorBrush x:Key="SidebarBackground" Color="#FAFBFC" />
             <SolidColorBrush x:Key="SurfaceBackground" Color="#FFFFFF" />
             <SolidColorBrush x:Key="ElevatedBackground" Color="#FFFFFF" />
+            <!-- Dims the app behind a prompt that has to be answered. -->
+            <SolidColorBrush x:Key="ScrimBackground" Color="#1B1F24" Opacity="0.44" />
             <SolidColorBrush x:Key="BorderSubtle" Color="#E1E4E8" />
             <SolidColorBrush x:Key="BorderStrong" Color="#CFD4DA" />
 

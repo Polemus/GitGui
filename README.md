@@ -48,6 +48,10 @@ three-pane history and the resizable panes.
   repositories need no terminal. Repositories you already have are marked rather than
   offered again, matched through the same URL parsing that groups them.
 - **Create branches**, and amend the last commit while it is still local.
+- **Switching branches with uncommitted work asks first** rather than silently carrying it
+  across. Bring everything, leave everything, or tick individual files — whatever is left
+  behind is stashed against the branch you came from. Returning to that branch shows a bar
+  above the commit box offering to restore it.
 - **Repository picker grouped by hosting site.** The group a repo lands in is derived from its
   actual `origin` URL, so a GitHub clone and a self-hosted Gitea clone genuinely sort
   themselves apart. Handles `https://`, `ssh://` and scp-style `git@host:owner/repo`.
