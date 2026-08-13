@@ -130,6 +130,13 @@ that was never committed — the one place in this codebase where a bug is unrec
 
 ### Tooling
 
+**Two `.dmg`s in one job collide over the volume name.** `hdiutil create` attaches the
+image while it builds it, so building osx-arm64 and then osx-x64 — which the release
+job does — has the second one mounting `/Volumes/GitGui <version>` while the first is
+still releasing it. It fails with `Resource busy`, on the second RID only, with the
+first `.dmg` already in `dist/`. `build/macos/package.sh` detaches a stale volume and
+retries rather than renaming the volume per architecture.
+
 **ImageMagick: `-background none` must come *before* the input file.** After it, the SVG
 has already been rasterised onto white and the alpha is gone.
 

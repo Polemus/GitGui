@@ -61,11 +61,40 @@ mkdir -p "$DMG_ROOT"
 cp -R "$APP" "$DMG_ROOT/"
 ln -s /Applications "$DMG_ROOT/Applications"
 
-hdiutil create \
-    -volname "GitGui $VERSION" \
-    -srcfolder "$DMG_ROOT" \
-    -ov -format UDZO \
-    "$DIST/GitGui-$VERSION-$RID.dmg"
+# hdiutil attaches the image while it builds it, and both RIDs ask for the same
+# volume name - so the second one mounts /Volumes/GitGui <version> while the
+# first is still letting go of it, and hdiutil says "Resource busy". The release
+# job builds osx-arm64 and then osx-x64 in one go, which is exactly that: 0.3.0
+# first failed here with the arm64 .dmg already sitting in dist/.
+#
+# Detach a stale one before trying, and treat a failure as worth one more go -
+# the window is short and neither the volume name nor the .dmg is worth changing
+# to avoid it.
+VOLUME="GitGui $VERSION"
+
+for attempt in 1 2 3; do
+    if [ -d "/Volumes/$VOLUME" ]; then
+        echo "==> /Volumes/$VOLUME is still mounted - detaching it"
+        hdiutil detach "/Volumes/$VOLUME" -force || true
+    fi
+
+    if hdiutil create \
+        -volname "$VOLUME" \
+        -srcfolder "$DMG_ROOT" \
+        -ov -format UDZO \
+        "$DIST/GitGui-$VERSION-$RID.dmg"
+    then
+        break
+    fi
+
+    if [ "$attempt" -eq 3 ]; then
+        echo "!! hdiutil create failed three times - giving up" >&2
+        exit 1
+    fi
+
+    echo "!! hdiutil create failed - retrying in 10s (attempt $attempt of 3)" >&2
+    sleep 10
+done
 
 echo "==> Done:"
 ls -la "$DIST"
