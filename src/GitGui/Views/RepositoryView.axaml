@@ -283,7 +283,27 @@
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
                                     <StackPanel Grid.Column="1" Spacing="2">
-                                        <TextBlock Classes="body" Text="{Binding Summary}" />
+                                        <!-- Badges keep their width; the summary gives way,
+                                             since a tag is the thing being scanned for. -->
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="7">
+                                            <TextBlock Grid.Column="0" Classes="body" Text="{Binding Summary}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <ItemsControl Grid.Column="1" ItemsSource="{Binding Tags}"
+                                                          IsVisible="{Binding HasTags}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal" Spacing="4" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="x:String">
+                                                        <Border Classes="tagBadge">
+                                                            <TextBlock Text="{Binding}" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
                                         <StackPanel Orientation="Horizontal" Spacing="7">
                                             <TextBlock Classes="muted" Text="{Binding AuthorName}" />
                                             <TextBlock Classes="muted" Text="·" />
@@ -407,6 +427,22 @@
                                         <StackPanel Grid.Column="1" Spacing="5">
                                             <TextBlock Classes="h2" Text="{Binding Summary}"
                                                        TextWrapping="Wrap" />
+                                            <ItemsControl ItemsSource="{Binding Tags}"
+                                                          IsVisible="{Binding HasTags}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal" ItemSpacing="4"
+                                                                   LineSpacing="4" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="x:String">
+                                                        <Border Classes="tagBadge">
+                                                            <TextBlock Text="{Binding}" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                             <StackPanel Orientation="Horizontal" Spacing="7">
                                                 <TextBlock Classes="caption" Text="{Binding AuthorName}" />
                                                 <TextBlock Classes="muted" Text="committed" />

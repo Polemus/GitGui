@@ -340,6 +340,23 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- Tag badge in the history list. Accent-tinted so a released commit is findable
+         by colour while scrolling, rather than reading every row. -->
+    <Style Selector="Border.tagBadge">
+        <Setter Property="Background" Value="{DynamicResource ElevatedBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="6,1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.tagBadge > TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFont}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
     <!-- ===================== File status letters ===================== -->
 
     <Style Selector="TextBlock.statusGlyph">

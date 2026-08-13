@@ -97,6 +97,12 @@ public sealed class CommitInfo
     /// loads the file list on demand and reports the count from there.
     /// </summary>
     public int FilesChanged { get; init; }
+
+    /// <summary>Tag names pointing at this commit, e.g. "v1.2.0". Usually empty.</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
+    public bool HasTags => Tags.Count > 0;
+
     public string ShortSha => Sha.Length > 7 ? Sha[..7] : Sha;
     public string RelativeTime => TimeFormat.Relative(CommittedAt);
 
