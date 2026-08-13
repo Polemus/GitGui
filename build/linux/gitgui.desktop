@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=GitGui
+GenericName=Git Client
+Comment=Desktop git client for GitHub, Gitea and other forges
+Exec=gitgui %U
+Icon=gitgui
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;github;gitea;version control;vcs;
+StartupWMClass=GitGui

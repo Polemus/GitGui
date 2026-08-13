@@ -1,0 +1,22 @@
+# Build output
+bin/
+obj/
+dist/
+build/.stage-*/
+
+# .NET
+*.user
+*.suo
+*.userprefs
+project.lock.json
+artifacts/
+
+# Rider / VS
+.idea/
+.vs/
+*.sln.docstates
+
+# OS noise
+.DS_Store
+Thumbs.db
+*~

@@ -1,0 +1,127 @@
+using System;
+using System.Collections.Generic;
+
+namespace GitGui.Models;
+
+/// <summary>A local clone, plus the remote it tracks.</summary>
+public sealed class RepositoryInfo
+{
+    public required string Name { get; init; }
+    public required string Owner { get; init; }
+    public required GitHost Host { get; init; }
+    public required string LocalPath { get; init; }
+    public required string DefaultBranch { get; init; }
+    public bool IsPrivate { get; init; }
+
+    /// <summary>Commits on the local branch not yet pushed.</summary>
+    public int Ahead { get; init; }
+
+    /// <summary>Commits on the remote branch not yet merged locally.</summary>
+    public int Behind { get; init; }
+
+    public DateTimeOffset LastFetched { get; init; }
+
+    public string FullName => $"{Owner}/{Name}";
+    public string VisibilityLabel => IsPrivate ? "Private" : "Public";
+    public string LastFetchedLabel => $"Last fetched {TimeFormat.Relative(LastFetched)}";
+    public string HostLabel => $"{Host.KindLabel} · {Host.Name}";
+}
+
+public sealed class BranchInfo
+{
+    public required string Name { get; init; }
+    public required string LastCommitSummary { get; init; }
+    public DateTimeOffset LastCommitAt { get; init; }
+    public bool IsDefault { get; init; }
+
+    public string RelativeTime => TimeFormat.Relative(LastCommitAt);
+}
+
+public sealed class CommitInfo
+{
+    public required string Sha { get; init; }
+    public required string Summary { get; init; }
+    public required string AuthorName { get; init; }
+    public required string AuthorInitials { get; init; }
+    public required string AvatarHex { get; init; }
+    public DateTimeOffset CommittedAt { get; init; }
+    public int FilesChanged { get; init; }
+
+    /// <summary>Diffs shown when this commit is selected in the History tab.</summary>
+    public IReadOnlyList<FileChange> Files { get; init; } = [];
+    public string ShortSha => Sha.Length > 7 ? Sha[..7] : Sha;
+    public string RelativeTime => TimeFormat.Relative(CommittedAt);
+
+    public string FilesChangedLabel =>
+        FilesChanged == 1 ? "1 file changed" : $"{FilesChanged} files changed";
+}
+
+/// <summary>One changed path in the working tree, with its rendered diff.</summary>
+public sealed class FileChange
+{
+    public required string Path { get; init; }
+    public required ChangeStatus Status { get; init; }
+    public int Additions { get; init; }
+    public int Deletions { get; init; }
+    public IReadOnlyList<DiffLine> Diff { get; init; } = [];
+
+    public string FileName
+    {
+        get
+        {
+            var i = Path.LastIndexOf('/');
+            return i < 0 ? Path : Path[(i + 1)..];
+        }
+    }
+
+    public string Directory
+    {
+        get
+        {
+            var i = Path.LastIndexOf('/');
+            return i < 0 ? string.Empty : Path[..i];
+        }
+    }
+
+    /// <summary>Single-letter status marker, matching git's short format.</summary>
+    public string StatusGlyph => Status switch
+    {
+        ChangeStatus.Added => "A",
+        ChangeStatus.Modified => "M",
+        ChangeStatus.Deleted => "D",
+        ChangeStatus.Renamed => "R",
+        ChangeStatus.Conflicted => "!",
+        _ => "?",
+    };
+
+    // Styling hooks — bound to Classes.* in the views so colours live in the theme.
+    public bool IsAdded => Status == ChangeStatus.Added;
+    public bool IsModified => Status == ChangeStatus.Modified;
+    public bool IsDeleted => Status == ChangeStatus.Deleted;
+    public bool IsRenamed => Status == ChangeStatus.Renamed;
+    public bool IsConflicted => Status == ChangeStatus.Conflicted;
+}
+
+public sealed class DiffLine
+{
+    public required DiffLineKind Kind { get; init; }
+    public required string Text { get; init; }
+
+    /// <summary>Line number in the pre-image, or empty for added lines.</summary>
+    public string OldNumber { get; init; } = string.Empty;
+
+    /// <summary>Line number in the post-image, or empty for removed lines.</summary>
+    public string NewNumber { get; init; } = string.Empty;
+
+    public string Marker => Kind switch
+    {
+        DiffLineKind.Added => "+",
+        DiffLineKind.Removed => "-",
+        _ => " ",
+    };
+
+    // Styling hooks — bound to Classes.* in DiffView.
+    public bool IsAdded => Kind == DiffLineKind.Added;
+    public bool IsRemoved => Kind == DiffLineKind.Removed;
+    public bool IsHunkHeader => Kind == DiffLineKind.HunkHeader;
+}

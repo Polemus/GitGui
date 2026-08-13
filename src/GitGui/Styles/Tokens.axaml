@@ -1,0 +1,127 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Every colour the app uses is declared here once per theme variant.
+        Views reference these with DynamicResource so switching Dark/Light at
+        runtime repaints without a restart.
+    -->
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Dark">
+            <!-- Surfaces -->
+            <SolidColorBrush x:Key="AppBackground" Color="#16181D" />
+            <SolidColorBrush x:Key="ToolbarBackground" Color="#1C1F26" />
+            <SolidColorBrush x:Key="SidebarBackground" Color="#1A1D23" />
+            <SolidColorBrush x:Key="SurfaceBackground" Color="#121418" />
+            <SolidColorBrush x:Key="ElevatedBackground" Color="#20242C" />
+            <SolidColorBrush x:Key="BorderSubtle" Color="#2A2F3A" />
+            <SolidColorBrush x:Key="BorderStrong" Color="#3A404E" />
+
+            <!-- Text -->
+            <SolidColorBrush x:Key="TextPrimary" Color="#E6E9EF" />
+            <SolidColorBrush x:Key="TextSecondary" Color="#9BA3B4" />
+            <SolidColorBrush x:Key="TextMuted" Color="#6B7385" />
+            <SolidColorBrush x:Key="TextOnAccent" Color="#FFFFFF" />
+
+            <!-- Interaction -->
+            <SolidColorBrush x:Key="AccentBrush" Color="#3399CC" />
+            <SolidColorBrush x:Key="AccentHover" Color="#47A9DA" />
+            <SolidColorBrush x:Key="AccentPressed" Color="#2A80AC" />
+            <SolidColorBrush x:Key="HoverBackground" Color="#232833" />
+            <SolidColorBrush x:Key="SelectedBackground" Color="#1F3B4D" />
+            <SolidColorBrush x:Key="SuccessBrush" Color="#3FB950" />
+
+            <!-- Diff -->
+            <SolidColorBrush x:Key="DiffAddBackground" Color="#12261A" />
+            <SolidColorBrush x:Key="DiffAddGutter" Color="#18351F" />
+            <SolidColorBrush x:Key="DiffAddText" Color="#7EE787" />
+            <SolidColorBrush x:Key="DiffRemoveBackground" Color="#2A1416" />
+            <SolidColorBrush x:Key="DiffRemoveGutter" Color="#3A181C" />
+            <SolidColorBrush x:Key="DiffRemoveText" Color="#FFA198" />
+            <SolidColorBrush x:Key="DiffHunkBackground" Color="#1A2233" />
+            <SolidColorBrush x:Key="DiffHunkText" Color="#79A6E8" />
+            <SolidColorBrush x:Key="DiffCodeText" Color="#C9D1D9" />
+            <SolidColorBrush x:Key="DiffGutterText" Color="#5A6272" />
+
+            <!-- File status -->
+            <SolidColorBrush x:Key="StatusAdded" Color="#3FB950" />
+            <SolidColorBrush x:Key="StatusModified" Color="#D29922" />
+            <SolidColorBrush x:Key="StatusDeleted" Color="#F85149" />
+            <SolidColorBrush x:Key="StatusRenamed" Color="#58A6FF" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <!-- Surfaces -->
+            <SolidColorBrush x:Key="AppBackground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToolbarBackground" Color="#F4F5F7" />
+            <SolidColorBrush x:Key="SidebarBackground" Color="#FAFBFC" />
+            <SolidColorBrush x:Key="SurfaceBackground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ElevatedBackground" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="BorderSubtle" Color="#E1E4E8" />
+            <SolidColorBrush x:Key="BorderStrong" Color="#CFD4DA" />
+
+            <!-- Text -->
+            <SolidColorBrush x:Key="TextPrimary" Color="#1F2328" />
+            <SolidColorBrush x:Key="TextSecondary" Color="#59636E" />
+            <SolidColorBrush x:Key="TextMuted" Color="#848D97" />
+            <SolidColorBrush x:Key="TextOnAccent" Color="#FFFFFF" />
+
+            <!-- Interaction -->
+            <!-- Deepened a shade from #3399CC so white button text clears WCAG AA. -->
+            <SolidColorBrush x:Key="AccentBrush" Color="#2B87B5" />
+            <SolidColorBrush x:Key="AccentHover" Color="#3399CC" />
+            <SolidColorBrush x:Key="AccentPressed" Color="#226E93" />
+            <SolidColorBrush x:Key="HoverBackground" Color="#F0F1F3" />
+            <SolidColorBrush x:Key="SelectedBackground" Color="#DCEDF7" />
+            <SolidColorBrush x:Key="SuccessBrush" Color="#1A7F37" />
+
+            <!-- Diff -->
+            <SolidColorBrush x:Key="DiffAddBackground" Color="#E6FFEC" />
+            <SolidColorBrush x:Key="DiffAddGutter" Color="#CCFFD8" />
+            <SolidColorBrush x:Key="DiffAddText" Color="#116329" />
+            <SolidColorBrush x:Key="DiffRemoveBackground" Color="#FFEBE9" />
+            <SolidColorBrush x:Key="DiffRemoveGutter" Color="#FFD7D5" />
+            <SolidColorBrush x:Key="DiffRemoveText" Color="#82071E" />
+            <SolidColorBrush x:Key="DiffHunkBackground" Color="#EAF1FB" />
+            <SolidColorBrush x:Key="DiffHunkText" Color="#0550AE" />
+            <SolidColorBrush x:Key="DiffCodeText" Color="#24292F" />
+            <SolidColorBrush x:Key="DiffGutterText" Color="#8C959F" />
+
+            <!-- File status -->
+            <SolidColorBrush x:Key="StatusAdded" Color="#1A7F37" />
+            <SolidColorBrush x:Key="StatusModified" Color="#9A6700" />
+            <SolidColorBrush x:Key="StatusDeleted" Color="#CF222E" />
+            <SolidColorBrush x:Key="StatusRenamed" Color="#0969DA" />
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- No font is embedded; this is a fallback chain across the three platforms. -->
+    <FontFamily x:Key="MonoFont">Cascadia Mono,JetBrains Mono,DejaVu Sans Mono,SF Mono,Menlo,Consolas,monospace</FontFamily>
+
+    <!--
+        Icons are stroked paths on a 16x16 box so they stay crisp at any DPI and
+        pick up Foreground from whatever control hosts them.
+    -->
+    <StreamGeometry x:Key="IconChevronDown">M 4,6.5 L 8,10.5 L 12,6.5</StreamGeometry>
+
+    <StreamGeometry x:Key="IconRepo">M 4,1.5 h 8.5 a 1,1 0 0 1 1,1 v 12 h -9.5 a 1.5,1.5 0 0 1 -1.5,-1.5 v -10 a 1.5,1.5 0 0 1 1.5,-1.5 z M 3,12 h 10.5</StreamGeometry>
+
+    <StreamGeometry x:Key="IconBranch">M 2,3.5 a 2,2 0 1,0 4,0 a 2,2 0 1,0 -4,0 M 2,12.5 a 2,2 0 1,0 4,0 a 2,2 0 1,0 -4,0 M 10,3.5 a 2,2 0 1,0 4,0 a 2,2 0 1,0 -4,0 M 4,5.5 L 4,10.5 M 12,5.5 C 12,9.2 4,7.8 4,10.5</StreamGeometry>
+
+    <StreamGeometry x:Key="IconSync">M 14,8 A 6,6 0 1 1 11.9,3.4 M 10.8,1.4 L 12.4,3.6 L 10.1,4.9</StreamGeometry>
+
+    <StreamGeometry x:Key="IconPerson">M 8,2.6 a 2.7,2.7 0 1,0 0,5.4 a 2.7,2.7 0 1,0 0,-5.4 M 2.6,14 a 5.4,5.4 0 0 1 10.8,0</StreamGeometry>
+
+    <StreamGeometry x:Key="IconPlus">M 8,3.5 L 8,12.5 M 3.5,8 L 12.5,8</StreamGeometry>
+
+    <StreamGeometry x:Key="IconSun">M 8,5.2 a 2.8,2.8 0 1,0 0,5.6 a 2.8,2.8 0 1,0 0,-5.6 M 8,1 L 8,2.5 M 8,13.5 L 8,15 M 1,8 L 2.5,8 M 13.5,8 L 15,8 M 3.05,3.05 L 4.1,4.1 M 11.9,11.9 L 12.95,12.95 M 12.95,3.05 L 11.9,4.1 M 4.1,11.9 L 3.05,12.95</StreamGeometry>
+
+    <StreamGeometry x:Key="IconMoon">M 13.4,10.3 A 6.2,6.2 0 1 1 5.9,2.4 A 5.2,5.2 0 0 0 13.4,10.3 Z</StreamGeometry>
+
+    <StreamGeometry x:Key="IconCheck">M 3.5,8.5 L 6.5,11.5 L 12.5,4.5</StreamGeometry>
+
+    <StreamGeometry x:Key="IconGlobe">M 8,1.5 a 6.5,6.5 0 1,0 0,13 a 6.5,6.5 0 1,0 0,-13 M 1.5,8 L 14.5,8 M 8,1.5 C 5.5,4 5.5,12 8,14.5 M 8,1.5 C 10.5,4 10.5,12 8,14.5</StreamGeometry>
+
+</ResourceDictionary>

@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run GitGui",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/GitGui/bin/Debug/net10.0/GitGui",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/GitGui",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        }
+    ]
+}
