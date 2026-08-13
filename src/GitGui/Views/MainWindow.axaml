@@ -183,7 +183,7 @@
                     <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedLeft"
                                 FlyoutPresenterClasses="picker">
-                            <Grid Width="340" RowDefinitions="Auto,Auto,*">
+                            <Grid Width="340" RowDefinitions="Auto,Auto,*,Auto,Auto">
                                 <TextBlock Grid.Row="0" Classes="sectionLabel" Text="BRANCHES"
                                            Margin="10,6,10,8" />
                                 <Border Grid.Row="1" Classes="divider" Margin="0,0,0,6" />
@@ -212,6 +212,20 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                 </ScrollViewer>
+
+                                <Border Grid.Row="3" Classes="divider" Margin="0,6" />
+
+                                <!-- New branch. Branches from whatever HEAD is now and
+                                     checks it out, which is what "git checkout -b" does. -->
+                                <Grid Grid.Row="4" ColumnDefinitions="*,Auto" ColumnSpacing="8"
+                                      Margin="10,0,10,8">
+                                    <TextBox Grid.Column="0" Classes="commitBox"
+                                             Text="{Binding NewBranchName, Mode=TwoWay}"
+                                             PlaceholderText="New branch name" />
+                                    <Button Grid.Column="1" Classes="primary" Content="Create"
+                                            Click="OnBranchRowClick"
+                                            Command="{Binding CreateBranchCommand}" />
+                                </Grid>
                             </Grid>
                         </Flyout>
                     </Button.Flyout>

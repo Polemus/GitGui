@@ -275,7 +275,15 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SyncActionLabel))]
     [NotifyPropertyChangedFor(nameof(SyncCountLabel))]
     [NotifyPropertyChangedFor(nameof(HasSyncCount))]
+    [NotifyPropertyChangedFor(nameof(CanAmend))]
+    [NotifyPropertyChangedFor(nameof(AmendHint))]
     public partial int Ahead { get; set; }
+
+    /// <summary>False when the branch has never been pushed; see <see cref="CanAmend"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAmend))]
+    [NotifyPropertyChangedFor(nameof(AmendHint))]
+    public partial bool HasUpstream { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SyncActionLabel))]
@@ -320,11 +328,61 @@ public partial class MainWindowViewModel : ViewModelBase
         _ => $"{Changes.Count} changed files",
     };
 
-    public bool CanCommit => StagedCount > 0
+    // Amending only needs a message; re-wording the last commit without touching any
+    // file is a perfectly ordinary thing to want.
+    public bool CanCommit => (StagedCount > 0 || IsAmending)
                              && !string.IsNullOrWhiteSpace(CommitSummary)
                              && !IsBusy;
 
-    public string CommitButtonLabel => $"Commit to {SelectedBranch?.Name ?? "branch"}";
+    /// <summary>
+    /// Amending rewrites history, so it is offered only while the last commit is still
+    /// local. Once pushed, changing it would need a force-push, which is not something
+    /// to make available behind a checkbox.
+    /// </summary>
+    public bool CanAmend => SelectedRepository is not null
+                            && (Ahead > 0 || !HasUpstream);
+
+    public string AmendHint => CanAmend
+        ? "Replace the last commit instead of adding one."
+        : "The last commit is already pushed, so it can't be amended here.";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCommit))]
+    [NotifyPropertyChangedFor(nameof(CommitButtonLabel))]
+    [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
+    public partial bool IsAmending { get; set; }
+
+    /// <summary>Loads or clears the previous message as the checkbox is ticked.</summary>
+    partial void OnIsAmendingChanged(bool value)
+    {
+        if (SelectedRepository is not { } repo)
+            return;
+
+        if (!value)
+        {
+            CommitSummary = string.Empty;
+            CommitDescription = string.Empty;
+            return;
+        }
+
+        if (_git.GetLastCommitMessage(repo.LocalPath) is not { } message)
+            return;
+
+        CommitSummary = message.Summary;
+        CommitDescription = message.Description;
+    }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateBranchCommand))]
+    public partial string NewBranchName { get; set; } = string.Empty;
+
+    public bool CanCreateBranch => !string.IsNullOrWhiteSpace(NewBranchName)
+                                   && SelectedRepository is not null
+                                   && !IsBusy;
+
+    public string CommitButtonLabel => IsAmending
+        ? "Amend last commit"
+        : $"Commit to {SelectedBranch?.Name ?? "branch"}";
 
     public string CommitSummaryPlaceholder
     {
@@ -442,6 +500,25 @@ public partial class MainWindowViewModel : ViewModelBase
             await OpenRepositoryAsync(Repositories[0]);
     }
 
+    [RelayCommand(CanExecute = nameof(CanCreateBranch))]
+    private async Task CreateBranchAsync()
+    {
+        if (SelectedRepository is not { } repo)
+            return;
+
+        var path = repo.LocalPath;
+        var name = NewBranchName;
+
+        await RunAsync(async () =>
+        {
+            var created = await Task.Run(() => _git.CreateBranch(path, name));
+            Log(ActivityLevel.Success, $"Created and switched to branch {created}");
+        });
+
+        NewBranchName = string.Empty;
+        await OpenRepositoryAsync(repo);
+    }
+
     [RelayCommand]
     private async Task SelectBranchAsync(BranchInfo branch)
     {
@@ -479,18 +556,32 @@ public partial class MainWindowViewModel : ViewModelBase
         var description = CommitDescription;
         var path = repo.LocalPath;
 
+        var amending = IsAmending;
         var committed = false;
 
         await RunAsync(async () =>
         {
-            var sha = await Task.Run(() => _git.Commit(path, paths, summary, description));
-            Log(ActivityLevel.Success, $"Committed {sha[..7]} — {paths.Count} file{(paths.Count == 1 ? "" : "s")}");
+            if (amending)
+            {
+                var amended = await Task.Run(() => _git.AmendCommit(path, paths, summary, description));
+                Log(ActivityLevel.Success, $"Amended the last commit — now {amended[..7]}");
+            }
+            else
+            {
+                var sha = await Task.Run(() => _git.Commit(path, paths, summary, description));
+                Log(ActivityLevel.Success,
+                    $"Committed {sha[..7]} — {paths.Count} file{(paths.Count == 1 ? "" : "s")}");
+            }
+
             committed = true;
         });
 
         if (!committed)
             return;
 
+        // Clearing IsAmending would reload the old message into the boxes, so the flag
+        // goes down first and the boxes are cleared after.
+        IsAmending = false;
         CommitSummary = string.Empty;
         CommitDescription = string.Empty;
         await OpenRepositoryAsync(repo);
@@ -851,6 +942,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         Ahead = info.Ahead;
         Behind = info.Behind;
+        HasUpstream = info.HasUpstream;
         LastFetched = info.LastFetched;
 
         Replace(Branches, branches);

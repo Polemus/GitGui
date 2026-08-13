@@ -24,6 +24,12 @@ public sealed class RepositoryInfo
     /// <summary>Commits on the remote branch not yet merged locally.</summary>
     public int Behind { get; init; }
 
+    /// <summary>
+    /// False when the current branch has never been pushed. Lets the UI tell "nothing to
+    /// push" apart from "nowhere to push to", which decides whether amending is safe.
+    /// </summary>
+    public bool HasUpstream { get; init; }
+
     /// <summary>Null when the clone has never been fetched from.</summary>
     public DateTimeOffset? LastFetched { get; init; }
 

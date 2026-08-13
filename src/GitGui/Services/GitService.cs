@@ -59,6 +59,7 @@ public sealed class GitService : IGitService
             IsPrivate = null, // Not knowable locally; the host API fills this in later.
             Ahead = tracking?.AheadBy ?? 0,
             Behind = tracking?.BehindBy ?? 0,
+            HasUpstream = head?.TrackedBranch is not null,
             LastFetched = LastFetchTime(repo.Info.Path),
         };
     }
@@ -241,6 +242,69 @@ public sealed class GitService : IGitService
                      ?? throw new InvalidOperationException($"Branch '{branchName}' not found.");
 
         Commands.Checkout(repo, branch);
+    }
+
+    public string CreateBranch(string path, string branchName)
+    {
+        var name = branchName.Trim();
+
+        if (string.IsNullOrEmpty(name))
+            throw new InvalidOperationException("A branch needs a name.");
+
+        using var repo = new Repository(Discover(path));
+
+        // An empty repository has no HEAD commit to branch from.
+        if (repo.Head.Tip is null)
+            throw new InvalidOperationException("Commit something before creating a branch.");
+
+        if (repo.Branches[name] is not null)
+            throw new InvalidOperationException($"Branch '{name}' already exists.");
+
+        var branch = repo.CreateBranch(name);
+        Commands.Checkout(repo, branch);
+
+        return branch.FriendlyName;
+    }
+
+    public string AmendCommit(string path, IEnumerable<string> paths, string summary, string description)
+    {
+        if (string.IsNullOrWhiteSpace(summary))
+            throw new InvalidOperationException("A commit summary is required.");
+
+        using var repo = new Repository(Discover(path));
+
+        if (repo.Head.Tip is null)
+            throw new InvalidOperationException("There is no commit to amend.");
+
+        var staged = paths.ToList();
+        if (staged.Count > 0)
+            Commands.Stage(repo, staged);
+
+        var message = string.IsNullOrWhiteSpace(description)
+            ? summary.Trim()
+            : $"{summary.Trim()}\n\n{description.Trim()}";
+
+        // The original author is kept; only the committer becomes whoever is amending,
+        // which is what git itself does.
+        var committer = repo.Config.BuildSignature(DateTimeOffset.Now)
+                        ?? new Signature("GitGui", "gitgui@localhost", DateTimeOffset.Now);
+
+        return repo.Commit(message, repo.Head.Tip.Author, committer, new CommitOptions { AmendPreviousCommit = true }).Sha;
+    }
+
+    public (string Summary, string Description)? GetLastCommitMessage(string path)
+    {
+        using var repo = new Repository(Discover(path));
+
+        if (repo.Head.Tip is not { } tip)
+            return null;
+
+        var message = tip.Message ?? string.Empty;
+        var split = message.IndexOf('\n');
+
+        return split < 0
+            ? (message.Trim(), string.Empty)
+            : (message[..split].Trim(), message[(split + 1)..].Trim());
     }
 
     // ------------------------------------------------------------- networking

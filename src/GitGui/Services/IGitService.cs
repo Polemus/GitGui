@@ -32,6 +32,21 @@ public interface IGitService
 
     void CheckoutBranch(string path, string branchName);
 
+    /// <summary>
+    /// Creates a branch at the current HEAD and checks it out. Returns the name actually
+    /// used, which git may have normalised.
+    /// </summary>
+    string CreateBranch(string path, string branchName);
+
+    /// <summary>
+    /// Replaces the last commit with one carrying this message and these paths. Only
+    /// valid while the commit has not been pushed, which the caller checks.
+    /// </summary>
+    string AmendCommit(string path, IEnumerable<string> paths, string summary, string description);
+
+    /// <summary>The last commit's message, so an amend can start from what's there.</summary>
+    (string Summary, string Description)? GetLastCommitMessage(string path);
+
     /// <summary>The origin URL, so callers can work out which account to authenticate with.</summary>
     string? GetRemoteUrl(string path);
 
