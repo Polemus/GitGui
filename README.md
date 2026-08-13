@@ -55,7 +55,13 @@ own. They predate the activity console, so the bar along the bottom is missing f
 - **Commit** — tick the files you want, write a summary, commit. Staging is selective,
   deletions stage correctly, and the author comes from that repository's own git config.
 - **History tab** — real commit log, with each commit's diffs loaded on demand
-  (diffing 100 commits up front is far too slow for a list).
+  (diffing 100 commits up front is far too slow for a list). Selecting a commit shows its
+  header, the files it touched, and the diff for whichever file you click.
+- **Resizable panes.** The sidebar, the commit file list and the activity console are all
+  draggable, and the console remembers its height across collapsing.
+- **Refreshes itself.** A debounced file-system watcher notices work done outside the app,
+  so committing in a terminal or saving in an editor updates the view without a restart.
+  An automatic refresh keeps your ticked files and selection, since you didn't ask for it.
 - **Diff viewer** — unified diff with dual line-number gutters, parsed from libgit2's
   patch output.
 - **Ahead/behind** counts read from the branch's tracking details.
@@ -75,9 +81,14 @@ own. They predate the activity console, so the bar along the bottom is missing f
 
 ### Hosting sites are pluggable
 
-Adding a new hosting site normally needs **no code**. You write a JSON file describing
-the site's API — which URL lists repositories, which field holds the name — drop it in
-`~/.config/GitGui/hosts/`, and restart. See **[docs/host-manifests.md](docs/host-manifests.md)**.
+Adding a new hosting site needs **no code**. **Settings → Hosting sites → Add a site**
+walks you through it — which URL lists repositories, which field holds the name — and the
+site is usable immediately, without a restart. Gitea-shaped and GitLab-shaped starting
+points are offered, since those two differ enough that one set of defaults won't do.
+
+What that form writes is an ordinary JSON file in `~/.config/GitGui/hosts/`, identical to
+one you'd write by hand and editable afterwards. The file stays the source of truth. See
+**[docs/host-manifests.md](docs/host-manifests.md)** for the format.
 
 Manifests are data, not programs, so a site description can't execute anything or read
 the tokens held for other sites. A plugin DLL could, which is why this isn't one.
@@ -174,7 +185,7 @@ src/GitGui/
     FolderPicker.cs        native folder dialog via StorageProvider
     MockData.cs            design-time sample content only
   ViewModels/    MainWindowViewModel + per-item view models
-  Views/         MainWindow, RepositoryView, DiffView, AccountsView
+  Views/         MainWindow, RepositoryView, DiffView, SettingsView
   Styles/        Tokens.axaml (theme colours + icons), Controls.axaml (control styles)
   Assets/        App icon
 build/
@@ -245,11 +256,13 @@ runner. That's 3 jobs instead of 5. Everyday CI is Linux-only and build-only.
 
 ## Known gaps
 
-- **Network operations.** Fetch/push/pull, plus the GitHub OAuth device flow, Gitea PAT
-  entry and secure token storage. This is the next phase.
-- **Non-GitHub hosts are assumed to be Gitea.** `HostResolver` classifies anything that
-  isn't `github.com` as Gitea without checking. Confirming it by probing
-  `/api/v1/version` comes with the API work.
+- **Repository grouping assumes non-GitHub means Gitea.** `HostResolver` classifies any
+  remote that isn't `github.com` as Gitea to pick a badge and colour for the sidebar. Sign-in
+  does not work this way — that probes the server properly — so the consequence is a
+  mislabelled group, not a failed connection.
+- **No branch creation, amend or undo.** Branches can be switched but not created, and a
+  commit can't be corrected from the app.
+- **No test project.** Verification has been manual, against a real Gitea server.
 - **History is capped at 100 commits** with no paging yet.
 - **macOS builds are unsigned.** Gatekeeper will complain on first launch — right-click →
   Open. Signing and notarisation need an Apple Developer account.

@@ -9,7 +9,8 @@ Views (.axaml)          What things look like. No logic beyond visibility.
     ↓ compiled bindings
 ViewModels              MainWindowViewModel drives the shell. Async, off the UI thread.
     ↓ interfaces
-Services                IGitService, ICredentialStore, IAccountStore, IActivityLog
+Services                IGitService, ICredentialStore, IAccountStore, IActivityLog,
+                        IRepositoryWatcher, ISystemShell, IFolderPicker
 HostProviders           IHostProvider — GitHub in C#, everything else from manifests
     ↓
 libgit2 (native)        bundled; no git installation required
