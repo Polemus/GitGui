@@ -143,6 +143,35 @@
         <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
     </Style>
 
+    <!-- Vertical tab in the settings rail. The active one carries an accent edge rather
+         than a filled background, so the rail stays quiet as sections are added. -->
+    <Style Selector="Button.settingsTab">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="18,9" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.settingsTab:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    </Style>
+
+    <Style Selector="Button.settingsTab.active">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.settingsTab.active /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderThickness" Value="3,0,0,0" />
+        <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    </Style>
+
     <!-- Reads as a hyperlink, behaves as a command. Used where text is an action. -->
     <Style Selector="Button.link">
         <Setter Property="Background" Value="Transparent" />

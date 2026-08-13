@@ -56,7 +56,8 @@ public partial class App : Application
                 new AccountStore(credentials),
                 credentials,
                 new ActivityLog(),
-                new SystemShell());
+                new SystemShell(),
+                new RepositoryWatcher());
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 
