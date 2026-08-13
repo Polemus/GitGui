@@ -44,7 +44,11 @@ public interface IGitService
     /// changed is stashed against the branch being left. Null brings everything, which
     /// is what a plain checkout does.
     /// </summary>
-    void SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths);
+    /// <returns>
+    /// <see cref="SwitchOutcome.Conflicts"/> when a carried file also differs on the
+    /// target branch, in which case nothing was changed and the caller has to say so.
+    /// </returns>
+    SwitchResult SwitchBranch(string path, string branchName, bool create, IReadOnlyList<string>? bringPaths);
 
     /// <summary>Stash entries, newest first, across all branches.</summary>
     IReadOnlyList<StashInfo> GetStashes(string path);

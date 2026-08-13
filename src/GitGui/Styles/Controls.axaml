@@ -541,6 +541,53 @@
         <Setter Property="MaxHeight" Value="540" />
     </Style>
 
+    <!--
+        Context menus. MenuFlyout renders through stock MenuFlyoutPresenter and MenuItem,
+        which read FluentAvalonia's own palette rather than Tokens.axaml - so the
+        right-click menus came up in a theme of their own next to the pickers, which have
+        a FlyoutPresenter.picker style below. Part names are FluentAvalonia's template,
+        read off the running theme rather than guessed at through resource keys.
+    -->
+    <Style Selector="MenuFlyoutPresenter">
+        <Setter Property="Background" Value="{DynamicResource ElevatedBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <Style Selector="MenuItem">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Transitions" Value="{x:Null}" />
+    </Style>
+
+    <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    </Style>
+
+    <!-- The header presenter carries its own Foreground from the stock theme, so setting
+         it on the MenuItem alone leaves the text the colour it already was. -->
+    <Style Selector="MenuItem /template/ ContentPresenter#PART_HeaderPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <Style Selector="MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    </Style>
+
+    <Style Selector="MenuFlyoutPresenter Separator">
+        <Setter Property="Background" Value="{DynamicResource BorderSubtle}" />
+        <Setter Property="Height" Value="1" />
+        <Setter Property="Margin" Value="0,4" />
+    </Style>
+
     <!-- Stroked 16x16 icons. Override Stroke per-usage where more contrast is wanted. -->
     <Style Selector="Path.icon">
         <Setter Property="Stroke" Value="{DynamicResource TextSecondary}" />
