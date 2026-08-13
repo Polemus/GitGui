@@ -153,6 +153,19 @@ Sites differ — GitHub takes the token as the password, GitLab wants a fixed us
 4. Save the file and add an account. A site added through **Settings → Hosting sites** is
    usable straight away; a file you drop in the folder by hand is picked up at startup.
 
+### Test connection
+
+The form has a **Test connection** button. Give it the address of a server running the
+site — and, if you have one, a token — and it reports each step separately: whether
+`recognise` matched, whether `endpoints.currentUser` returned a login through your
+`userFields` mapping, and how many repositories `endpoints.repositories` listed. A wrong
+path or field name is named in the result rather than showing up later as a failed
+sign-in. Nothing is saved by testing: neither the address nor the token is written to the
+manifest, and the token is not stored anywhere.
+
+Without a token only the `recognise` check runs, which is still the one that catches a
+wrong base path.
+
 If a manifest is malformed or missing an `id`, GitGui logs a warning naming the file and
 carries on with the rest — one bad file never stops the app starting.
 

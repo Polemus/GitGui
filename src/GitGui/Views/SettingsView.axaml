@@ -412,6 +412,53 @@
                                             </StackPanel>
                                         </Expander>
 
+                                        <!-- Testing the draft against a real server, before saving it. -->
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Classes="sectionLabel" Text="TEST IT AGAINST A SERVER" />
+                                            <TextBlock Classes="muted" TextWrapping="Wrap"
+                                                       Text="Neither the address nor the token is saved. Without a token only the recognise check can run." />
+                                            <Grid ColumnDefinitions="2*,2*,Auto" ColumnSpacing="12">
+                                                <TextBox Grid.Column="0" Classes="commitBox"
+                                                         Text="{Binding TestUrl, Mode=TwoWay}"
+                                                         PlaceholderText="https://git.example.com" />
+                                                <TextBox Grid.Column="1" Classes="commitBox"
+                                                         PasswordChar="•"
+                                                         Text="{Binding TestToken, Mode=TwoWay}"
+                                                         PlaceholderText="token (optional)" />
+                                                <Button Grid.Column="2" Classes="secondary" Content="Test connection"
+                                                        IsEnabled="{Binding CanTest}"
+                                                        Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).TestHostCommand}" />
+                                            </Grid>
+
+                                            <TextBlock Classes="muted" Text="Testing…" IsVisible="{Binding IsTesting}" />
+
+                                            <StackPanel Spacing="10" IsVisible="{Binding HasTestResult}">
+                                                <TextBlock Classes="logLine"
+                                                           Classes.success="{Binding TestPassed}"
+                                                           Classes.error="{Binding !TestPassed}"
+                                                           TextWrapping="Wrap"
+                                                           Text="{Binding TestSummary}" />
+                                                <ItemsControl ItemsSource="{Binding TestSteps}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ProbeStepViewModel">
+                                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                                                                  Margin="0,0,0,8">
+                                                                <TextBlock Grid.Column="0" Classes="statusGlyph"
+                                                                           Classes.added="{Binding IsPassed}"
+                                                                           Classes.deleted="{Binding IsFailed}"
+                                                                           Text="{Binding Glyph}" />
+                                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                                    <TextBlock Classes="body" Text="{Binding Name}" />
+                                                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                                                               Text="{Binding Detail}" />
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </StackPanel>
+
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <Button Classes="primary" Content="Save site"
                                                     IsEnabled="{Binding CanSave}"
