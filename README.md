@@ -334,6 +334,15 @@ attaches the results to a GitHub Release:
 
 You can also run it manually from the Actions tab and pass a version.
 
+**Every release is checked against a list of what it should contain.**
+`build/expected-artifacts.sh` names the twelve files a complete release has, and
+`build/verify-artifacts.sh` enforces it — once on each runner right after packaging,
+once when the three sets are gathered together, and once against the published release
+itself. That last one is the one that matters: both packaging scripts treat a missing
+tool as a skip and still exit 0, and `gh release upload` has exited 0 having quietly not
+uploaded two of the twelve. Every one of those failures has happened, and all of them
+looked like a green build.
+
 **On Actions minutes:** this repo is private, so minutes are billed — and macOS runners
 bill at 10x. The release workflow therefore runs **only** on tags or manual dispatch, and
 cross-publishes both Linux RIDs from one Linux runner and both macOS RIDs from one macOS

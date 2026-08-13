@@ -81,6 +81,12 @@ jobs:
       - name: Package linux-arm64
         run: ./build/linux/package.sh linux-arm64 "${{ needs.version.outputs.version }}"
 
+      # if-no-files-found only catches an empty dist. This catches a partial one -
+      # package.sh exits 0 when fpm is absent, so a missing .deb and .rpm would
+      # otherwise sail through as a green job.
+      - name: Verify Linux artifacts
+        run: ./build/verify-artifacts.sh "${{ needs.version.outputs.version }}" --dir dist linux
+
       - uses: actions/upload-artifact@v7
         with:
           name: linux
@@ -111,6 +117,13 @@ jobs:
         shell: pwsh
         run: ./build/windows/package.ps1 -Rid win-x64 -Version "${{ needs.version.outputs.version }}"
 
+      # bash, not pwsh: the checker is one script shared by all three runners.
+      # Invoked through bash rather than executed, since the exec bit is the one
+      # thing about a checkout that doesn't survive Windows.
+      - name: Verify Windows artifacts
+        shell: bash
+        run: bash ./build/verify-artifacts.sh "${{ needs.version.outputs.version }}" --dir dist windows
+
       - uses: actions/upload-artifact@v7
         with:
           name: windows
@@ -136,6 +149,9 @@ jobs:
       - name: Package osx-x64
         run: ./build/macos/package.sh osx-x64 "${{ needs.version.outputs.version }}"
 
+      - name: Verify macOS artifacts
+        run: ./build/verify-artifacts.sh "${{ needs.version.outputs.version }}" --dir dist macos
+
       - uses: actions/upload-artifact@v7
         with:
           name: macos
@@ -159,6 +175,12 @@ jobs:
           mkdir -p dist
           find artifacts -type f -exec mv {} dist/ \;
           ls -la dist
+
+      # Everything the three build jobs made should now be in one directory.
+      # Checked before uploading so a lost artifact is reported as that, rather
+      # than as whatever the upload does about a file it never saw.
+      - name: Verify everything arrived
+        run: ./build/verify-artifacts.sh "${{ needs.version.outputs.version }}" --dir dist all
 
       - name: Create or update the release
         env:
@@ -194,3 +216,22 @@ jobs:
           fi
 
           gh release upload "$TAG" dist/* --clobber
+
+      # The step above has exited 0 while quietly failing to upload two of the
+      # twelve assets, which is how v0.2.0 first shipped with no .deb at all.
+      # The files were on disk and the command was happy, so nothing short of
+      # asking the release what it ended up with would have noticed.
+      - name: Verify the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          TAG="v${VERSION}"
+
+          if ./build/verify-artifacts.sh "$VERSION" --release "$TAG"; then
+            exit 0
+          fi
+
+          echo "Re-uploading, then checking again before giving up."
+          gh release upload "$TAG" dist/* --clobber
+          ./build/verify-artifacts.sh "$VERSION" --release "$TAG"
