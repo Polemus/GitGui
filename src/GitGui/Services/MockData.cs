@@ -150,6 +150,7 @@ public static class MockData
             AvatarHex = "#3399CC",
             CommittedAt = DateTimeOffset.Now.AddHours(-3),
             FilesChanged = 7,
+            Tags = ["v0.3.0"],
         },
         new CommitInfo
         {
