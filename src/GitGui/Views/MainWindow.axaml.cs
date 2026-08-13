@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
+using Avalonia.Threading;
 
 namespace GitGui.Views;
 
@@ -13,13 +14,19 @@ public partial class MainWindow : Window
         UpdateThemeIcon();
     }
 
-    // Flyouts don't dismiss themselves when a templated row is clicked, so the
-    // row handlers close them explicitly after the bound command has run.
+    // Flyouts don't dismiss themselves when a templated row is clicked, so these
+    // close them explicitly.
+    //
+    // The Post is load-bearing. Button raises Click *before* invoking Command, and
+    // hiding a flyout tears down the popup's visual tree - which detaches the row's
+    // DataContext and makes CommandParameter re-evaluate to null. Deferring the hide
+    // to the next dispatcher pass lets the command run first, with its parameter
+    // still intact.
     private void OnRepositoryRowClick(object? sender, RoutedEventArgs e)
-        => RepositoryPickerButton.Flyout?.Hide();
+        => Dispatcher.UIThread.Post(() => RepositoryPickerButton.Flyout?.Hide());
 
     private void OnBranchRowClick(object? sender, RoutedEventArgs e)
-        => BranchPickerButton.Flyout?.Hide();
+        => Dispatcher.UIThread.Post(() => BranchPickerButton.Flyout?.Hide());
 
     private void OnToggleTheme(object? sender, RoutedEventArgs e)
     {

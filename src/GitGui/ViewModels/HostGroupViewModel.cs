@@ -10,5 +10,8 @@ public sealed class HostGroupViewModel
     public required IReadOnlyList<RepositoryInfo> Repositories { get; init; }
 
     public string Header => Host.Name;
-    public string SubHeader => $"{Host.KindLabel} · {Repositories.Count} repositories";
+
+    public string SubHeader => Repositories.Count == 1
+        ? $"{Host.KindLabel} · 1 repository"
+        : $"{Host.KindLabel} · {Repositories.Count} repositories";
 }

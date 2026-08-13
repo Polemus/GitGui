@@ -155,43 +155,55 @@
 
             <!-- Selected working-tree file -->
             <ScrollViewer IsVisible="{Binding IsChangesTab}" Padding="18">
-                <views:DiffView DataContext="{Binding SelectedChange.Model}" />
+                <!-- The visibility test has to live on a wrapper: DiffView's own
+                     DataContext is the FileChange, which knows nothing of selection. -->
+                <Panel IsVisible="{Binding SelectedChange, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <views:DiffView DataContext="{Binding SelectedChange.Model}" />
+                </Panel>
             </ScrollViewer>
+
+            <!-- Clean working tree -->
+            <TextBlock IsVisible="{Binding IsChangesTab}"
+                       Classes="caption"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Text="No local changes."
+                       ZIndex="-1" />
 
             <!-- Selected commit -->
             <ScrollViewer IsVisible="{Binding IsHistoryTab}" Padding="18">
-                <StackPanel Spacing="14" DataContext="{Binding SelectedCommit}"
-                            x:DataType="m:CommitInfo">
+                <StackPanel Spacing="14">
 
-                    <Border Classes="card">
+                    <Border Classes="card"
+                            IsVisible="{Binding SelectedCommit, Converter={x:Static ObjectConverters.IsNotNull}}">
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
                             <Border Grid.Column="0" Width="40" Height="40" CornerRadius="20"
                                     VerticalAlignment="Top"
-                                    Background="{Binding AvatarHex, Converter={StaticResource HexToBrush}}">
-                                <TextBlock Text="{Binding AuthorInitials}"
+                                    Background="{Binding SelectedCommit.AvatarHex, Converter={StaticResource HexToBrush}}">
+                                <TextBlock Text="{Binding SelectedCommit.AuthorInitials}"
                                            FontSize="14" FontWeight="Bold" Foreground="White"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
 
                             <StackPanel Grid.Column="1" Spacing="5">
-                                <TextBlock Classes="h2" Text="{Binding Summary}" TextWrapping="Wrap" />
+                                <TextBlock Classes="h2" Text="{Binding SelectedCommit.Summary}"
+                                           TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="7">
-                                    <TextBlock Classes="caption" Text="{Binding AuthorName}" />
+                                    <TextBlock Classes="caption" Text="{Binding SelectedCommit.AuthorName}" />
                                     <TextBlock Classes="muted" Text="committed" />
-                                    <TextBlock Classes="muted" Text="{Binding RelativeTime}" />
+                                    <TextBlock Classes="muted" Text="{Binding SelectedCommit.RelativeTime}" />
                                     <TextBlock Classes="muted" Text="·" />
-                                    <TextBlock Classes="muted" Text="{Binding FilesChangedLabel}" />
+                                    <TextBlock Classes="muted" Text="{Binding SelectedCommitFilesLabel}" />
                                 </StackPanel>
                             </StackPanel>
 
                             <Border Grid.Column="2" Classes="chip" VerticalAlignment="Top">
                                 <TextBlock Classes="mono" Foreground="{DynamicResource TextSecondary}"
-                                           Text="{Binding ShortSha}" />
+                                           Text="{Binding SelectedCommit.ShortSha}" />
                             </Border>
                         </Grid>
                     </Border>
 
-                    <ItemsControl ItemsSource="{Binding Files}">
+                    <ItemsControl ItemsSource="{Binding SelectedCommitFiles}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="m:FileChange">
                                 <views:DiffView />

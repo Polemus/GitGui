@@ -11,7 +11,12 @@ public sealed class RepositoryInfo
     public required GitHost Host { get; init; }
     public required string LocalPath { get; init; }
     public required string DefaultBranch { get; init; }
-    public bool IsPrivate { get; init; }
+
+    /// <summary>
+    /// Null when unknown. Visibility is a property of the forge, not the clone, so
+    /// it stays null until a host API tells us.
+    /// </summary>
+    public bool? IsPrivate { get; init; }
 
     /// <summary>Commits on the local branch not yet pushed.</summary>
     public int Ahead { get; init; }
@@ -19,11 +24,16 @@ public sealed class RepositoryInfo
     /// <summary>Commits on the remote branch not yet merged locally.</summary>
     public int Behind { get; init; }
 
-    public DateTimeOffset LastFetched { get; init; }
+    /// <summary>Null when the clone has never been fetched from.</summary>
+    public DateTimeOffset? LastFetched { get; init; }
 
-    public string FullName => $"{Owner}/{Name}";
-    public string VisibilityLabel => IsPrivate ? "Private" : "Public";
-    public string LastFetchedLabel => $"Last fetched {TimeFormat.Relative(LastFetched)}";
+    public string FullName => string.IsNullOrEmpty(Owner) ? Name : $"{Owner}/{Name}";
+    public bool HasVisibility => IsPrivate.HasValue;
+    public string VisibilityLabel => IsPrivate == true ? "Private" : "Public";
+
+    public string LastFetchedLabel => LastFetched is { } when
+        ? $"Last fetched {TimeFormat.Relative(when)}"
+        : "Never fetched";
     public string HostLabel => $"{Host.KindLabel} · {Host.Name}";
 }
 
@@ -33,6 +43,9 @@ public sealed class BranchInfo
     public required string LastCommitSummary { get; init; }
     public DateTimeOffset LastCommitAt { get; init; }
     public bool IsDefault { get; init; }
+
+    /// <summary>True for the branch HEAD currently points at.</summary>
+    public bool IsCurrent { get; init; }
 
     public string RelativeTime => TimeFormat.Relative(LastCommitAt);
 }
@@ -45,10 +58,12 @@ public sealed class CommitInfo
     public required string AuthorInitials { get; init; }
     public required string AvatarHex { get; init; }
     public DateTimeOffset CommittedAt { get; init; }
+    /// <summary>
+    /// Zero until the commit is selected. Counting changed files means diffing every
+    /// commit, which is far too slow to do for a whole history list, so the view model
+    /// loads the file list on demand and reports the count from there.
+    /// </summary>
     public int FilesChanged { get; init; }
-
-    /// <summary>Diffs shown when this commit is selected in the History tab.</summary>
-    public IReadOnlyList<FileChange> Files { get; init; } = [];
     public string ShortSha => Sha.Length > 7 ? Sha[..7] : Sha;
     public string RelativeTime => TimeFormat.Relative(CommittedAt);
 

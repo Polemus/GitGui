@@ -1,0 +1,405 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using GitGui.Models;
+using LibGit2Sharp;
+
+namespace GitGui.Services;
+
+/// <summary>
+/// <see cref="IGitService"/> backed by libgit2. The native library ships inside the
+/// LibGit2Sharp package and is copied into our self-contained publish, so end users
+/// need neither git nor a runtime installed.
+/// </summary>
+/// <remarks>
+/// A <see cref="Repository"/> handle is opened and disposed per call rather than
+/// cached. libgit2 handles are not thread-safe, and the UI hits these methods from
+/// pooled background threads; opening per call is cheap next to the work each one
+/// does and removes the need for locking.
+/// </remarks>
+public sealed class GitService : IGitService
+{
+    /// <summary>How much of a file we read before deciding it is binary.</summary>
+    private const int BinarySniffBytes = 8000;
+
+    /// <summary>Untracked files above this size are listed without a rendered diff.</summary>
+    private const long MaxUntrackedDiffBytes = 512 * 1024;
+
+    public bool IsRepository(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            return false;
+
+        return Repository.Discover(path) is not null;
+    }
+
+    public RepositoryInfo OpenRepository(string path)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var workdir = repo.Info.WorkingDirectory?.TrimEnd(Path.DirectorySeparatorChar, '/')
+                      ?? path;
+
+        var origin = repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault();
+        var identity = HostResolver.Parse(origin?.Url);
+
+        var head = repo.Head;
+        var tracking = head?.TrackingDetails;
+
+        return new RepositoryInfo
+        {
+            Name = identity?.Name ?? new DirectoryInfo(workdir).Name,
+            Owner = identity?.Owner ?? string.Empty,
+            Host = identity?.Host ?? HostResolver.LocalOnly,
+            LocalPath = workdir,
+            DefaultBranch = head?.FriendlyName ?? "HEAD",
+            IsPrivate = null, // Not knowable locally; the host API fills this in later.
+            Ahead = tracking?.AheadBy ?? 0,
+            Behind = tracking?.BehindBy ?? 0,
+            LastFetched = LastFetchTime(repo.Info.Path),
+        };
+    }
+
+    public IReadOnlyList<BranchInfo> GetBranches(string path)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var currentName = repo.Head?.FriendlyName;
+
+        return repo.Branches
+            .Where(b => !b.IsRemote)
+            .Select(b => new BranchInfo
+            {
+                Name = b.FriendlyName,
+                LastCommitSummary = b.Tip?.MessageShort ?? string.Empty,
+                LastCommitAt = b.Tip?.Committer.When ?? DateTimeOffset.MinValue,
+                IsCurrent = b.FriendlyName == currentName,
+                IsDefault = b.FriendlyName is "main" or "master",
+            })
+            .OrderByDescending(b => b.IsCurrent)
+            .ThenByDescending(b => b.LastCommitAt)
+            .ToList();
+    }
+
+    public IReadOnlyList<FileChange> GetWorkingChanges(string path)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var status = repo.RetrieveStatus(new StatusOptions
+        {
+            IncludeUntracked = true,
+            RecurseUntrackedDirs = true,
+            DetectRenamesInWorkDir = true,
+            DetectRenamesInIndex = true,
+        });
+
+        var entries = status
+            .Where(e => e.State != FileStatus.Unaltered && e.State != FileStatus.Ignored)
+            .ToList();
+
+        if (entries.Count == 0)
+            return [];
+
+        // Untracked files have no blob to diff against, so libgit2 won't produce a
+        // patch for them. They're rendered from file contents instead, below.
+        var untracked = entries
+            .Where(e => e.State.HasFlag(FileStatus.NewInWorkdir))
+            .Select(e => e.FilePath)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var tracked = entries
+            .Select(e => e.FilePath)
+            .Where(p => !untracked.Contains(p))
+            .ToList();
+
+        var patches = new Dictionary<string, PatchEntryChanges>(StringComparer.Ordinal);
+
+        if (tracked.Count > 0 && repo.Head?.Tip is { } tip)
+        {
+            var patch = repo.Diff.Compare<Patch>(
+                tip.Tree,
+                DiffTargets.WorkingDirectory | DiffTargets.Index,
+                tracked,
+                new ExplicitPathsOptions { ShouldFailOnUnmatchedPath = false });
+
+            foreach (var entry in patch)
+                patches[entry.Path] = entry;
+        }
+
+        var workdir = repo.Info.WorkingDirectory ?? path;
+        var changes = new List<FileChange>(entries.Count);
+
+        foreach (var entry in entries.OrderBy(e => e.FilePath, StringComparer.Ordinal))
+        {
+            if (patches.TryGetValue(entry.FilePath, out var pec))
+            {
+                changes.Add(new FileChange
+                {
+                    Path = pec.Path,
+                    Status = ToChangeStatus(pec.Status, entry.State),
+                    Additions = pec.LinesAdded,
+                    Deletions = pec.LinesDeleted,
+                    Diff = UnifiedDiffParser.Parse(pec.Patch),
+                });
+            }
+            else
+            {
+                changes.Add(DescribeUntracked(workdir, entry));
+            }
+        }
+
+        return changes;
+    }
+
+    public IReadOnlyList<CommitInfo> GetHistory(string path, int maxCount)
+    {
+        using var repo = new Repository(Discover(path));
+
+        if (repo.Head?.Tip is null)
+            return [];
+
+        return repo.Commits
+            .QueryBy(new CommitFilter
+            {
+                IncludeReachableFrom = repo.Head,
+                // Time alone ties commits made within the same second into an
+                // arbitrary order; topological breaks those ties by ancestry.
+                SortBy = CommitSortStrategies.Time | CommitSortStrategies.Topological,
+            })
+            .Take(maxCount)
+            .Select(c => new CommitInfo
+            {
+                Sha = c.Sha,
+                Summary = string.IsNullOrWhiteSpace(c.MessageShort) ? "(no message)" : c.MessageShort,
+                AuthorName = c.Author.Name,
+                AuthorInitials = Initials(c.Author.Name),
+                AvatarHex = AvatarColour(c.Author.Email ?? c.Author.Name),
+                CommittedAt = c.Author.When,
+                // Counting changed files per commit means diffing every one of them,
+                // which is far too slow for a list. It's filled in on selection.
+                FilesChanged = 0,
+            })
+            .ToList();
+    }
+
+    public IReadOnlyList<FileChange> GetCommitFiles(string path, string sha)
+    {
+        using var repo = new Repository(Discover(path));
+
+        if (repo.Lookup<Commit>(sha) is not { } commit)
+            return [];
+
+        // Root commits have no parent, so they diff against an empty tree.
+        var parentTree = commit.Parents.FirstOrDefault()?.Tree;
+
+        var patch = repo.Diff.Compare<Patch>(parentTree, commit.Tree);
+
+        return patch
+            .Select(pec => new FileChange
+            {
+                Path = pec.Path,
+                Status = ToChangeStatus(pec.Status, null),
+                Additions = pec.LinesAdded,
+                Deletions = pec.LinesDeleted,
+                Diff = UnifiedDiffParser.Parse(pec.Patch),
+            })
+            .ToList();
+    }
+
+    public string Commit(string path, IEnumerable<string> paths, string summary, string description)
+    {
+        var staged = paths.ToList();
+        if (staged.Count == 0)
+            throw new InvalidOperationException("Nothing selected to commit.");
+
+        if (string.IsNullOrWhiteSpace(summary))
+            throw new InvalidOperationException("A commit summary is required.");
+
+        using var repo = new Repository(Discover(path));
+
+        // Stage handles additions, modifications and deletions alike.
+        Commands.Stage(repo, staged);
+
+        var message = string.IsNullOrWhiteSpace(description)
+            ? summary.Trim()
+            : $"{summary.Trim()}\n\n{description.Trim()}";
+
+        var signature = repo.Config.BuildSignature(DateTimeOffset.Now)
+                        ?? new Signature("GitGui", "gitgui@localhost", DateTimeOffset.Now);
+
+        return repo.Commit(message, signature, signature).Sha;
+    }
+
+    public void CheckoutBranch(string path, string branchName)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var branch = repo.Branches[branchName]
+                     ?? throw new InvalidOperationException($"Branch '{branchName}' not found.");
+
+        Commands.Checkout(repo, branch);
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private static string Discover(string path)
+        => Repository.Discover(path)
+           ?? throw new InvalidOperationException($"'{path}' is not a git repository.");
+
+    /// <summary>
+    /// Builds a synthetic all-added diff for an untracked file, so new files read the
+    /// same way in the UI as tracked additions.
+    /// </summary>
+    private static FileChange DescribeUntracked(string workdir, StatusEntry entry)
+    {
+        var full = Path.Combine(workdir, entry.FilePath);
+        var lines = new List<DiffLine>();
+        var additions = 0;
+
+        try
+        {
+            var info = new FileInfo(full);
+
+            if (info.Exists && info.Length <= MaxUntrackedDiffBytes && !LooksBinary(full))
+            {
+                var text = File.ReadAllLines(full);
+                additions = text.Length;
+
+                lines.Add(new DiffLine
+                {
+                    Kind = DiffLineKind.HunkHeader,
+                    Text = $"@@ -0,0 +1,{text.Length} @@",
+                });
+
+                for (var i = 0; i < text.Length && lines.Count < UnifiedDiffParser.MaxLines; i++)
+                {
+                    lines.Add(new DiffLine
+                    {
+                        Kind = DiffLineKind.Added,
+                        Text = text[i],
+                        NewNumber = (i + 1).ToString(),
+                    });
+                }
+            }
+            else if (info.Exists)
+            {
+                lines.Add(new DiffLine
+                {
+                    Kind = DiffLineKind.HunkHeader,
+                    Text = LooksBinary(full)
+                        ? "Binary file - no preview"
+                        : $"File too large to preview ({info.Length / 1024} KB)",
+                });
+            }
+        }
+        catch (IOException)
+        {
+            lines.Add(new DiffLine { Kind = DiffLineKind.HunkHeader, Text = "Unable to read file" });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            lines.Add(new DiffLine { Kind = DiffLineKind.HunkHeader, Text = "Permission denied" });
+        }
+
+        return new FileChange
+        {
+            Path = entry.FilePath,
+            Status = ChangeStatus.Added,
+            Additions = additions,
+            Deletions = 0,
+            Diff = lines,
+        };
+    }
+
+    private static bool LooksBinary(string file)
+    {
+        try
+        {
+            using var stream = File.OpenRead(file);
+            Span<byte> buffer = stackalloc byte[BinarySniffBytes];
+            var read = stream.Read(buffer);
+
+            return buffer[..read].IndexOf((byte)0) >= 0;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+    }
+
+    private static ChangeStatus ToChangeStatus(ChangeKind kind, FileStatus? state)
+    {
+        if (state is { } s && s.HasFlag(FileStatus.Conflicted))
+            return ChangeStatus.Conflicted;
+
+        return kind switch
+        {
+            ChangeKind.Added or ChangeKind.Untracked or ChangeKind.Copied => ChangeStatus.Added,
+            ChangeKind.Deleted => ChangeStatus.Deleted,
+            ChangeKind.Renamed => ChangeStatus.Renamed,
+            ChangeKind.Conflicted => ChangeStatus.Conflicted,
+            _ => ChangeStatus.Modified,
+        };
+    }
+
+    /// <summary>
+    /// git writes FETCH_HEAD on every fetch, so its mtime is the fetch time. No
+    /// FETCH_HEAD means the clone has never been fetched from - returning null keeps
+    /// the UI from claiming a fetch that never happened (falling back to the .git
+    /// directory's mtime would report "just now" after any commit).
+    /// </summary>
+    private static DateTimeOffset? LastFetchTime(string gitDir)
+    {
+        try
+        {
+            var marker = Path.Combine(gitDir, "FETCH_HEAD");
+            if (File.Exists(marker))
+                return new DateTimeOffset(File.GetLastWriteTime(marker));
+        }
+        catch (IOException)
+        {
+            // Treated the same as never fetched.
+        }
+
+        return null;
+    }
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant(),
+            _ => $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[^1][0])}",
+        };
+    }
+
+    private static readonly string[] AvatarPalette =
+    [
+        "#3399CC", "#609926", "#C0576B", "#8E6FD8",
+        "#2E9E8F", "#B7791F", "#4C7FD1", "#CC6633",
+    ];
+
+    /// <summary>
+    /// Picks a stable colour for an author. Uses FNV-1a rather than
+    /// <see cref="string.GetHashCode()"/>, which is randomised per process and would
+    /// give an author a different colour on every launch.
+    /// </summary>
+    private static string AvatarColour(string key)
+    {
+        unchecked
+        {
+            var hash = 2166136261u;
+            foreach (var c in key)
+            {
+                hash ^= c;
+                hash *= 16777619u;
+            }
+
+            return AvatarPalette[hash % (uint)AvatarPalette.Length];
+        }
+    }
+}
