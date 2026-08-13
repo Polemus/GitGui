@@ -27,6 +27,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly HostProviderRegistry _hosts;
     private readonly IAccountStore _accountStore;
     private readonly ICredentialStore _credentials;
+    private readonly IActivityLog _log;
     private readonly bool _isDesignTime;
 
     /// <summary>Design-time constructor. Fills the previewer from sample data only.</summary>
@@ -34,7 +35,7 @@ public partial class MainWindowViewModel : ViewModelBase
         : this(new GitService(), new RepositoryStore(), new FolderPicker(),
                HostProviderRegistry.Create(new System.Net.Http.HttpClient()),
                new AccountStore(new FileCredentialStore()), new FileCredentialStore(),
-               designTime: true)
+               new ActivityLog(), designTime: true)
     {
         LoadDesignTimeData();
     }
@@ -45,8 +46,9 @@ public partial class MainWindowViewModel : ViewModelBase
         IFolderPicker picker,
         HostProviderRegistry hosts,
         IAccountStore accountStore,
-        ICredentialStore credentials)
-        : this(git, store, picker, hosts, accountStore, credentials, designTime: false)
+        ICredentialStore credentials,
+        IActivityLog log)
+        : this(git, store, picker, hosts, accountStore, credentials, log, designTime: false)
     {
     }
 
@@ -57,6 +59,7 @@ public partial class MainWindowViewModel : ViewModelBase
         HostProviderRegistry hosts,
         IAccountStore accountStore,
         ICredentialStore credentials,
+        IActivityLog log,
         bool designTime)
     {
         _git = git;
@@ -65,7 +68,11 @@ public partial class MainWindowViewModel : ViewModelBase
         _hosts = hosts;
         _accountStore = accountStore;
         _credentials = credentials;
+        _log = log;
         _isDesignTime = designTime;
+
+        // An error the user can't see is an error they can't act on.
+        log.ErrorLogged += (_, _) => IsConsoleExpanded = true;
 
         foreach (var provider in hosts.Providers)
             Providers.Add(provider);
@@ -123,21 +130,41 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasHostWarnings => HostWarnings is not null;
 
+    // ---- Activity console --------------------------------------------------
+
+    public ReadOnlyObservableCollection<ActivityEntry> LogEntries => _log.Entries;
+
+    [ObservableProperty]
+    public partial bool IsConsoleExpanded { get; set; }
+
+    /// <summary>Most recent line, shown on the collapsed bar.</summary>
+    public ActivityEntry? LatestEntry => _log.Entries.Count > 0 ? _log.Entries[^1] : null;
+
+    public bool HasLogEntries => _log.Entries.Count > 0;
+
+    [RelayCommand]
+    private void ToggleConsole() => IsConsoleExpanded = !IsConsoleExpanded;
+
+    [RelayCommand]
+    private void ClearLog()
+    {
+        _log.Clear();
+        OnPropertyChanged(nameof(LatestEntry));
+        OnPropertyChanged(nameof(HasLogEntries));
+    }
+
+    private void Log(ActivityLevel level, string message, string? detail = null)
+    {
+        _log.Write(level, message, detail);
+        OnPropertyChanged(nameof(LatestEntry));
+        OnPropertyChanged(nameof(HasLogEntries));
+    }
+
     // ---- Loading / errors --------------------------------------------------
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasError))]
-    public partial string? ErrorMessage { get; set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasStatus))]
-    public partial string? StatusMessage { get; set; }
-
-    public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
-    public bool HasStatus => !string.IsNullOrEmpty(StatusMessage);
     public bool HasRepositories => Repositories.Count > 0;
 
     // ---- Selection ---------------------------------------------------------
@@ -255,10 +282,22 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_isDesignTime)
             return;
 
+        Log(ActivityLevel.Info,
+            $"GitGui ready — {Providers.Count} hosting site{(Providers.Count == 1 ? "" : "s")}: "
+            + string.Join(", ", Providers.Select(p => p.DisplayName)));
+
+        Log(ActivityLevel.Trace, _credentials.Description is { } d ? $"Tokens stored in {d}" : "");
+
+        foreach (var warning in _hosts.Warnings)
+            Log(ActivityLevel.Warning, warning);
+
         foreach (var account in await _accountStore.LoadAsync())
             Accounts.Add(account);
 
         OnPropertyChanged(nameof(HasAccounts));
+
+        foreach (var account in Accounts)
+            Log(ActivityLevel.Trace, $"Signed in to {account.BaseUrl.Host} as {account.Login}");
 
         var paths = await Task.Run(() => _store.Load());
 
@@ -280,7 +319,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (!await Task.Run(() => _git.IsRepository(path)))
         {
-            ErrorMessage = $"'{path}' is not a git repository.";
+            Log(ActivityLevel.Error, $"'{path}' is not a git repository.");
             return;
         }
 
@@ -326,7 +365,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var path = repo.LocalPath;
             await Task.Run(() => _git.CheckoutBranch(path, branch.Name));
-            StatusMessage = $"Switched to {branch.Name}";
+            Log(ActivityLevel.Success, $"Switched to branch {branch.Name}");
         });
 
         await OpenRepositoryAsync(repo);
@@ -355,7 +394,7 @@ public partial class MainWindowViewModel : ViewModelBase
         await RunAsync(async () =>
         {
             var sha = await Task.Run(() => _git.Commit(path, paths, summary, description));
-            StatusMessage = $"Committed {sha[..7]}";
+            Log(ActivityLevel.Success, $"Committed {sha[..7]} — {paths.Count} file{(paths.Count == 1 ? "" : "s")}");
             committed = true;
         });
 
@@ -385,9 +424,15 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var credentials = await Task.Run(() => CredentialsFor(_git.GetRemoteUrl(path)));
 
-            StatusMessage = await Task.Run(() => behind > 0 ? _git.Pull(path, credentials)
-                                              : ahead > 0 ? _git.Push(path, credentials)
-                                              : _git.Fetch(path, credentials));
+            void Trace(string line) => _log.Write(ActivityLevel.Trace, line);
+
+            var result = await Task.Run(() => behind > 0 ? _git.Pull(path, credentials, Trace)
+                                            : ahead > 0 ? _git.Push(path, credentials, Trace)
+                                            : _git.Fetch(path, credentials, Trace));
+
+            // Being signed out is an ordinary outcome, so it arrives as a result rather
+            // than an exception; it still belongs in the error banner, not the status one.
+            Log(result.Succeeded ? ActivityLevel.Success : ActivityLevel.Error, result.Message);
         });
 
         await OpenRepositoryAsync(repo);
@@ -419,7 +464,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (!Uri.TryCreate(SignInServerUrl, UriKind.Absolute, out var baseUrl))
         {
-            ErrorMessage = "Enter a full server URL, including https://";
+            Log(ActivityLevel.Error, "Enter a full server URL, including https://");
             return;
         }
 
@@ -429,7 +474,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await AddAccountAsync(account);
 
             SignInToken = string.Empty;
-            StatusMessage = $"Signed in to {provider.DisplayName} as {account.Login}";
+            Log(ActivityLevel.Success, $"Signed in to {provider.DisplayName} as {account.Login}");
         });
     }
 
@@ -441,7 +486,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (!Uri.TryCreate(SignInServerUrl, UriKind.Absolute, out var baseUrl))
         {
-            ErrorMessage = "Enter a full server URL, including https://";
+            Log(ActivityLevel.Error, "Enter a full server URL, including https://");
             return;
         }
 
@@ -455,7 +500,7 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 var account = await provider.CompleteBrowserLoginAsync(baseUrl, login, default);
                 await AddAccountAsync(account);
-                StatusMessage = $"Signed in to {provider.DisplayName} as {account.Login}";
+                Log(ActivityLevel.Success, $"Signed in to {provider.DisplayName} as {account.Login}");
             }
             finally
             {
@@ -473,7 +518,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await _accountStore.RemoveAsync(account);
             Accounts.Remove(account);
             OnPropertyChanged(nameof(HasAccounts));
-            StatusMessage = $"Signed out {account.Login}";
+            Log(ActivityLevel.Info, $"Signed out {account.Login}");
         });
     }
 
@@ -501,12 +546,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ShowRepository() => IsAccountsPageVisible = false;
 
-    [RelayCommand]
-    private void DismissError() => ErrorMessage = null;
-
-    [RelayCommand]
-    private void DismissStatus() => StatusMessage = null;
-
     // ---- Loading -----------------------------------------------------------
 
     private async Task<RepositoryInfo?> AddRepositoryPathAsync(string path, bool persist)
@@ -521,7 +560,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Could not open '{path}': {ex.Message}";
+            Log(ActivityLevel.Error, $"Could not open '{path}'", ex.Message);
             return null;
         }
 
@@ -578,6 +617,13 @@ public partial class MainWindowViewModel : ViewModelBase
             SelectedCommit = History.FirstOrDefault();
 
             NotifyChangeCountsChanged();
+
+            Log(ActivityLevel.Trace,
+                $"Opened {repository.Name} on {SelectedBranch?.Name ?? "?"} — "
+                + $"{Changes.Count} change{(Changes.Count == 1 ? "" : "s")}, "
+                + $"{Branches.Count} branch{(Branches.Count == 1 ? "" : "es")}"
+                + (info.Ahead > 0 ? $", {info.Ahead} ahead" : string.Empty)
+                + (info.Behind > 0 ? $", {info.Behind} behind" : string.Empty));
         });
     }
 
@@ -609,7 +655,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            Log(ActivityLevel.Error, ex.Message, ex.ToString());
         }
     }
 
@@ -617,7 +663,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task RunAsync(Func<Task> operation)
     {
         IsBusy = true;
-        ErrorMessage = null;
         CommitCommand.NotifyCanExecuteChanged();
 
         try
@@ -626,7 +671,8 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            // Unexpected faults still reach the user rather than vanishing.
+            Log(ActivityLevel.Error, ex.Message, ex.ToString());
         }
         finally
         {

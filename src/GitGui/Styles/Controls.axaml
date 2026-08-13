@@ -322,6 +322,55 @@
         <Setter Property="Height" Value="1" />
     </Style>
 
+    <!-- ===================== Activity console ===================== -->
+
+    <Style Selector="Button.consoleBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="Padding" Value="14,7" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.consoleBar:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    </Style>
+
+    <!-- Severity dot on the collapsed bar. -->
+    <Style Selector="Border.logDot">
+        <Setter Property="Background" Value="{DynamicResource TextSecondary}" />
+    </Style>
+    <Style Selector="Border.logDot.trace">
+        <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Border.logDot.success">
+        <Setter Property="Background" Value="{DynamicResource StatusAdded}" />
+    </Style>
+    <Style Selector="Border.logDot.warning">
+        <Setter Property="Background" Value="{DynamicResource StatusModified}" />
+    </Style>
+    <Style Selector="Border.logDot.error">
+        <Setter Property="Background" Value="{DynamicResource StatusDeleted}" />
+    </Style>
+
+    <Style Selector="TextBlock.logLine">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+    <Style Selector="TextBlock.logLine.trace">
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="TextBlock.logLine.success">
+        <Setter Property="Foreground" Value="{DynamicResource StatusAdded}" />
+    </Style>
+    <Style Selector="TextBlock.logLine.warning">
+        <Setter Property="Foreground" Value="{DynamicResource StatusModified}" />
+    </Style>
+    <Style Selector="TextBlock.logLine.error">
+        <Setter Property="Foreground" Value="{DynamicResource StatusDeleted}" />
+    </Style>
+
     <!-- Dropdown surface for the repository and branch pickers. -->
     <Style Selector="FlyoutPresenter.picker">
         <Setter Property="Background" Value="{DynamicResource ElevatedBackground}" />

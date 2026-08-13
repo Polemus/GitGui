@@ -251,72 +251,76 @@ public sealed class GitService : IGitService
         return (repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault())?.Url;
     }
 
-    public string Fetch(string path, GitCredentials? credentials)
+    public SyncResult Fetch(string path, GitCredentials? credentials, Action<string>? trace = null)
     {
         using var repo = new Repository(Discover(path));
 
-        var remote = repo.Network.Remotes["origin"]
-                     ?? repo.Network.Remotes.FirstOrDefault()
-                     ?? throw new InvalidOperationException("This repository has no remote to fetch from.");
+        if (FindRemote(repo) is not { } remote)
+            return NoRemote("fetch from");
 
         var refSpecs = remote.FetchRefSpecs.Select(r => r.Specification).ToList();
         var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
 
-        RunNetwork(probe, () =>
+        trace?.Invoke($"Fetching {remote.Name} from {remote.Url}");
+
+        if (RunNetwork(probe, () => Commands.Fetch(
+                repo, remote.Name, refSpecs,
+                BuildFetchOptions(credentials, probe, trace), "fetch by GitGui")) is { } failure)
         {
-            Commands.Fetch(repo, remote.Name, refSpecs,
-                BuildFetchOptions(credentials, probe), "fetch by GitGui");
-            return true;
-        });
+            return failure;
+        }
 
-        var tracking = repo.Head?.TrackingDetails;
-        var behind = tracking?.BehindBy ?? 0;
+        var behind = repo.Head?.TrackingDetails?.BehindBy ?? 0;
 
-        return behind > 0
+        return SyncResult.Ok(behind > 0
             ? $"Fetched from {remote.Name} — {behind} commit{(behind == 1 ? "" : "s")} to pull"
-            : $"Fetched from {remote.Name} — already up to date";
+            : $"Fetched from {remote.Name} — already up to date");
     }
 
-    public string Pull(string path, GitCredentials? credentials)
+    public SyncResult Pull(string path, GitCredentials? credentials, Action<string>? trace = null)
     {
         using var repo = new Repository(Discover(path));
 
         var signature = repo.Config.BuildSignature(DateTimeOffset.Now)
                         ?? new Signature("GitGui", "gitgui@localhost", DateTimeOffset.Now);
 
-        var remote = repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault();
-        var probe = new AuthProbe
-        {
-            Host = remote is null ? "the remote" : HostOf(remote),
-            HadCredentials = credentials is not null,
-        };
+        var remote = FindRemote(repo);
+        if (remote is null)
+            return NoRemote("pull from");
 
-        var result = RunNetwork(probe, () => Commands.Pull(repo, signature, new PullOptions
-        {
-            FetchOptions = BuildFetchOptions(credentials, probe),
-            MergeOptions = new MergeOptions { FailOnConflict = false },
-        }));
+        var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
+        MergeResult? result = null;
 
-        return result.Status switch
+        if (RunNetwork(probe, () => result = Commands.Pull(repo, signature, new PullOptions
+            {
+                FetchOptions = BuildFetchOptions(credentials, probe, trace),
+                MergeOptions = new MergeOptions { FailOnConflict = false },
+            })) is { } failure)
         {
-            MergeStatus.UpToDate => "Already up to date",
-            MergeStatus.FastForward => $"Fast-forwarded to {Short(result.Commit)}",
-            MergeStatus.NonFastForward => $"Merged to {Short(result.Commit)}",
-            MergeStatus.Conflicts => "Pulled with conflicts — resolve them before committing",
-            _ => "Pull finished",
+            return failure;
+        }
+
+        return result?.Status switch
+        {
+            MergeStatus.UpToDate => SyncResult.Ok("Already up to date"),
+            MergeStatus.FastForward => SyncResult.Ok($"Fast-forwarded to {Short(result.Commit)}"),
+            MergeStatus.NonFastForward => SyncResult.Ok($"Merged to {Short(result.Commit)}"),
+            MergeStatus.Conflicts => new SyncResult(SyncOutcome.Failed,
+                "Pulled with conflicts — resolve them before committing"),
+            _ => SyncResult.Ok("Pull finished"),
         };
     }
 
-    public string Push(string path, GitCredentials? credentials)
+    public SyncResult Push(string path, GitCredentials? credentials, Action<string>? trace = null)
     {
         using var repo = new Repository(Discover(path));
 
-        var branch = repo.Head
-                     ?? throw new InvalidOperationException("No branch is checked out.");
+        var branch = repo.Head;
+        if (branch is null)
+            return new SyncResult(SyncOutcome.Failed, "No branch is checked out.");
 
-        var remote = repo.Network.Remotes["origin"]
-                     ?? repo.Network.Remotes.FirstOrDefault()
-                     ?? throw new InvalidOperationException("This repository has no remote to push to.");
+        if (FindRemote(repo) is not { } remote)
+            return NoRemote("push to");
 
         // A branch created locally has no upstream, and libgit2 refuses to push it.
         // Setting it here saves the user dropping to the command line for their first
@@ -333,22 +337,32 @@ public sealed class GitService : IGitService
         var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
         var pushed = 0;
 
+        trace?.Invoke($"Pushing {branch.FriendlyName} to {remote.Url}");
+        string? rejection = null;
+
         var options = new PushOptions
         {
             CredentialsProvider = CredentialsFor(credentials, probe),
-            OnPushStatusError = error =>
-                throw new InvalidOperationException($"{remote.Name} rejected {error.Reference}: {error.Message}"),
+            // Recorded rather than thrown, for the same reason as the auth failures.
+            OnPushStatusError = error => rejection = $"{remote.Name} rejected {error.Reference}: {error.Message}",
             OnPackBuilderProgress = (_, current, _) => { pushed = current; return true; },
+            OnPushTransferProgress = (current, total, _) =>
+            {
+                if (trace is not null && total > 0 && (current == total || current % 50 == 0))
+                    trace($"  {current}/{total} objects sent");
+
+                return true;
+            },
         };
 
-        RunNetwork(probe, () =>
-        {
-            repo.Network.Push(branch, options);
-            return true;
-        });
+        if (RunNetwork(probe, () => repo.Network.Push(branch, options)) is { } failure)
+            return failure;
 
-        return $"Pushed {branch.FriendlyName} to {remote.Name}"
-               + (pushed > 0 ? $" ({pushed} objects)" : string.Empty);
+        if (rejection is not null)
+            return new SyncResult(SyncOutcome.Failed, rejection);
+
+        return SyncResult.Ok($"Pushed {branch.FriendlyName} to {remote.Name}"
+                             + (pushed > 0 ? $" ({pushed} objects)" : string.Empty));
     }
 
     /// <summary>
@@ -362,12 +376,35 @@ public sealed class GitService : IGitService
         public required string Host { get; init; }
     }
 
-    private static FetchOptions BuildFetchOptions(GitCredentials? credentials, AuthProbe probe) => new()
+    private static FetchOptions BuildFetchOptions(
+        GitCredentials? credentials, AuthProbe probe, Action<string>? trace = null)
     {
-        CredentialsProvider = CredentialsFor(credentials, probe),
-        TagFetchMode = TagFetchMode.Auto,
-        Prune = true,
-    };
+        // libgit2 reports transfer progress per object, which would flood the console.
+        // Only the crossing of each 10% boundary is reported.
+        var lastReported = -1;
+
+        return new FetchOptions
+        {
+            CredentialsProvider = CredentialsFor(credentials, probe),
+            TagFetchMode = TagFetchMode.Auto,
+            Prune = true,
+            OnTransferProgress = progress =>
+            {
+                if (trace is null || progress.TotalObjects == 0)
+                    return true;
+
+                var percent = progress.ReceivedObjects * 100 / progress.TotalObjects;
+                if (percent / 10 > lastReported / 10 || percent == 100)
+                {
+                    lastReported = percent;
+                    trace($"  {percent}% — {progress.ReceivedObjects}/{progress.TotalObjects} objects, "
+                          + $"{progress.ReceivedBytes / 1024} KB");
+                }
+
+                return true;
+            },
+        };
+    }
 
     /// <summary>
     /// Supplies credentials to libgit2.
@@ -408,28 +445,45 @@ public sealed class GitService : IGitService
         => HostResolver.Parse(remote.Url)?.Host.Id ?? remote.Url;
 
     /// <summary>
-    /// Runs a network operation and turns libgit2's terse failures into something that
-    /// says what to do about it, using what the credentials callback observed.
+    /// Runs a network operation. Returns null on success, or a <see cref="SyncResult"/>
+    /// describing an authentication or connection failure in terms the user can act on.
     /// </summary>
-    private static T RunNetwork<T>(AuthProbe probe, Func<T> operation)
+    /// <remarks>
+    /// Nothing is rethrown for these cases. libgit2's own message ("could not find
+    /// appropriate mechanism for credentials") says nothing useful, and turning an
+    /// everyday signed-out state into an exception makes the debugger halt on it during
+    /// every development run.
+    /// </remarks>
+    private static SyncResult? RunNetwork(AuthProbe probe, Action operation)
     {
         try
         {
-            return operation();
+            operation();
+            return null;
         }
         catch (LibGit2SharpException ex) when (probe.WasAsked || IsAuthFailure(ex.Message))
         {
             // The callback fired, so the server wanted credentials. Which message is
             // right depends on whether we had any to give it.
-            var message = probe.HadCredentials
-                ? $"{probe.Host} rejected the saved credentials. The token may have expired "
-                  + "or lost its scopes — sign in again on the Accounts screen."
-                : $"{probe.Host} needs you to be signed in. Open the Accounts screen and add "
-                  + $"an account for {probe.Host}, then try again.";
-
-            throw new InvalidOperationException(message, ex);
+            return probe.HadCredentials
+                ? new SyncResult(SyncOutcome.CredentialsRejected,
+                    $"{probe.Host} rejected the saved credentials. The token may have expired "
+                    + "or lost its scopes — sign in again on the Accounts screen.")
+                : new SyncResult(SyncOutcome.NotSignedIn,
+                    $"{probe.Host} needs you to be signed in. Open the Accounts screen and add "
+                    + $"an account for {probe.Host}, then try again.");
+        }
+        catch (LibGit2SharpException ex)
+        {
+            return new SyncResult(SyncOutcome.Failed, $"{probe.Host}: {ex.Message}");
         }
     }
+
+    private static Remote? FindRemote(Repository repo)
+        => repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault();
+
+    private static SyncResult NoRemote(string what)
+        => new(SyncOutcome.NoRemote, $"This repository has no remote to {what}.");
 
     private static bool IsAuthFailure(string message)
         => message.Contains("authentication", StringComparison.OrdinalIgnoreCase)
