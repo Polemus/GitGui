@@ -137,6 +137,48 @@ still releasing it. It fails with `Resource busy`, on the second RID only, with 
 first `.dmg` already in `dist/`. `build/macos/package.sh` detaches a stale volume and
 retries rather than renaming the volume per architecture.
 
+**`Contents/MacOS` is a code location, so only code may live there.** `codesign` treats
+everything in it as code and refuses to seal a bundle containing anything it cannot
+verify. A plain self-contained publish drops some two hundred managed assemblies in
+beside the executable and sealing fails with `code object is not signed at all / In
+subcomponent: …/System.Diagnostics.Contracts.dll`, naming whichever one the walk reached
+first — which reads like a problem with that assembly and is a problem with the layout.
+The macOS build alone publishes with `PublishSingleFile`, which packs the managed
+assemblies into the executable and leaves the native libraries beside it.
+`IncludeNativeLibrariesForSelfExtract` stays off so those stay visible to be signed.
+
+**Never hand `codesign` the path of a bundle's main executable.** It does not sign that
+file: it resolves the path to the enclosing `.app` and signs the whole bundle — early,
+without the entitlements, and while the nested binaries are only half done. Every other
+Mach-O signs normally, `createdump` included, which is what says it is about the path and
+not the file. Skip `Contents/MacOS/$CFBundleExecutable` in the loop; signing the bundle
+last is what signs it, and the only way it can carry entitlements.
+
+**A `.p12` made by OpenSSL 3 cannot be imported by `security(1)`.** Its default container
+is AES-256-CBC with a PBKDF2/SHA-256 MAC, and `security` reports `MAC verification failed
+during PKCS12 import (wrong password?)` — the same message as for a genuinely wrong
+password, so the parenthesised guess sends you off changing the wrong secret. Anyone
+without a Mac to export from Keychain Access has one of these, `openssl` being how they
+had to make it. `build/macos/sign.sh` asks OpenSSL whether the password opens the file
+before blaming it, then re-exports with `-keypbe`/`-certpbe PBE-SHA1-3DES -macalg sha1`.
+
+**The hardened runtime kills a .NET app on startup without JIT entitlements.** No dialog,
+nothing useful logged. Notarisation requires the hardened runtime, which requires
+`com.apple.security.cs.allow-jit` and `allow-unsigned-executable-memory` — the JIT writes
+machine code and then executes it, exactly what the runtime exists to stop — plus
+`disable-library-validation` for the natives .NET loads through `dlopen`. They live in
+`build/macos/entitlements.plist` and go on the bundle only.
+
+**`--deep` is for verifying, never for signing.** Signing with it applies one set of
+entitlements to every binary it touches. Sign nested binaries individually, inside out,
+because a bundle's signature seals its contents and signing it first invalidates them.
+
+**Notarise the `.app` and the `.dmg` separately.** Stapling only the disk image leaves the
+copy dragged into Applications with no ticket of its own, so a first launch on a machine
+that is offline is refused. Two round trips per architecture is why the macOS release job
+allows 90 minutes. Copy the signed bundle into the image with `ditto`, never `cp` — it is
+the copy documented to preserve what a signature and a stapled ticket depend on.
+
 **ImageMagick: `-background none` must come *before* the input file.** After it, the SVG
 has already been rasterised onto white and the alpha is gone.
 

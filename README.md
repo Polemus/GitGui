@@ -359,6 +359,12 @@ Artifacts land in `dist/`. None of those commands names a version: every one of 
 defaults to `<Version>` in `GitGui.csproj`, which is the single place it is written
 down. Pass one as the last argument to override it, as release CI does.
 
+The macOS build signs and notarises itself when the `APPLE_*` variables are set — see the
+list at the top of `build/macos/sign.sh` — and produces the same unsigned bundle it always
+did when they aren't, so a build on a machine without the certificate still works. It is
+also the one target published with `PublishSingleFile`, because `Contents/MacOS` is a code
+location and codesign will not seal a bundle with loose managed assemblies in it.
+
 The AppImage is built by `build/linux/appimage.sh`, which `package.sh` calls once the
 publish is staged. `appimagetool` and the AppImage runtime are downloaded on first use and
 cached in `build/.tools/`; without network access that step is skipped and the other three
@@ -455,11 +461,9 @@ build would ever notice were wrong.
   repository are covered; the network and the whole UI are still verified by hand,
   against a real Gitea server.
 - **History is capped at 100 commits** with no paging yet.
-- **macOS and Windows builds are unsigned.** Gatekeeper and SmartScreen both complain on
-  first launch; [Download](#download) has the steps past each. On macOS 15 and later this
-  costs a trip into System Settings, because Apple removed the right-click → Open escape
-  hatch that used to make it one click. Signing and notarisation need an Apple Developer
-  account and a Windows certificate.
+- **Windows builds are unsigned.** SmartScreen complains on first launch;
+  [Download](#download) has the way past it. A certificate from a commercial authority is
+  what it would take, and there isn't one. macOS is signed and notarised from 0.3.2.
 - **Installers are ~45 MB** because each build bundles the .NET runtime. Enabling
   `PublishTrimmed` would cut that substantially, but Avalonia needs trimming feed
   configuration and `ViewLocator`'s reflection would have to go first.
