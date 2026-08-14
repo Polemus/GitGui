@@ -19,6 +19,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- So the tests can reach helpers that are internal because nothing in the app
+         calls them directly - DesktopIntegration's desktop-entry rewrite, so far. -->
+    <InternalsVisibleTo Include="GitGui.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
 
     <!-- Site descriptions shipped with the app. Loaded by HostProviderRegistry

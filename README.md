@@ -33,6 +33,14 @@ users don't need git, .NET, or anything else installed. See [Does it need git?](
 
 Both x64 and arm64 are built for Linux and macOS; Windows is x64.
 
+The AppImage adds itself to your applications menu on first run — a desktop entry and
+the icons in `~/.local/share`, which is what stops the dock showing a generic cog
+instead of GitGui's icon. It writes nothing else there. Set
+`GITGUI_NO_DESKTOP_INTEGRATION=1` to skip it, and delete
+`~/.local/share/applications/io.github.polemus.GitGui.desktop` to undo it. Move the
+AppImage and the next run points the entry at its new home; delete the AppImage and the
+menu entry hides itself.
+
 The Flatpak sees your home directory, `/mnt`, `/media` and `/run/media`, which is
 where repositories nearly always are. If yours are somewhere else,
 `flatpak override --user --filesystem=host io.github.polemus.GitGui` widens it.

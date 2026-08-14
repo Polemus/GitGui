@@ -47,6 +47,7 @@ public partial class App : Application
         {
             var http = new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(30) };
             var credentials = CredentialStoreFactory.Create();
+            var log = new ActivityLog();
 
             var viewModel = new MainWindowViewModel(
                 new GitService(),
@@ -55,7 +56,7 @@ public partial class App : Application
                 HostProviderRegistry.Create(http),
                 new AccountStore(credentials),
                 credentials,
-                new ActivityLog(),
+                log,
                 new SystemShell(),
                 new RepositoryWatcher());
 
@@ -63,9 +64,37 @@ public partial class App : Application
 
             // Loading repositories touches the disk, so it happens after the window
             // is up rather than blocking first paint.
-            desktop.MainWindow.Opened += async (_, _) => await viewModel.InitialiseAsync();
+            desktop.MainWindow.Opened += async (_, _) =>
+            {
+                await viewModel.InitialiseAsync();
+                await RegisterWithDesktopAsync(log);
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Gives an AppImage the desktop entry and icons the other package formats
+    /// install for themselves, so the dock shows GitGui's icon rather than the
+    /// generic executable one. A no-op everywhere else.
+    /// </summary>
+    private static async System.Threading.Tasks.Task RegisterWithDesktopAsync(IActivityLog log)
+    {
+        var result = await DesktopIntegration.EnsureInstalledAsync();
+
+        switch (result.Outcome)
+        {
+            case DesktopIntegrationOutcome.Installed:
+                log.Write(ActivityLevel.Info, "Added GitGui to the desktop menu", result.Detail);
+                break;
+
+            case DesktopIntegrationOutcome.Failed:
+                log.Write(
+                    ActivityLevel.Warning,
+                    "Couldn't add GitGui to the desktop menu - it will show a generic icon",
+                    result.Detail);
+                break;
+        }
     }
 }
