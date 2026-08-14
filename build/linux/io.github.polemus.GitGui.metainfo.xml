@@ -130,6 +130,16 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.3.1" date="2026-08-14">
+      <url type="details">https://github.com/Polemus/GitGui/releases/tag/v0.3.1</url>
+      <description>
+        <p>
+          The AppImage now shows GitGui's icon in the dock instead of a generic one,
+          and a branch pushed without an upstream is no longer reported as having
+          nothing to push.
+        </p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-08-14">
       <url type="details">https://github.com/Polemus/GitGui/releases/tag/v0.3.0</url>
       <description>
