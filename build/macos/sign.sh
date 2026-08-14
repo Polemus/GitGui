@@ -179,7 +179,7 @@ signing_prepare() {
     [ -n "$SIGNING_IDENTITY" ] && return 0
 
     local work="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
-    SIGNING_KEYCHAIN="$work/gitgui-signing.keychain-db"
+    SIGNING_KEYCHAIN="$work/omnigit-signing.keychain-db"
 
     # A keychain of our own rather than the login one: this runs on a shared
     # runner image, and the cleanup at the end has to be able to remove
@@ -279,14 +279,14 @@ sign_bundle() {
     # entitlements. It then fails sealing a bundle whose nested code is only
     # half done:
     #
-    #     Contents/MacOS/GitGui: code object is not signed at all
+    #     Contents/MacOS/Omnigit: code object is not signed at all
     #     In subcomponent: .../System.Diagnostics.Contracts.dll
     #
     # The main executable is signed by signing the bundle, at the end, which is
     # also the only way it can carry the entitlements it needs.
     local main
     main="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \
-        "$app/Contents/Info.plist" 2>/dev/null || echo GitGui)"
+        "$app/Contents/Info.plist" 2>/dev/null || echo Omnigit)"
 
     echo "==> Signing the binaries inside $(basename "$app")"
 

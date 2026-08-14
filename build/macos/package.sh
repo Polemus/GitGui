@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Builds macOS artifacts for one runtime identifier:
-#   dist/GitGui-<version>-<rid>.dmg   drag-to-Applications disk image
+#   dist/Omnigit-<version>-<rid>.dmg   drag-to-Applications disk image
 #
 # Usage: build/macos/package.sh <rid> [version]
 #   rid: osx-arm64 (Apple silicon) | osx-x64 (Intel)
@@ -23,7 +23,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERSION="${2:-$(project_version "$ROOT")}"
 DIST="$ROOT/dist"
 STAGE="$ROOT/build/.stage-$RID"
-APP="$STAGE/GitGui.app"
+APP="$STAGE/Omnigit.app"
 
 echo "==> Publishing $RID (self-contained, $VERSION)"
 rm -rf "$STAGE"
@@ -37,7 +37,7 @@ mkdir -p "$DIST" "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # self-contained publish drops ~200 managed assemblies in beside the executable,
 # none of them Mach-O, and sealing the bundle fails with
 #
-#     GitGui.app: code object is not signed at all
+#     Omnigit.app: code object is not signed at all
 #     In subcomponent: .../Contents/MacOS/System.Diagnostics.Contracts.dll
 #
 # Single-file publishing packs the managed assemblies into the executable itself
@@ -46,7 +46,7 @@ mkdir -p "$DIST" "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # left off: the .dylib files stay visible and get signed individually, which is
 # the inside-out order Apple asks for, and nothing has to be extracted to a
 # temporary directory at run time to be loaded.
-dotnet publish "$ROOT/src/GitGui/GitGui.csproj" \
+dotnet publish "$ROOT/src/Omnigit/Omnigit.csproj" \
     --configuration Release \
     --runtime "$RID" \
     --self-contained true \
@@ -56,12 +56,12 @@ dotnet publish "$ROOT/src/GitGui/GitGui.csproj" \
     -p:DebugSymbols=false \
     --output "$APP/Contents/MacOS"
 
-chmod +x "$APP/Contents/MacOS/GitGui"
+chmod +x "$APP/Contents/MacOS/Omnigit"
 
 echo "==> Building icon set"
-ICONSET="$STAGE/GitGui.iconset"
+ICONSET="$STAGE/Omnigit.iconset"
 mkdir -p "$ICONSET"
-SRC_PNG="$ROOT/build/linux/icons/gitgui-256.png"
+SRC_PNG="$ROOT/build/linux/icons/omnigit-256.png"
 
 # iconutil wants this exact set of names.
 sips -z 16 16     "$SRC_PNG" --out "$ICONSET/icon_16x16.png"      >/dev/null
@@ -74,7 +74,7 @@ sips -z 256 256   "$SRC_PNG" --out "$ICONSET/icon_256x256.png"    >/dev/null
 sips -z 512 512   "$SRC_PNG" --out "$ICONSET/icon_256x256@2x.png" >/dev/null
 sips -z 512 512   "$SRC_PNG" --out "$ICONSET/icon_512x512.png"    >/dev/null
 
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/GitGui.icns"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Omnigit.icns"
 
 echo "==> Writing Info.plist"
 sed -e "s/@VERSION@/$VERSION/g" \
@@ -112,11 +112,11 @@ mkdir -p "$DMG_ROOT"
 # everything they depend on - extended attributes and all. cp is the tool people
 # find out about the hard way, from a signature that verifies here and not on the
 # machine that mounted the disk image.
-ditto "$APP" "$DMG_ROOT/GitGui.app"
+ditto "$APP" "$DMG_ROOT/Omnigit.app"
 ln -s /Applications "$DMG_ROOT/Applications"
 
 # hdiutil attaches the image while it builds it, and both RIDs ask for the same
-# volume name - so the second one mounts /Volumes/GitGui <version> while the
+# volume name - so the second one mounts /Volumes/Omnigit <version> while the
 # first is still letting go of it, and hdiutil says "Resource busy". The release
 # job builds osx-arm64 and then osx-x64 in one go, which is exactly that: 0.3.0
 # first failed here with the arm64 .dmg already sitting in dist/.
@@ -124,7 +124,7 @@ ln -s /Applications "$DMG_ROOT/Applications"
 # Detach a stale one before trying, and treat a failure as worth one more go -
 # the window is short and neither the volume name nor the .dmg is worth changing
 # to avoid it.
-VOLUME="GitGui $VERSION"
+VOLUME="Omnigit $VERSION"
 
 for attempt in 1 2 3; do
     if [ -d "/Volumes/$VOLUME" ]; then
@@ -136,7 +136,7 @@ for attempt in 1 2 3; do
         -volname "$VOLUME" \
         -srcfolder "$DMG_ROOT" \
         -ov -format UDZO \
-        "$DIST/GitGui-$VERSION-$RID.dmg"
+        "$DIST/Omnigit-$VERSION-$RID.dmg"
     then
         break
     fi
@@ -150,7 +150,7 @@ for attempt in 1 2 3; do
     sleep 10
 done
 
-DMG="$DIST/GitGui-$VERSION-$RID.dmg"
+DMG="$DIST/Omnigit-$VERSION-$RID.dmg"
 
 # And again for the disk image itself, which Gatekeeper checks on mount quite
 # separately from the app inside it.

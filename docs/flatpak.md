@@ -5,17 +5,17 @@ it shares with the `.deb`, `.rpm` and AppImage:
 
 | File | What it is |
 | --- | --- |
-| `build/linux/io.github.polemus.GitGui.desktop` | The launcher. One copy, installed by all four package formats |
-| `build/linux/io.github.polemus.GitGui.metainfo.xml` | AppStream metadata — the name, description and screenshots a software centre shows |
-| `build/linux/flatpak/io.github.polemus.GitGui.yml` | The manifest |
+| `build/linux/io.github.polemus.Omnigit.desktop` | The launcher. One copy, installed by all four package formats |
+| `build/linux/io.github.polemus.Omnigit.metainfo.xml` | AppStream metadata — the name, description and screenshots a software centre shows |
+| `build/linux/flatpak/io.github.polemus.Omnigit.yml` | The manifest |
 | `build/linux/flatpak/nuget-sources-*.json` | Generated. Every NuGet package, pinned by hash |
-| `build/linux/flatpak/package.sh` | Builds it, and writes `dist/GitGui-<version>-<arch>.flatpak` |
+| `build/linux/flatpak/package.sh` | Builds it, and writes `dist/Omnigit-<version>-<arch>.flatpak` |
 | `build/linux/flatpak/generate-nuget-sources.sh` | Regenerates the lists above. Needs network |
 | `build/linux/flatpak/check-nuget-sources.sh` | Says whether they still match the csproj. Runs in CI |
 | `build/linux/flatpak/validate.sh` | The checks Flathub runs, run here first |
 | `build/linux/flatpak/flathub-manifest.sh` | Emits the copy of the manifest Flathub builds from |
 
-The app id is **`io.github.polemus.GitGui`**, which is not a free choice: Flathub
+The app id is **`io.github.polemus.Omnigit`**, which is not a free choice: Flathub
 derives it from where the source lives, and the desktop entry, the icons and the
 metainfo file all have to be named after it.
 
@@ -28,7 +28,7 @@ flatpak install flathub org.flatpak.Builder \
     org.freedesktop.Sdk.Extension.dotnet10//25.08
 
 ./build/linux/flatpak/package.sh --install
-flatpak run io.github.polemus.GitGui
+flatpak run io.github.polemus.Omnigit
 ```
 
 `--install` is optional; without it you get the bundle in `dist/` and nothing
@@ -36,7 +36,7 @@ installed. A `.flatpak` bundle installs with no remote involved, which is what
 makes it worth attaching to a release:
 
 ```bash
-flatpak install --user ./dist/GitGui-*-x86_64.flatpak
+flatpak install --user ./dist/Omnigit-*-x86_64.flatpak
 ```
 
 **The Flatpak is the one Linux artifact that cannot be cross-built.** The `.deb`,
@@ -61,7 +61,7 @@ They are generated, and they go stale:
 ./build/linux/flatpak/generate-nuget-sources.sh   # needs network
 ```
 
-**Run that whenever a `PackageReference` in `GitGui.csproj` changes — including
+**Run that whenever a `PackageReference` in `Omnigit.csproj` changes — including
 when Dependabot bumps one.** Nothing else in the repository notices. `dotnet
 build` is happy, the tests pass, the `.deb` and the `.rpm` and the AppImage all
 build, and the first sign of trouble is the Flatpak job failing partway through a
@@ -111,12 +111,12 @@ Anyone who keeps repositories somewhere none of those four cover can widen it
 without a rebuild:
 
 ```bash
-flatpak override --user --filesystem=host io.github.polemus.GitGui
+flatpak override --user --filesystem=host io.github.polemus.Omnigit
 ```
 
 ## secret-tool is built here
 
-`GitGui` stores tokens by shelling out to `secret-tool`, which talks to the
+`Omnigit` stores tokens by shelling out to `secret-tool`, which talks to the
 keyring over D-Bus. `org.freedesktop.Platform` ships `libsecret-1.so.0` but not
 the command-line tool, so the manifest builds libsecret with everything but the
 tool switched off. Without it `CredentialStoreFactory` would find no
@@ -150,7 +150,7 @@ makes a local checkout build. Rather than keep a second manifest and let the two
 drift, generate it:
 
 ```bash
-git tag -a v1.2.3 -m "GitGui 1.2.3"
+git tag -a v1.2.3 -m "Omnigit 1.2.3"
 git push origin v1.2.3
 
 ./build/linux/flatpak/flathub-manifest.sh 1.2.3
@@ -164,7 +164,7 @@ rejection on Flathub's side and easy to forget.
 
 Two versions have to agree before any of this, and both are checked:
 
-- **`<Version>` in `GitGui.csproj`** decides what the app reports. The Flatpak
+- **`<Version>` in `Omnigit.csproj`** decides what the app reports. The Flatpak
   build never passes `-p:Version`, on purpose, because Flathub would not either.
   `package.sh` refuses to build if the version you ask for and the csproj
   disagree.
@@ -181,7 +181,7 @@ the build the same way Flathub will:
 
 ```bash
 ./build/linux/flatpak/package.sh --install
-flatpak run io.github.polemus.GitGui        # actually use it
+flatpak run io.github.polemus.Omnigit        # actually use it
 ./build/linux/flatpak/validate.sh --repo
 ```
 
@@ -193,16 +193,16 @@ Then:
    ```bash
    git clone --branch=new-pr git@github.com:<you>/flathub.git
    cd flathub
-   git checkout -b add-io.github.polemus.GitGui new-pr
+   git checkout -b add-io.github.polemus.Omnigit new-pr
    ```
 
 2. **Copy in `dist/flathub/`** — the manifest and both NuGet lists — at the root
    of the repository. Nothing else: the metainfo, the desktop entry and the icons
-   are installed by the build from the GitGui repository, which is where Flathub
+   are installed by the build from the Omnigit repository, which is where Flathub
    prefers them.
 
 3. **Open a pull request against `new-pr`**, titled
-   `Add io.github.polemus.GitGui`. Opening it against `master` is the usual
+   `Add io.github.polemus.Omnigit`. Opening it against `master` is the usual
    mistake.
 
 4. **Comment `bot, build`.** Flathub builds it for both architectures and
@@ -216,7 +216,7 @@ Then:
    further up this page. Reviewers are volunteers; a few days of silence is
    normal.
 
-6. **On merge**, Flathub creates `flathub/io.github.polemus.GitGui` and invites
+6. **On merge**, Flathub creates `flathub/io.github.polemus.Omnigit` and invites
    you as maintainer. **Accept within a week**, and note it requires 2FA on your
    GitHub account. The app appears on flathub.org within a few hours.
 
@@ -227,13 +227,13 @@ puts a verified badge on the listing.
 ## Automating every release after that
 
 Updates never go through submission again. Each one is a pull request to
-`flathub/io.github.polemus.GitGui` — and maintainers cannot push to its protected
+`flathub/io.github.polemus.Omnigit` — and maintainers cannot push to its protected
 branch, so a pull request is the only route regardless.
 
 `.github/workflows/flathub.yml` opens it. It runs when the Release workflow
 finishes successfully on a tag, or manually from the Actions tab with a version.
 It checks out that tag, runs `flathub-manifest.sh`, commits the result to a
-`gitgui-<version>` branch of the Flathub repository and opens the pull request
+`omnigit-<version>` branch of the Flathub repository and opens the pull request
 with `bot, build` in the body.
 
 **It needs one secret, and does nothing until it exists.** Before the app is
@@ -242,11 +242,11 @@ than failing every release.
 
 1. Create a **fine-grained personal access token** at
    [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens),
-   with access to `flathub/io.github.polemus.GitGui` only, and repository
+   with access to `flathub/io.github.polemus.Omnigit` only, and repository
    permissions **Contents: read and write** and **Pull requests: read and write**.
-   Nothing else, and nothing on this repository — the workflow reads GitGui with
+   Nothing else, and nothing on this repository — the workflow reads Omnigit with
    the ordinary `GITHUB_TOKEN`.
-2. Add it to GitGui as the repository secret **`FLATHUB_TOKEN`**.
+2. Add it to Omnigit as the repository secret **`FLATHUB_TOKEN`**.
 
 Then a release publishes itself as far as a pull request with a green test build,
 and stops there for you to install it and merge. That last step is deliberately
@@ -260,7 +260,7 @@ hours, which reads `x-checker-data` and opens update pull requests on its own.
 The libsecret source has one, so libsecret bumps arrive without anyone doing
 anything.
 
-**The GitGui source deliberately does not.** A checker that noticed a new tag
+**The Omnigit source deliberately does not.** A checker that noticed a new tag
 would bump the commit without regenerating `nuget-sources-*.json` — and the moment
 a release also changed a `PackageReference`, that pull request would be a build
 failure nobody asked for. Our own workflow moves the two together or not at all.

@@ -23,28 +23,28 @@ GROUP="${2:-all}"
 linux_artifacts() {
     # Two runtime identifiers, four package formats each - and the .deb and .rpm
     # names use the distro's own architecture spelling rather than the RID.
-    echo "GitGui-$VERSION-linux-x64.tar.gz"
-    echo "GitGui-$VERSION-linux-arm64.tar.gz"
-    echo "gitgui_${VERSION}_amd64.deb"
-    echo "gitgui_${VERSION}_arm64.deb"
-    echo "gitgui-${VERSION}-1.x86_64.rpm"
-    echo "gitgui-${VERSION}-1.aarch64.rpm"
-    echo "GitGui-$VERSION-x86_64.AppImage"
-    echo "GitGui-$VERSION-aarch64.AppImage"
+    echo "Omnigit-$VERSION-linux-x64.tar.gz"
+    echo "Omnigit-$VERSION-linux-arm64.tar.gz"
+    echo "omnigit_${VERSION}_amd64.deb"
+    echo "omnigit_${VERSION}_arm64.deb"
+    echo "omnigit-${VERSION}-1.x86_64.rpm"
+    echo "omnigit-${VERSION}-1.aarch64.rpm"
+    echo "Omnigit-$VERSION-x86_64.AppImage"
+    echo "Omnigit-$VERSION-aarch64.AppImage"
 }
 
 flatpak_artifacts() {  # flatpak_artifacts <flatpak-arch>
-    echo "GitGui-$VERSION-$1.flatpak"
+    echo "Omnigit-$VERSION-$1.flatpak"
 }
 
 windows_artifacts() {
-    echo "GitGui-$VERSION-win-x64-setup.exe"
-    echo "GitGui-$VERSION-win-x64.zip"
+    echo "Omnigit-$VERSION-win-x64-setup.exe"
+    echo "Omnigit-$VERSION-win-x64.zip"
 }
 
 macos_artifacts() {
-    echo "GitGui-$VERSION-osx-arm64.dmg"
-    echo "GitGui-$VERSION-osx-x64.dmg"
+    echo "Omnigit-$VERSION-osx-arm64.dmg"
+    echo "Omnigit-$VERSION-osx-x64.dmg"
 }
 
 case "$GROUP" in

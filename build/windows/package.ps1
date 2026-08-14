@@ -4,14 +4,14 @@
 
 .DESCRIPTION
     Produces:
-      dist\GitGui-<version>-<rid>.zip              portable, unzip and run
-      dist\GitGui-<version>-<rid>-setup.exe        Inno Setup installer
+      dist\Omnigit-<version>-<rid>.zip              portable, unzip and run
+      dist\Omnigit-<version>-<rid>-setup.exe        Inno Setup installer
 
 .PARAMETER Rid
     win-x64 or win-arm64.
 
 .PARAMETER Version
-    Defaults to <Version> in GitGui.csproj, which is the one place a version is
+    Defaults to <Version> in Omnigit.csproj, which is the one place a version is
     written down - see build/version.sh for why.
 
 .EXAMPLE
@@ -34,7 +34,7 @@ $stage = Join-Path $root "build\.stage-$Rid"
 # build/version.sh is the bash half of this; there is no sourcing a shell script
 # from PowerShell, so the read is repeated rather than shared.
 if (-not $Version) {
-    $csproj = Join-Path $root 'src\GitGui\GitGui.csproj'
+    $csproj = Join-Path $root 'src\Omnigit\Omnigit.csproj'
     $Version = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version |
         Where-Object { $_ } | Select-Object -First 1
 
@@ -45,7 +45,7 @@ Write-Host "==> Publishing $Rid (self-contained, $Version)"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dist, $stage | Out-Null
 
-dotnet publish (Join-Path $root 'src\GitGui\GitGui.csproj') `
+dotnet publish (Join-Path $root 'src\Omnigit\Omnigit.csproj') `
     --configuration Release `
     --runtime $Rid `
     --self-contained true `
@@ -56,7 +56,7 @@ dotnet publish (Join-Path $root 'src\GitGui\GitGui.csproj') `
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
 
 Write-Host "==> Portable zip"
-$zip = Join-Path $dist "GitGui-$Version-$Rid.zip"
+$zip = Join-Path $dist "Omnigit-$Version-$Rid.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
 
@@ -80,7 +80,7 @@ if (-not $iscc) {
     "/DSourceDir=$stage" `
     "/DOutputDir=$dist" `
     "/DRid=$Rid" `
-    (Join-Path $PSScriptRoot 'gitgui.iss')
+    (Join-Path $PSScriptRoot 'omnigit.iss')
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
 
 Write-Host "==> Done:"

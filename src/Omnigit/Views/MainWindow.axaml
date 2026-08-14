@@ -1,0 +1,580 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Omnigit.ViewModels"
+        xmlns:m="using:Omnigit.Models"
+        xmlns:views="using:Omnigit.Views"
+        xmlns:conv="using:Omnigit.Converters"
+        xmlns:svc="using:Omnigit.Services"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="Omnigit.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        x:Name="Root"
+        Title="Omnigit"
+        Icon="/Assets/omnigit.png"
+        Width="1280" Height="820"
+        MinWidth="960" MinHeight="620"
+        Background="{DynamicResource AppBackground}">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Window.Resources>
+        <conv:HexToBrushConverter x:Key="HexToBrush" />
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />              <!-- toolbar -->
+            <RowDefinition Height="Auto" />              <!-- busy strip -->
+            <RowDefinition Height="*" MinHeight="220" /> <!-- content -->
+            <RowDefinition Height="Auto" />              <!-- console drag handle -->
+            <!-- Auto while collapsed, absolute once open. MinHeight keeps the header
+                 visible no matter how far the splitter is dragged down. -->
+            <RowDefinition Height="{Binding ConsoleHeight, Mode=TwoWay}" MinHeight="34" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================ Toolbar ============================ -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource ToolbarBackground}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="0,0,0,1">
+            <Grid Height="60" Margin="0,0,14,0">
+                <Grid.ColumnDefinitions>
+                    <!-- Same width as the sidebar, and driven by the same value, so the
+                         wordmark stays flush with it when the splitter is dragged. -->
+                    <ColumnDefinition Width="{Binding SidebarWidth}" />
+                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="1.15*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Wordmark, with + pushed to the right of the block so it sits over
+                     the sidebar it fills. -->
+                <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto" Margin="14,0,18,0">
+                    <Border Grid.Column="0" Width="26" Height="26" CornerRadius="7"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource AccentBrush}">
+                        <TextBlock Text="G" FontSize="15" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextOnAccent}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="Omnigit" FontSize="15" FontWeight="SemiBold"
+                               Margin="9,0,0,0" VerticalAlignment="Center" />
+
+                    <!-- Everything that brings a new repository in. It was buried at the
+                         bottom of the picker, which is a list of what you already have. -->
+                    <Button Grid.Column="2" x:Name="AddRepositoryButton"
+                            Classes="addButton" VerticalAlignment="Center"
+                            ToolTip.Tip="Add a repository">
+                        <Path Data="{DynamicResource IconPlus}" Width="16" Height="16"
+                              Stretch="None" StrokeLineCap="Round" Fill="Transparent" />
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedLeft"
+                                    FlyoutPresenterClasses="picker">
+                                <StackPanel Width="280">
+                                    <Button Classes="rowButton"
+                                            Click="OnAddRepositoryRowClick"
+                                            Command="{Binding AddRepositoryCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <Path Classes="icon" Data="{DynamicResource IconPlus}" />
+                                            <TextBlock Classes="body" Text="Add local repository…" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Classes="rowButton"
+                                            Click="OnAddRepositoryRowClick"
+                                            Command="{Binding ShowCloneCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <Path Classes="icon" Data="{DynamicResource IconRepo}" />
+                                            <TextBlock Classes="body" Text="Clone from a hosting site…" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </Grid>
+
+                <!-- Current branch -->
+                <Button Grid.Column="1" x:Name="BranchPickerButton"
+                        Classes="toolbarItem" Margin="0,0,8,0">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Path Grid.Column="0" Classes="icon" Data="{DynamicResource IconBranch}" />
+                        <!-- Says "Not on a branch" over a short sha while HEAD is
+                             detached, so the toolbar never claims a branch we are not on. -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Classes="muted" Text="{Binding HeadDetailLabel}" />
+                            <TextBlock Classes="body" FontWeight="SemiBold"
+                                       Text="{Binding HeadLabel}" />
+                        </StackPanel>
+                        <Path Grid.Column="2" Classes="icon" Data="{DynamicResource IconChevronDown}" />
+                    </Grid>
+
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedLeft"
+                                FlyoutPresenterClasses="picker">
+                            <Grid Width="340" RowDefinitions="Auto,Auto,*,Auto,Auto">
+                                <TextBlock Grid.Row="0" Classes="sectionLabel" Text="BRANCHES"
+                                           Margin="10,6,10,8" />
+                                <Border Grid.Row="1" Classes="divider" Margin="0,0,0,6" />
+                                <ScrollViewer Grid.Row="2" MaxHeight="380">
+                                    <ItemsControl ItemsSource="{Binding Branches}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="m:BranchInfo">
+                                                <Button Classes="rowButton"
+                                                        Click="OnBranchRowClick"
+                                                        Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).SelectBranchCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                                                        <Path Grid.Column="0" Classes="icon"
+                                                              Data="{DynamicResource IconBranch}" />
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Classes="body" Text="{Binding Name}" />
+                                                            <TextBlock Classes="muted"
+                                                                       Text="{Binding LastCommitSummary}" />
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="2" Classes="muted"
+                                                                   VerticalAlignment="Center"
+                                                                   Text="{Binding RelativeTime}" />
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+
+                                <Border Grid.Row="3" Classes="divider" Margin="0,6" />
+
+                                <!-- New branch. Branches from whatever HEAD is now and
+                                     checks it out, which is what "git checkout -b" does. -->
+                                <Grid Grid.Row="4" ColumnDefinitions="*,Auto" ColumnSpacing="8"
+                                      Margin="10,0,10,8">
+                                    <TextBox Grid.Column="0" Classes="commitBox"
+                                             Text="{Binding NewBranchName, Mode=TwoWay}"
+                                             PlaceholderText="New branch name" />
+                                    <Button Grid.Column="1" Classes="primary" Content="Create"
+                                            Click="OnBranchRowClick"
+                                            Command="{Binding CreateBranchCommand}" />
+                                </Grid>
+                            </Grid>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <!-- Fetch / push / pull -->
+                <Button Grid.Column="2" Classes="toolbarItem"
+                        Command="{Binding SyncCommand}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Path Grid.Column="0" Classes="icon" Data="{DynamicResource IconSync}" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Classes="body" FontWeight="SemiBold"
+                                       Text="{Binding SyncActionLabel}" />
+                            <TextBlock Classes="muted" Text="{Binding SyncDetailLabel}" />
+                        </StackPanel>
+                        <Border Grid.Column="2" Classes="chip"
+                                IsVisible="{Binding HasSyncCount}">
+                            <TextBlock Classes="muted" Text="{Binding SyncCountLabel}" />
+                        </Border>
+                    </Grid>
+                </Button>
+
+                <!-- Right-hand controls -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" Margin="10,0,0,0">
+                    <Button Classes="iconButton" Click="OnToggleTheme" ToolTip.Tip="Toggle theme">
+                        <Path Classes="icon" Data="{DynamicResource IconMoon}" x:Name="ThemeIcon" />
+                    </Button>
+                    <Button Classes="iconButton" Command="{Binding ShowSettingsCommand}"
+                            ToolTip.Tip="Settings">
+                        <Path Classes="icon" Data="{DynamicResource IconSettings}" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Indeterminate strip while a git operation runs. -->
+        <ProgressBar Grid.Row="1" Height="2" IsIndeterminate="True"
+                     Background="Transparent"
+                     Foreground="{DynamicResource AccentBrush}"
+                     IsVisible="{Binding IsBusy}" />
+
+        <!-- ============================ Content ============================ -->
+        <Panel Grid.Row="2">
+            <views:RepositoryView>
+                <views:RepositoryView.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="!IsSettingsPageVisible" />
+                        <Binding Path="!IsClonePageVisible" />
+                    </MultiBinding>
+                </views:RepositoryView.IsVisible>
+            </views:RepositoryView>
+
+            <views:CloneView IsVisible="{Binding IsClonePageVisible}" />
+            <views:SettingsView IsVisible="{Binding IsSettingsPageVisible}" />
+
+            <!-- Discarding is the other unrecoverable action here: the change was never
+                 committed, so nothing can bring it back. Hence the scrim and the extra
+                 click, and the destructive button on the right rather than under the
+                 pointer's resting place. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasPendingDiscard}">
+                <Border Classes="dialog"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel Spacing="14">
+                        <TextBlock Classes="h2" Text="Discard changes?" />
+                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                   Text="{Binding PendingDiscardSummary}" />
+                        <StackPanel Orientation="Horizontal" Spacing="9"
+                                    HorizontalAlignment="Right">
+                            <Button Classes="secondary" Content="Cancel"
+                                    Command="{Binding CancelDiscardCommand}" />
+                            <Button Classes="primary" Content="Discard changes"
+                                    Command="{Binding ConfirmDiscardCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Border>
+
+            <!-- Branch switch with uncommitted work. A ContentControl so nothing binds
+                 against a null prompt, and a scrim so the choice has to be made. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasPendingBranchSwitch}">
+                <ContentControl Content="{Binding PendingBranchSwitch}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:BranchSwitchViewModel">
+                            <!-- Wider than the rest, and capped: it carries a file list. -->
+                            <Border Classes="dialog" Width="560" MaxHeight="560">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="{Binding Title}" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="{Binding Summary}" />
+
+                                    <StackPanel Spacing="8">
+                                        <RadioButton GroupName="BranchSwitch"
+                                                     IsChecked="{Binding IsBringing, Mode=OneWay}"
+                                                     Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).BringChangesCommand}"
+                                                     Content="Bring my changes with me" />
+                                        <RadioButton GroupName="BranchSwitch"
+                                                     IsChecked="{Binding LeaveEverything, Mode=OneWay}"
+                                                     Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).LeaveChangesCommand}"
+                                                     Content="Leave everything here (stash it)" />
+                                    </StackPanel>
+
+                                    <Expander Header="Choose which files come with you"
+                                              IsVisible="{Binding IsBringing}">
+                                        <StackPanel Spacing="6" Margin="0,8,0,0">
+                                            <CheckBox Content="All files"
+                                                      IsChecked="{Binding AllSelected, Mode=TwoWay}" />
+                                            <Border Classes="divider" />
+                                            <ScrollViewer MaxHeight="220">
+                                                <ItemsControl ItemsSource="{Binding Files}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:FileChangeViewModel">
+                                                            <Grid ColumnDefinitions="Auto,Auto,*"
+                                                                  ColumnSpacing="9" Margin="0,4">
+                                                                <CheckBox Grid.Column="0"
+                                                                          IsChecked="{Binding IsStaged, Mode=TwoWay}"
+                                                                          VerticalAlignment="Center" />
+                                                                <TextBlock Grid.Column="1"
+                                                                           Classes="statusGlyph"
+                                                                           Classes.added="{Binding IsAdded}"
+                                                                           Classes.modified="{Binding IsModified}"
+                                                                           Classes.deleted="{Binding IsDeleted}"
+                                                                           Classes.renamed="{Binding IsRenamed}"
+                                                                           Text="{Binding StatusGlyph}"
+                                                                           VerticalAlignment="Center" />
+                                                                <TextBlock Grid.Column="2" Classes="body"
+                                                                           VerticalAlignment="Center"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           Text="{Binding Path}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                        </StackPanel>
+                                    </Expander>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelBranchSwitchCommand}" />
+                                        <Button Classes="primary" Content="{Binding ConfirmLabel}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmBranchSwitchCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- ============ Questions asked about one commit ============ -->
+            <!-- All four follow the branch-switch prompt's shape: a ContentControl so
+                 nothing binds against a null draft, a scrim so the question gets an
+                 answer, and the confirming button on the right. -->
+
+            <!-- Naming a branch that starts at an older commit. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasBranchFromCommit}">
+                <ContentControl Content="{Binding BranchFromCommit}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:BranchFromCommitViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="New branch from this commit" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+                                    <TextBox Classes="commitBox"
+                                             Text="{Binding Name, Mode=TwoWay}"
+                                             PlaceholderText="Branch name" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="The new branch starts here and is checked out. Nothing already committed changes." />
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelBranchFromCommitCommand}" />
+                                        <Button Classes="primary" Content="Create branch"
+                                                IsEnabled="{Binding CanCreate}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmBranchFromCommitCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Tagging a commit. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasTagDraft}">
+                <ContentControl Content="{Binding TagDraft}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:TagDraftViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="Tag this commit" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+                                    <TextBox Classes="commitBox"
+                                             Text="{Binding Name, Mode=TwoWay}"
+                                             PlaceholderText="Tag name, e.g. v1.2.0" />
+                                    <TextBox Classes="commitBox"
+                                             Text="{Binding Message, Mode=TwoWay}"
+                                             PlaceholderText="What it marks (optional)"
+                                             AcceptsReturn="True" TextWrapping="Wrap" Height="64" />
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="A message makes it an annotated tag, recording who made it and when. The tag stays local until you push." />
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelTagCommand}" />
+                                        <Button Classes="primary" Content="Create tag"
+                                                IsEnabled="{Binding CanCreate}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmTagCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Copying a commit onto another branch. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasCherryPickDraft}">
+                <ContentControl Content="{Binding CherryPickDraft}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:CherryPickDraftViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="Copy this commit to another branch" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+
+                                    <ComboBox HorizontalAlignment="Stretch"
+                                              IsVisible="{Binding HasBranches}"
+                                              ItemsSource="{Binding Branches}"
+                                              SelectedItem="{Binding TargetBranch, Mode=TwoWay}" />
+
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               IsVisible="{Binding !HasBranches}"
+                                               Text="{Binding EmptyLabel}" />
+
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               IsVisible="{Binding HasBranches}"
+                                               Text="Omnigit switches to that branch and applies the same change there as a new commit. If it clashes with what is already there, you finish it on the Changes tab." />
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelCherryPickCommand}" />
+                                        <Button Classes="primary" Content="Copy it across"
+                                                IsEnabled="{Binding CanApply}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmCherryPickCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Moving the branch back. One of the three choices destroys work, which is
+                 why this is a dialog with an explanation rather than a menu entry. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasResetDraft}">
+                <ContentControl Content="{Binding ResetDraft}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:ResetDraftViewModel">
+                            <Border Classes="dialog">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="Move the branch back to this commit" />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CommitLabel}" />
+
+                                    <StackPanel Spacing="8">
+                                        <RadioButton GroupName="ResetKind"
+                                                     IsChecked="{Binding IsSoft, Mode=OneWay}"
+                                                     Command="{Binding ChooseSoftCommand}"
+                                                     Content="Keep the changes, ready to commit" />
+                                        <RadioButton GroupName="ResetKind"
+                                                     IsChecked="{Binding IsMixed, Mode=OneWay}"
+                                                     Command="{Binding ChooseMixedCommand}"
+                                                     Content="Keep the changes in my working tree" />
+                                        <RadioButton GroupName="ResetKind"
+                                                     IsChecked="{Binding IsHard, Mode=OneWay}"
+                                                     Command="{Binding ChooseHardCommand}"
+                                                     Content="Throw the changes away" />
+                                    </StackPanel>
+
+                                    <Border Background="{DynamicResource BannerWarningBackground}"
+                                            BorderBrush="{DynamicResource BannerWarningBorder}"
+                                            BorderThickness="1" CornerRadius="8" Padding="11,9">
+                                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                   Text="{Binding Explanation}" />
+                                    </Border>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelResetCommand}" />
+                                        <Button Classes="primary" Content="{Binding ConfirmLabel}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmResetCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
+            <!-- Abandoning a stopped merge or revert. Resets hard, so it asks first for
+                 the same reason discarding a file does. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding IsConfirmingAbort}">
+                <Border Classes="dialog" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel Spacing="14">
+                        <TextBlock Classes="h2" Text="Abandon this?" />
+                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                   Text="{Binding AbortSummary}" />
+                        <StackPanel Orientation="Horizontal" Spacing="9"
+                                    HorizontalAlignment="Right">
+                            <Button Classes="secondary" Content="Keep going"
+                                    Command="{Binding CancelAbortCommand}" />
+                            <Button Classes="primary" Content="Abandon it"
+                                    Command="{Binding ConfirmAbortCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Border>
+        </Panel>
+
+        <!-- ======================= Activity console ======================= -->
+        <!-- Drag handle. Only there when the console is open; collapsed, the header is
+             already the full-width toggle and a handle on top of it would fight it. -->
+        <GridSplitter Grid.Row="3" Classes="consoleSplitter"
+                      IsVisible="{Binding IsConsoleExpanded}" />
+
+        <Grid Grid.Row="4" RowDefinitions="Auto,Auto,*"
+              Background="{DynamicResource ToolbarBackground}">
+
+            <Border Grid.Row="0" Classes="divider" />
+
+            <!-- The header IS the toggle, expanded or not. -->
+            <Grid Grid.Row="1" ColumnDefinitions="*">
+                <Button Grid.Column="0" Classes="consoleBar"
+                        Command="{Binding ToggleConsoleCommand}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Border Grid.Column="0" Width="7" Height="7" CornerRadius="4"
+                                VerticalAlignment="Center"
+                                Classes="logDot"
+                                Classes.trace="{Binding LatestEntry.IsTrace, FallbackValue=False}"
+                                Classes.success="{Binding LatestEntry.IsSuccess, FallbackValue=False}"
+                                Classes.warning="{Binding LatestEntry.IsWarning, FallbackValue=False}"
+                                Classes.error="{Binding LatestEntry.IsError, FallbackValue=False}" />
+
+                        <TextBlock Grid.Column="1" Classes="caption" VerticalAlignment="Center"
+                                   Text="{Binding LatestEntry.Message, FallbackValue='Ready'}" />
+
+                        <!-- Chevron only. Points up to expand, down to collapse. -->
+                        <Path Grid.Column="2" Classes="icon" VerticalAlignment="Center"
+                              Data="{DynamicResource IconChevronDown}"
+                              RenderTransformOrigin="50%,50%"
+                              RenderTransform="rotate(180deg)"
+                              IsVisible="{Binding !IsConsoleExpanded}" />
+                        <Path Grid.Column="2" Classes="icon" VerticalAlignment="Center"
+                              Data="{DynamicResource IconChevronDown}"
+                              IsVisible="{Binding IsConsoleExpanded}" />
+                    </Grid>
+                </Button>
+            </Grid>
+
+            <!-- Expanded log. No fixed height: the row it sits in is what's dragged. -->
+            <Grid Grid.Row="2" RowDefinitions="*"
+                  IsVisible="{Binding IsConsoleExpanded}">
+
+                <Border Grid.Row="0" Background="{DynamicResource SurfaceBackground}"
+                        BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,1,0,0">
+                    <ScrollViewer x:Name="LogScroller" Padding="14,8">
+                        <ItemsControl ItemsSource="{Binding LogEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="svc:ActivityEntry">
+                                    <StackPanel Margin="0,1">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <TextBlock Grid.Column="0" Classes="mono"
+                                                       Foreground="{DynamicResource DiffGutterText}"
+                                                       Text="{Binding Timestamp}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Classes="mono logLine"
+                                                       Classes.trace="{Binding IsTrace}"
+                                                       Classes.success="{Binding IsSuccess}"
+                                                       Classes.warning="{Binding IsWarning}"
+                                                       Classes.error="{Binding IsError}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding Message}" />
+                                        </Grid>
+                                        <TextBlock Classes="mono" FontSize="11"
+                                                   Margin="72,2,0,6"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding HasDetail}"
+                                                   Text="{Binding Detail}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

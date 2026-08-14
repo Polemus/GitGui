@@ -49,14 +49,14 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Restore
-        run: dotnet restore GitGui.slnx
+        run: dotnet restore Omnigit.slnx
 
       - name: Build
-        run: dotnet build GitGui.slnx --configuration Release --no-restore
+        run: dotnet build Omnigit.slnx --configuration Release --no-restore
 
       # Pure functions only, so this needs no display, no network and no git.
       - name: Test
-        run: dotnet test GitGui.slnx --configuration Release --no-build --verbosity normal
+        run: dotnet test Omnigit.slnx --configuration Release --no-build --verbosity normal
 
   # The Linux packages carry a desktop entry and an AppStream file that nothing
   # in the build compiles, so a mistake in either is invisible until a software
@@ -80,10 +80,10 @@ jobs:
       - name: Validate the AppStream metainfo
         run: |
           appstreamcli validate --explain --no-net --strict \
-            build/linux/io.github.polemus.GitGui.metainfo.xml
+            build/linux/io.github.polemus.Omnigit.metainfo.xml
 
       - name: Validate the desktop entry
-        run: desktop-file-validate build/linux/io.github.polemus.GitGui.desktop
+        run: desktop-file-validate build/linux/io.github.polemus.Omnigit.desktop
 
       # The one that catches Dependabot: a Flatpak build has no network and can
       # only install the packages listed ahead of time, so a bumped

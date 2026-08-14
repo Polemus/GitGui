@@ -15,11 +15,11 @@
 # the two would drift, and the way you would find out is a Flathub build behaving
 # differently from the one you tested.
 #
-# The result goes in the flathub/io.github.polemus.GitGui repository. See
+# The result goes in the flathub/io.github.polemus.Omnigit repository. See
 # docs/flatpak.md for what to do with it.
 set -euo pipefail
 
-APP_ID=io.github.polemus.GitGui
+APP_ID=io.github.polemus.Omnigit
 VERSION="${1:?usage: flathub-manifest.sh <version> [--ref <git-ref>]}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"

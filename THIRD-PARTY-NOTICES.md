@@ -1,15 +1,15 @@
 # Third-party notices
 
-GitGui is [MIT licensed](LICENSE). Its release builds are self-contained — the .NET
+Omnigit is [MIT licensed](LICENSE). Its release builds are self-contained — the .NET
 runtime, the rendering stack and the native git library are all inside the download, so
 users need nothing installed. That means the binaries you download from the Releases page
 contain the following third-party software, and this file is the attribution that comes
 with it.
 
 Everything here permits redistribution in a closed or open product. Nothing in this list
-imposes a copyleft obligation on GitGui's own source.
+imposes a copyleft obligation on Omnigit's own source.
 
-Version numbers are those referenced by `src/GitGui/GitGui.csproj` and its transitive
+Version numbers are those referenced by `src/Omnigit/Omnigit.csproj` and its transitive
 dependencies at the time of writing; `dotnet list package --include-transitive` gives the
 current set.
 
@@ -20,7 +20,7 @@ current set.
 ### libgit2 — GPLv2 **with a linking exception**
 
 Shipped inside `LibGit2Sharp.NativeBinaries`. It is the native library that does all the
-actual git work, and it is the reason GitGui needs no git installation.
+actual git work, and it is the reason Omnigit needs no git installation.
 
 libgit2 is GPLv2, which would normally be a problem for an MIT application distributing
 it. It isn't, because of an explicit exception granted by the libgit2 authors:
@@ -34,8 +34,8 @@ it. It isn't, because of an explicit exception granted by the libgit2 authors:
 > other respects; for example, they cover modification of the file, and distribution when
 > not linked into a combined executable.)
 
-So: linking it into GitGui and distributing the result is unrestricted. **Modifying
-libgit2 itself** would still be covered by the GPL. GitGui ships it unmodified.
+So: linking it into Omnigit and distributing the result is unrestricted. **Modifying
+libgit2 itself** would still be covered by the GPL. Omnigit ships it unmodified.
 
 Copyright (C) the libgit2 contributors. Full text:
 <https://github.com/libgit2/libgit2/blob/main/COPYING>
@@ -63,7 +63,7 @@ notice travel with the software — which is what this file does.
 | [System.Security.Cryptography.ProtectedData](https://github.com/dotnet/runtime) | 10.0.11 | © .NET Foundation and Contributors |
 | [.NET runtime and libraries](https://github.com/dotnet/runtime) | 10.0 | © .NET Foundation and Contributors |
 
-The MIT License text is the same as [GitGui's own](LICENSE), with the respective
+The MIT License text is the same as [Omnigit's own](LICENSE), with the respective
 copyright holder substituted.
 
 ---
@@ -73,7 +73,7 @@ copyright holder substituted.
 ### Skia — BSD 3-Clause
 
 Bundled inside SkiaSharp's native assets. Skia is what actually draws every pixel of
-GitGui, which is why the app looks the same on all three platforms.
+Omnigit, which is why the app looks the same on all three platforms.
 
 © Google LLC. <https://github.com/google/skia/blob/main/LICENSE>
 
@@ -94,7 +94,7 @@ Bundled inside HarfBuzzSharp's native assets. Text shaping.
 
 The typeface, embedded via `Avalonia.Fonts.Inter`. The OFL permits bundling and
 redistribution with software; it forbids selling the font on its own and requires that
-any modified version be renamed. GitGui embeds it unmodified.
+any modified version be renamed. Omnigit embeds it unmodified.
 
 © The Inter Project Authors. <https://github.com/rsms/inter/blob/master/LICENSE.txt>
 
@@ -102,7 +102,7 @@ any modified version be renamed. GitGui embeds it unmodified.
 
 ## Development-only dependencies
 
-These are used to build and test GitGui and are **not** present in any release binary.
+These are used to build and test Omnigit and are **not** present in any release binary.
 Listed for completeness rather than obligation.
 
 | Component | Version | Licence |
@@ -114,14 +114,14 @@ Listed for completeness rather than obligation.
 | [AvaloniaUI.DiagnosticsSupport](https://github.com/AvaloniaUI/Avalonia) | 2.2.3 | MIT |
 
 `AvaloniaUI.DiagnosticsSupport` is excluded from non-Debug configurations by the
-`IncludeAssets`/`PrivateAssets` conditions in `GitGui.csproj`, so it never reaches a
+`IncludeAssets`/`PrivateAssets` conditions in `Omnigit.csproj`, so it never reaches a
 release build.
 
 ---
 
 ## Packaging tools
 
-Not distributed with GitGui, and not linked into it — these produce the installers.
+Not distributed with Omnigit, and not linked into it — these produce the installers.
 
 - **[fpm](https://github.com/jordansissel/fpm)** — MIT — builds the `.deb` and `.rpm`.
 - **[Inno Setup](https://jrsoftware.org/isinfo.php)** — its own permissive licence —
@@ -130,4 +130,4 @@ Not distributed with GitGui, and not linked into it — these produce the instal
 ---
 
 If something is missing or misattributed here, that's a bug — please
-[open an issue](https://github.com/Polemus/GitGui/issues/new/choose).
+[open an issue](https://github.com/Polemus/Omnigit/issues/new/choose).

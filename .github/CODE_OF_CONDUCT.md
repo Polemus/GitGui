@@ -57,7 +57,7 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may be repor
 the maintainer, [@Polemus](https://github.com/Polemus).
 
 If you would rather not raise it in public — which is usually the right instinct — use
-GitHub's [private report form](https://github.com/Polemus/GitGui/security/advisories/new).
+GitHub's [private report form](https://github.com/Polemus/Omnigit/security/advisories/new).
 It is labelled for security vulnerabilities, but it is the only private channel this
 repository has, and a conduct report sent through it will be read and handled the same
 way. Say in the first line that it is a conduct report rather than a vulnerability.

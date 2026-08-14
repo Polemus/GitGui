@@ -1,4 +1,4 @@
-# How GitGui is put together
+# How Omnigit is put together
 
 A short tour of the layers and, more usefully, why they're shaped this way.
 

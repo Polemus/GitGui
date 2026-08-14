@@ -10,7 +10,7 @@
 # A tag names a commit; it cannot put anything inside one. Two things have to be
 # inside the commit because Flathub builds it without ever running our workflows:
 #
-#   <Version> in GitGui.csproj   what the app reports. The Flatpak build never
+#   <Version> in Omnigit.csproj   what the app reports. The Flatpak build never
 #                                passes -p:Version, because Flathub would not.
 #   <release> in the metainfo    the notes a software centre shows. Flathub
 #                                rejects a build whose newest release is not the
@@ -30,8 +30,8 @@ PUSH=no
 [ "${3:-}" = "--push" ] && PUSH=yes
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_ID=io.github.polemus.GitGui
-CSPROJ="$ROOT/src/GitGui/GitGui.csproj"
+APP_ID=io.github.polemus.Omnigit
+CSPROJ="$ROOT/src/Omnigit/Omnigit.csproj"
 METAINFO="$ROOT/build/linux/$APP_ID.metainfo.xml"
 TAG="v$VERSION"
 
@@ -61,7 +61,7 @@ if [ "$CURRENT" = "$VERSION" ]; then
     exit 1
 fi
 
-echo "==> GitGui $CURRENT -> $VERSION"
+echo "==> Omnigit $CURRENT -> $VERSION"
 
 # ---------------------------------------------------------------- the version
 # Anchored to the tag rather than a bare number: the file holds package versions
@@ -88,7 +88,7 @@ body = textwrap.fill(" ".join(notes.split()), width=72,
 entry = (
     f'    <release version="{version}" date="{date.today().isoformat()}">\n'
     f'      <url type="details">'
-    f'https://github.com/Polemus/GitGui/releases/tag/v{version}</url>\n'
+    f'https://github.com/Polemus/Omnigit/releases/tag/v{version}</url>\n'
     f'      <description>\n'
     f'        <p>\n{body}\n        </p>\n'
     f'      </description>\n'
@@ -113,8 +113,8 @@ fi
 
 # ------------------------------------------------------------- commit and tag
 git -C "$ROOT" add "$CSPROJ" "$METAINFO"
-git -C "$ROOT" commit -q -m "GitGui $VERSION" -m "$NOTES"
-git -C "$ROOT" tag -a "$TAG" -m "GitGui $VERSION"
+git -C "$ROOT" commit -q -m "Omnigit $VERSION" -m "$NOTES"
+git -C "$ROOT" tag -a "$TAG" -m "Omnigit $VERSION"
 
 echo "==> Committed and tagged $TAG"
 git -C "$ROOT" --no-pager show --stat --format='    %h %s' "$TAG" | head -8

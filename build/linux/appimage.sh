@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Builds a single-file AppImage from a tree already staged by package.sh:
-#   dist/GitGui-<version>-<arch>.AppImage
+#   dist/Omnigit-<version>-<arch>.AppImage
 #
 # Usage: build/linux/appimage.sh <rid> [version] [stage-dir]
 #   rid: linux-x64 | linux-arm64
@@ -31,7 +31,7 @@ case "$RID" in
     *) echo "unsupported rid: $RID" >&2 ; exit 1 ;;
 esac
 
-if [ ! -x "$STAGE/usr/lib/gitgui/GitGui" ]; then
+if [ ! -x "$STAGE/usr/lib/omnigit/Omnigit" ]; then
     echo "!! nothing staged at $STAGE - run build/linux/package.sh $RID first" >&2
     exit 1
 fi
@@ -84,21 +84,21 @@ cat > "$APPDIR/AppRun" <<'APPRUN'
 #!/bin/sh
 # The mount point moves on every launch, so resolve it at run time.
 HERE="$(dirname "$(readlink -f "$0")")"
-exec "$HERE/usr/lib/gitgui/GitGui" "$@"
+exec "$HERE/usr/lib/omnigit/Omnigit" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
 
 # appimagetool wants the desktop entry and the icon at the top of the AppDir, and
 # the icon file has to be named after the entry's Icon= key or it refuses to
 # build. Desktop integration reads the icon from .DirIcon.
-APP_ID=io.github.polemus.GitGui
+APP_ID=io.github.polemus.Omnigit
 cp "$ROOT/build/linux/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
-cp "$ROOT/build/linux/icons/gitgui-256.png" "$APPDIR/$APP_ID.png"
+cp "$ROOT/build/linux/icons/omnigit-256.png" "$APPDIR/$APP_ID.png"
 cp "$APPDIR/$APP_ID.png" "$APPDIR/.DirIcon"
 
 echo "==> Building the AppImage"
 mkdir -p "$DIST"
-OUT="$DIST/GitGui-$VERSION-$ARCH.AppImage"
+OUT="$DIST/Omnigit-$VERSION-$ARCH.AppImage"
 
 # APPIMAGE_EXTRACT_AND_RUN unpacks appimagetool instead of mounting it, which
 # is what lets it run on CI images that have no FUSE.

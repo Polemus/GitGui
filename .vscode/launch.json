@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run GitGui",
+            "name": "Run Omnigit",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/GitGui/bin/Debug/net10.0/GitGui",
+            "program": "${workspaceFolder}/src/Omnigit/bin/Debug/net10.0/Omnigit",
             "args": [],
-            "cwd": "${workspaceFolder}/src/GitGui",
+            "cwd": "${workspaceFolder}/src/Omnigit",
             "console": "internalConsole",
             "stopAtEntry": false,
             // Only step through our own code; framework and Avalonia assemblies

@@ -3,7 +3,7 @@
 # The version every artifact is named after, read from the one place it is
 # written down.
 #
-# <Version> in GitGui.csproj is that place. It has to be right regardless of
+# <Version> in Omnigit.csproj is that place. It has to be right regardless of
 # what any script is told, because the Flatpak build never passes -p:Version -
 # Flathub would not either - so the app reports whatever the csproj says. Making
 # it the default everywhere else means the packaging commands in the README carry
@@ -16,7 +16,7 @@
 
 project_version() {
     local root="${1:?usage: project_version <repository-root>}"
-    local csproj="$root/src/GitGui/GitGui.csproj"
+    local csproj="$root/src/Omnigit/Omnigit.csproj"
     local version
 
     version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$csproj")"

@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>GitGui</string>
+    <string>Omnigit</string>
     <key>CFBundleDisplayName</key>
-    <string>GitGui</string>
+    <string>Omnigit</string>
     <key>CFBundleIdentifier</key>
-    <string>net.polemus.gitgui</string>
+    <string>net.polemus.omnigit</string>
     <key>CFBundleVersion</key>
     <string>@VERSION@</string>
     <key>CFBundleShortVersionString</key>
@@ -15,9 +15,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>GitGui</string>
+    <string>Omnigit</string>
     <key>CFBundleIconFile</key>
-    <string>GitGui.icns</string>
+    <string>Omnigit.icns</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>NSHighResolutionCapable</key>

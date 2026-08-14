@@ -11,7 +11,7 @@
 # these two files are: a plain list of URLs and SHA-512s produced by restoring
 # the project once per target architecture.
 #
-# RUN THIS WHENEVER A PackageReference IN GitGui.csproj CHANGES - a version bump
+# RUN THIS WHENEVER A PackageReference IN Omnigit.csproj CHANGES - a version bump
 # from Dependabot counts. Nothing else notices: the app builds fine everywhere
 # else, and the Flatpak build fails with a restore error naming a package it was
 # never given. The check in .github/workflows/ci.yml is there to catch the case
@@ -25,11 +25,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 HERE="$ROOT/build/linux/flatpak"
 TOOLS="$ROOT/build/.tools"
-PROJECT="src/GitGui/GitGui.csproj"
+PROJECT="src/Omnigit/Omnigit.csproj"
 
 # Kept in step with the manifest by reading them out of it, so bumping the
 # runtime is a one-line edit there rather than a two-place one.
-MANIFEST="$HERE/io.github.polemus.GitGui.yml"
+MANIFEST="$HERE/io.github.polemus.Omnigit.yml"
 FREEDESKTOP="$(sed -n "s/^runtime-version: *'\{0,1\}\([0-9.]*\)'\{0,1\}.*/\1/p" "$MANIFEST")"
 DOTNET="$(sed -n 's/.*org\.freedesktop\.Sdk\.Extension\.dotnet\([0-9]*\).*/\1/p' "$MANIFEST" | head -n1)"
 

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Omnigit/Omnigit.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Omnigit.Tests/Omnigit.Tests.csproj" />
+  </Folder>
+</Solution>

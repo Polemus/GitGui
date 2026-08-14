@@ -1,6 +1,6 @@
 # Adding a git hosting site
 
-GitGui talks to more than one kind of hosting site. Adding a new one needs **no code** —
+Omnigit talks to more than one kind of hosting site. Adding a new one needs **no code** —
 just a small JSON file describing the site's API.
 
 You have two ways to do it. **Settings → Hosting sites → Add a site** fills in the same
@@ -12,12 +12,12 @@ Put your file here:
 
 | Platform | Folder |
 | --- | --- |
-| Linux | `~/.config/GitGui/hosts/` |
-| Windows | `%APPDATA%\GitGui\hosts\` |
-| macOS | `~/Library/Application Support/GitGui/hosts/` |
+| Linux | `~/.config/Omnigit/hosts/` |
+| Windows | `%APPDATA%\Omnigit\hosts\` |
+| macOS | `~/Library/Application Support/Omnigit/hosts/` |
 
 Any `.json` file in that folder is loaded at startup. A file whose `id` matches one that
-ships with GitGui **replaces** it, so you can always fix a built-in description yourself
+ships with Omnigit **replaces** it, so you can always fix a built-in description yourself
 without waiting for a release.
 
 ## Why JSON and not a plugin DLL
@@ -33,12 +33,12 @@ tradeoff is why this is JSON.
 
 The cost is real, though: a site whose sign-in is a genuine multi-step conversation
 can't be described this way. GitHub's browser login is exactly that, which is why GitHub
-is built into GitGui as real code. Everything else about GitHub *could* have been a
+is built into Omnigit as real code. Everything else about GitHub *could* have been a
 manifest.
 
 ## A complete example
 
-This is `gitea.json`, which ships with GitGui. It goes through exactly the same code
+This is `gitea.json`, which ships with Omnigit. It goes through exactly the same code
 path yours will:
 
 ```json
@@ -94,14 +94,14 @@ user sees.
 
 ### `recognise`
 
-How GitGui confirms a URL really is this kind of site. It fetches `path` and checks that
+How Omnigit confirms a URL really is this kind of site. It fetches `path` and checks that
 `expectField` exists in the JSON response.
 
 ```json
 "recognise": { "path": "/api/v1/version", "expectField": "version" }
 ```
 
-This is what lets a self-hosted instance live on any domain. GitGui does **not** guess
+This is what lets a self-hosted instance live on any domain. Omnigit does **not** guess
 from the domain name.
 
 If two providers recognise the same server, the first one loaded wins. Give yours a
@@ -166,7 +166,7 @@ manifest, and the token is not stored anywhere.
 Without a token only the `recognise` check runs, which is still the one that catches a
 wrong base path.
 
-If a manifest is malformed or missing an `id`, GitGui logs a warning naming the file and
+If a manifest is malformed or missing an `id`, Omnigit logs a warning naming the file and
 carries on with the rest — one bad file never stops the app starting.
 
 ## Known limits

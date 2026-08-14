@@ -1,6 +1,6 @@
-# Contributing to GitGui
+# Contributing to Omnigit
 
-Thanks for looking. GitGui is a small project with one maintainer, so the most useful
+Thanks for looking. Omnigit is a small project with one maintainer, so the most useful
 thing you can do before writing code is open an issue and say what you have in mind —
 it's cheaper for both of us than a pull request that turns out to duplicate work or cut
 across a decision already made.
@@ -11,10 +11,10 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download). Nothing else 
 even git, since LibGit2Sharp bundles its own native library.
 
 ```bash
-git clone https://github.com/Polemus/GitGui.git
-cd GitGui
-dotnet build                                    # the solution is GitGui.slnx, not .sln
-dotnet run --project src/GitGui/GitGui.csproj
+git clone https://github.com/Polemus/Omnigit.git
+cd Omnigit
+dotnet build                                    # the solution is Omnigit.slnx, not .sln
+dotnet run --project src/Omnigit/Omnigit.csproj
 ```
 
 VS Code users get F5 from the checked-in `.vscode/launch.json`.
@@ -22,7 +22,7 @@ VS Code users get F5 from the checked-in `.vscode/launch.json`.
 ## Where things live
 
 ```
-src/GitGui/
+src/Omnigit/
   Models/          Plain domain types. No behaviour beyond computed display strings.
   Services/        Git, storage, credentials, activity log.
   HostProviders/   Talking to GitHub/Gitea/etc. See docs/host-manifests.md.
@@ -106,7 +106,7 @@ nobody is currently doing.
 
 ## Reporting bugs and vulnerabilities
 
-Ordinary bugs: [open an issue](https://github.com/Polemus/GitGui/issues/new/choose).
+Ordinary bugs: [open an issue](https://github.com/Polemus/Omnigit/issues/new/choose).
 
 Security problems — anything touching tokens, the credential store, or the sign-in flows
 — go through [SECURITY.md](SECURITY.md) instead. Please don't file those as public

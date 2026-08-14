@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
 # Builds the Flatpak and writes a single-file bundle:
-#   dist/GitGui-<version>-<arch>.flatpak
+#   dist/Omnigit-<version>-<arch>.flatpak
 #
 # Usage: build/linux/flatpak/package.sh [version] [--install]
 #   --install  also install the bundle for the current user, so you can run it
 #
 # A .flatpak bundle installs without a remote:
-#     flatpak install --user ./GitGui-<version>-x86_64.flatpak
+#     flatpak install --user ./Omnigit-<version>-x86_64.flatpak
 # which is what the release attaches. Flathub installs the same manifest from
 # its own build servers instead - see docs/flatpak.md.
 #
@@ -34,7 +34,7 @@ VERSION="${1:-$CSPROJ_VERSION}"
 INSTALL=no
 [ "${2:-}" = "--install" ] && INSTALL=yes
 
-APP_ID=io.github.polemus.GitGui
+APP_ID=io.github.polemus.Omnigit
 HERE="$ROOT/build/linux/flatpak"
 DIST="$ROOT/dist"
 STATE="$ROOT/build/.flatpak-builder"
@@ -75,7 +75,7 @@ fi
 # Only reachable when a version was passed explicitly, since the default is the
 # csproj's. Release CI always passes one, which is the case this is for.
 if [ "$CSPROJ_VERSION" != "$VERSION" ]; then
-    echo "!! asked for $VERSION but src/GitGui/GitGui.csproj says $CSPROJ_VERSION" >&2
+    echo "!! asked for $VERSION but src/Omnigit/Omnigit.csproj says $CSPROJ_VERSION" >&2
     echo "   the Flatpak build has no way to override it - update the csproj first" >&2
     exit 1
 fi
@@ -94,7 +94,7 @@ mkdir -p "$DIST"
     "$MANIFEST"
 
 echo "==> Exporting the bundle"
-BUNDLE="$DIST/GitGui-$VERSION-$ARCH.flatpak"
+BUNDLE="$DIST/Omnigit-$VERSION-$ARCH.flatpak"
 
 # build-bundle looks for the "master" branch unless told otherwise, while
 # flatpak-builder exported whatever default-branch in the manifest says. Read it

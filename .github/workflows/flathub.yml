@@ -2,7 +2,7 @@ name: Flathub
 
 # Opens the pull request that publishes a release on Flathub.
 #
-# Flathub builds from its own repository, flathub/io.github.polemus.GitGui, and
+# Flathub builds from its own repository, flathub/io.github.polemus.Omnigit, and
 # maintainers cannot push to its protected branch - every update is a pull
 # request there. That pull request is all this makes: regenerate the manifest
 # from the tag, drop it and the NuGet lists into a branch, open the PR. Flathub's
@@ -96,7 +96,7 @@ jobs:
         if: steps.target.outputs.skip != 'yes'
         run: |
           if [ -z "${{ secrets.FLATHUB_TOKEN }}" ]; then
-            echo "::notice::FLATHUB_TOKEN is not set, so GitGui is not on Flathub yet."
+            echo "::notice::FLATHUB_TOKEN is not set, so Omnigit is not on Flathub yet."
             echo "::notice::docs/flatpak.md has the one-time submission steps."
             echo "skip=yes" >> "$GITHUB_OUTPUT"
           fi
@@ -119,7 +119,7 @@ jobs:
         if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
         uses: actions/checkout@v7
         with:
-          repository: flathub/io.github.polemus.GitGui
+          repository: flathub/io.github.polemus.Omnigit
           token: ${{ secrets.FLATHUB_TOKEN }}
           path: flathub
 
@@ -136,7 +136,7 @@ jobs:
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-          branch="gitgui-$VERSION"
+          branch="omnigit-$VERSION"
           git checkout -b "$branch"
 
           # Copy rather than mirror: the Flathub repository owns files we do not,
@@ -150,7 +150,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "GitGui $VERSION"
+          git commit -m "Omnigit $VERSION"
           git push --force-with-lease -u origin "$branch"
 
           # An open pull request for this version means this is a re-run, and the
@@ -165,10 +165,10 @@ jobs:
           # The delimiter is unquoted because $TAG has to expand; the backticks
           # are escaped for the same reason.
           cat > /tmp/pr-body.md <<BODY
-          Built from [\`$TAG\`](https://github.com/Polemus/GitGui/releases/tag/$TAG).
+          Built from [\`$TAG\`](https://github.com/Polemus/Omnigit/releases/tag/$TAG).
 
           Opened automatically by \`.github/workflows/flathub.yml\` in
-          [Polemus/GitGui](https://github.com/Polemus/GitGui), from the manifest that
+          [Polemus/Omnigit](https://github.com/Polemus/Omnigit), from the manifest that
           \`build/linux/flatpak/flathub-manifest.sh\` generates. The offline NuGet lists
           are regenerated upstream whenever a dependency changes, and checked against the
           project file on every push, so they match the commit pinned here.
@@ -179,5 +179,5 @@ jobs:
           gh pr create \
             --base master \
             --head "$branch" \
-            --title "GitGui $VERSION" \
+            --title "Omnigit $VERSION" \
             --body-file /tmp/pr-body.md

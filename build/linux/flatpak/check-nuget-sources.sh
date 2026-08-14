@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Checks that the offline NuGet lists still match GitGui.csproj.
+# Checks that the offline NuGet lists still match Omnigit.csproj.
 #
 # Usage: build/linux/flatpak/check-nuget-sources.sh
 #
@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-csproj = root / "src" / "GitGui" / "GitGui.csproj"
+csproj = root / "src" / "Omnigit" / "Omnigit.csproj"
 flatpak = root / "build" / "linux" / "flatpak"
 
 # PackageReference elements, in either the one-line or the wrapping form.

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # Builds Linux artifacts for one runtime identifier:
-#   dist/GitGui-<version>-<rid>.tar.gz     portable tarball
-#   dist/gitgui_<version>_<arch>.deb       Debian / Ubuntu / Mint
-#   dist/gitgui-<version>-1.<arch>.rpm     Fedora / RHEL / openSUSE
-#   dist/GitGui-<version>-<arch>.AppImage  everything else
+#   dist/Omnigit-<version>-<rid>.tar.gz     portable tarball
+#   dist/omnigit_<version>_<arch>.deb       Debian / Ubuntu / Mint
+#   dist/omnigit-<version>-1.<arch>.rpm     Fedora / RHEL / openSUSE
+#   dist/Omnigit-<version>-<arch>.AppImage  everything else
 #
 # Usage: build/linux/package.sh <rid> [version]
 #   rid: linux-x64 | linux-arm64
@@ -30,46 +30,46 @@ esac
 
 echo "==> Publishing $RID (self-contained, $VERSION)"
 rm -rf "$STAGE"
-mkdir -p "$DIST" "$STAGE/usr/lib/gitgui" "$STAGE/usr/bin" "$STAGE/usr/share/applications"
+mkdir -p "$DIST" "$STAGE/usr/lib/omnigit" "$STAGE/usr/bin" "$STAGE/usr/share/applications"
 
-dotnet publish "$ROOT/src/GitGui/GitGui.csproj" \
+dotnet publish "$ROOT/src/Omnigit/Omnigit.csproj" \
     --configuration Release \
     --runtime "$RID" \
     --self-contained true \
     -p:Version="$VERSION" \
     -p:DebugType=None \
     -p:DebugSymbols=false \
-    --output "$STAGE/usr/lib/gitgui"
+    --output "$STAGE/usr/lib/omnigit"
 
-chmod +x "$STAGE/usr/lib/gitgui/GitGui"
+chmod +x "$STAGE/usr/lib/omnigit/Omnigit"
 
-# /usr/bin/gitgui -> the real binary next to its runtime files
-ln -sf ../lib/gitgui/GitGui "$STAGE/usr/bin/gitgui"
+# /usr/bin/omnigit -> the real binary next to its runtime files
+ln -sf ../lib/omnigit/Omnigit "$STAGE/usr/bin/omnigit"
 
 echo "==> Laying out desktop integration"
 
 # Everything a desktop environment reads is named after the app id, not the
 # binary: that is what Flatpak requires and what lets one desktop entry and one
-# metainfo file serve all four package formats. The command stays "gitgui".
-APP_ID=io.github.polemus.GitGui
+# metainfo file serve all four package formats. The command stays "omnigit".
+APP_ID=io.github.polemus.Omnigit
 
 install -Dm644 "$ROOT/build/linux/$APP_ID.desktop" \
     "$STAGE/usr/share/applications/$APP_ID.desktop"
 
-# Without this a software centre lists GitGui as a bare package name and no
+# Without this a software centre lists Omnigit as a bare package name and no
 # description. It is the same file the Flatpak ships.
 install -Dm644 "$ROOT/build/linux/$APP_ID.metainfo.xml" \
     "$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 
 for size in 16 32 48 64 128 256; do
-    install -Dm644 "$ROOT/build/linux/icons/gitgui-${size}.png" \
+    install -Dm644 "$ROOT/build/linux/icons/omnigit-${size}.png" \
         "$STAGE/usr/share/icons/hicolor/${size}x${size}/apps/$APP_ID.png"
 done
-install -Dm644 "$ROOT/src/GitGui/Assets/gitgui.svg" \
+install -Dm644 "$ROOT/src/Omnigit/Assets/omnigit.svg" \
     "$STAGE/usr/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 
 echo "==> Portable tarball"
-tar -czf "$DIST/GitGui-$VERSION-$RID.tar.gz" -C "$STAGE/usr/lib" gitgui
+tar -czf "$DIST/Omnigit-$VERSION-$RID.tar.gz" -C "$STAGE/usr/lib" omnigit
 
 # Before the fpm check below, which exits when fpm is absent.
 "$ROOT/build/linux/appimage.sh" "$RID" "$VERSION" "$STAGE"
@@ -82,12 +82,12 @@ fi
 COMMON_ARGS=(
     -s dir
     -C "$STAGE"
-    --name gitgui
+    --name omnigit
     --version "$VERSION"
     --license MIT
     --vendor Polemus
     --maintainer "Polemus <112549+Polemus@users.noreply.github.com>"
-    --url "https://github.com/Polemus/GitGui"
+    --url "https://github.com/Polemus/Omnigit"
     --description "Desktop git client for GitHub, Gitea and other forges."
     --force
 )
@@ -100,7 +100,7 @@ fpm "${COMMON_ARGS[@]}" \
     --depends libice6 \
     --depends libsm6 \
     --depends libfontconfig1 \
-    --package "$DIST/gitgui_${VERSION}_${DEB_ARCH}.deb" \
+    --package "$DIST/omnigit_${VERSION}_${DEB_ARCH}.deb" \
     usr
 
 echo "==> Building .rpm"
@@ -111,7 +111,7 @@ fpm "${COMMON_ARGS[@]}" \
     --depends libICE \
     --depends libSM \
     --depends fontconfig \
-    --package "$DIST/gitgui-${VERSION}-1.${RPM_ARCH}.rpm" \
+    --package "$DIST/omnigit-${VERSION}-1.${RPM_ARCH}.rpm" \
     usr
 
 echo "==> Done:"

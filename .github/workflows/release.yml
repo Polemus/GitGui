@@ -61,7 +61,7 @@ jobs:
 
           if [ "$version" != "$csproj" ]; then
               echo "::error::v$version was asked for, but the csproj says $csproj."
-              echo "::error::Bump <Version> in src/GitGui/GitGui.csproj and tag that commit."
+              echo "::error::Bump <Version> in src/Omnigit/Omnigit.csproj and tag that commit."
               exit 1
           fi
 
@@ -82,7 +82,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Test
-        run: dotnet test GitGui.slnx --configuration Release
+        run: dotnet test Omnigit.slnx --configuration Release
 
   # ------------------------------------------------------------------ linux
   linux:
@@ -297,16 +297,16 @@ jobs:
           # workflow_dispatch runs have no tag yet - make one at this commit.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
-              --title "GitGui $VERSION" \
-              --notes "Automated build of GitGui $VERSION.
+              --title "Omnigit $VERSION" \
+              --notes "Automated build of Omnigit $VERSION.
 
           ## Install
 
-          **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), \`.flatpak\` (\`flatpak install ./GitGui-${VERSION}-x86_64.flatpak\`), the \`.AppImage\` (anywhere else — \`chmod +x\` it and run it, no install), or the portable \`.tar.gz\`.
+          **Linux** — \`.deb\` (Debian/Ubuntu/Mint), \`.rpm\` (Fedora/RHEL/openSUSE), \`.flatpak\` (\`flatpak install ./Omnigit-${VERSION}-x86_64.flatpak\`), the \`.AppImage\` (anywhere else — \`chmod +x\` it and run it, no install), or the portable \`.tar.gz\`.
           **Windows** — run the \`-setup.exe\`, or unzip the portable build.
-          **macOS** — open the \`.dmg\` and drag GitGui to Applications.
+          **macOS** — open the \`.dmg\` and drag Omnigit to Applications.
 
-          The macOS builds are signed and notarised — the \`.dmg\` opens and GitGui launches with nothing to click past. The Windows builds are unsigned, so the first launch needs one nudge: click *More info* → *Run anyway*, and for the portable \`.zip\` you may also need right-click the \`.exe\` → *Properties* → **Unblock**.
+          The macOS builds are signed and notarised — the \`.dmg\` opens and Omnigit launches with nothing to click past. The Windows builds are unsigned, so the first launch needs one nudge: click *More info* → *Run anyway*, and for the portable \`.zip\` you may also need right-click the \`.exe\` → *Properties* → **Unblock**.
 
           **No git installation is required.** The native libgit2 library ships inside the app, along with everything else it needs.
 

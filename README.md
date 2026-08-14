@@ -1,16 +1,16 @@
-# GitGui
+# Omnigit
 
-[![CI](https://github.com/Polemus/GitGui/actions/workflows/ci.yml/badge.svg)](https://github.com/Polemus/GitGui/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/Polemus/GitGui?sort=semver)](https://github.com/Polemus/GitGui/releases/latest)
+[![CI](https://github.com/Polemus/Omnigit/actions/workflows/ci.yml/badge.svg)](https://github.com/Polemus/Omnigit/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Polemus/Omnigit?sort=semver)](https://github.com/Polemus/Omnigit/releases/latest)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
 A desktop git client in the spirit of GitHub Desktop — except it isn't tied to GitHub.
-GitGui talks to **GitHub**, **Gitea** and **GitLab** (including self-hosted instances
+Omnigit talks to **GitHub**, **Gitea** and **GitLab** (including self-hosted instances
 behind your own domain), and to anything else you describe in a JSON file.
 
 Runs on **Linux, Windows and macOS** from a single codebase.
 
-> **Status: working, not finished.** GitGui reads and writes real repositories — branches,
+> **Status: working, not finished.** Omnigit reads and writes real repositories — branches,
 > working-tree status, diffs, history, commits, tags, reverts and resets — signs in to
 > hosting sites to browse, clone, fetch, push and pull, and finishes merges that stop on
 > conflicts. Still missing: pull requests and issues.
@@ -20,33 +20,33 @@ users don't need git, .NET, or anything else installed. See [Does it need git?](
 
 ## Download
 
-**[Latest release →](https://github.com/Polemus/GitGui/releases/latest)**
+**[Latest release →](https://github.com/Polemus/Omnigit/releases/latest)**
 
 | Platform | Take this one |
 | --- | --- |
 | Debian, Ubuntu, Mint | `.deb` |
 | Fedora, RHEL, openSUSE | `.rpm` |
-| Any Linux, sandboxed | `.flatpak` — `flatpak install ./GitGui-*.flatpak` |
+| Any Linux, sandboxed | `.flatpak` — `flatpak install ./Omnigit-*.flatpak` |
 | Any other Linux | `.AppImage` — `chmod +x` it and run it, nothing to install |
 | Windows | `-setup.exe`, or the `.zip` for a portable copy |
-| macOS | `.dmg` — drag GitGui to Applications |
+| macOS | `.dmg` — drag Omnigit to Applications |
 
 Both x64 and arm64 are built for Linux and macOS; Windows is x64.
 
 The AppImage adds itself to your applications menu on first run — a desktop entry and
 the icons in `~/.local/share`, which is what stops the dock showing a generic cog
-instead of GitGui's icon. It writes nothing else there. Set
-`GITGUI_NO_DESKTOP_INTEGRATION=1` to skip it, and delete
-`~/.local/share/applications/io.github.polemus.GitGui.desktop` to undo it. Move the
+instead of Omnigit's icon. It writes nothing else there. Set
+`OMNIGIT_NO_DESKTOP_INTEGRATION=1` to skip it, and delete
+`~/.local/share/applications/io.github.polemus.Omnigit.desktop` to undo it. Move the
 AppImage and the next run points the entry at its new home; delete the AppImage and the
 menu entry hides itself.
 
 The Flatpak sees your home directory, `/mnt`, `/media` and `/run/media`, which is
 where repositories nearly always are. If yours are somewhere else,
-`flatpak override --user --filesystem=host io.github.polemus.GitGui` widens it.
+`flatpak override --user --filesystem=host io.github.polemus.Omnigit` widens it.
 
 **macOS builds are signed and notarised** from 0.3.2 onward, so the `.dmg` opens and
-GitGui launches with no warning and nothing to click past. The ticket is stapled to both
+Omnigit launches with no warning and nothing to click past. The ticket is stapled to both
 the disk image and the app inside it, so a first launch works even with no network.
 
 **Windows builds are unsigned**, and 0.3.1 and earlier are unsigned on both platforms.
@@ -54,10 +54,10 @@ Those need a nudge past the OS — once, then never again:
 
 - **Windows** — "More info" → "Run anyway". For the portable `.zip`, you may also need
   right-click the `.exe` → Properties → **Unblock**.
-- **macOS 15 and later** (0.3.1 and earlier) — open GitGui, let it be blocked, then
+- **macOS 15 and later** (0.3.1 and earlier) — open Omnigit, let it be blocked, then
   **System Settings → Privacy & Security**, scroll to the bottom, **Open Anyway**. The
   old right-click trick was removed in macOS 15 and no longer helps.
-- **macOS 14 and earlier** (0.3.1 and earlier) — Control-click GitGui in Applications →
+- **macOS 14 and earlier** (0.3.1 and earlier) — Control-click Omnigit in Applications →
   **Open** → **Open**. It has to be the right-click menu; double-clicking won't offer
   the choice.
 
@@ -70,7 +70,7 @@ GitHub Actions from a tagged commit in this repository, with a public build log.
 ## Screenshots
 
 Every screenshot below is the app running against **real repositories** — including its
-own. The one at the top is GitGui showing the edit to this very README.
+own. The one at the top is Omnigit showing the edit to this very README.
 
 **Changes — working tree and unified diff**
 
@@ -154,7 +154,7 @@ until nothing is conflicted
   shows what it is actually doing:
 
   ```
-  14:22:01  Fetching origin from https://github.com/Polemus/GitGui.git
+  14:22:01  Fetching origin from https://github.com/Polemus/Omnigit.git
   14:22:02    30% — 41/136 objects, 82 KB
   14:22:03  Fetched from origin — already up to date
   ```
@@ -168,7 +168,7 @@ walks you through it — which URL lists repositories, which field holds the nam
 site is usable immediately, without a restart. Gitea-shaped and GitLab-shaped starting
 points are offered, since those two differ enough that one set of defaults won't do.
 
-What that form writes is an ordinary JSON file in `~/.config/GitGui/hosts/`, identical to
+What that form writes is an ordinary JSON file in `~/.config/Omnigit/hosts/`, identical to
 one you'd write by hand and editable afterwards. The file stays the source of truth. See
 **[docs/host-manifests.md](docs/host-manifests.md)** for the format.
 
@@ -182,7 +182,7 @@ the tokens held for other sites. A plugin DLL could, which is why this isn't one
 | GitLab | a built-in manifest |
 | anything else | a manifest you write |
 
-Gitea ships *as* a manifest deliberately: the format is exercised by GitGui's own code,
+Gitea ships *as* a manifest deliberately: the format is exercised by Omnigit's own code,
 so it can't rot into something that only works in theory. Verified end-to-end against a
 real Gitea 1.27 server — recognition, token sign-in, repository listing and credential
 templating — including a hand-written third-party manifest.
@@ -193,7 +193,7 @@ Sign in under **Settings → Accounts** — **"Sign in with browser"** on github
 a code to type into GitHub and waits for approval, or a personal access token anywhere —
 and fetch/push/pull work. GitHub Enterprise has no browser button until you register an
 OAuth App on that server (Settings → Developer settings → OAuth Apps, tick *Enable Device
-Flow*) and set `GITGUI_GITHUB_CLIENT_ID`; a token works there without any of that.
+Flow*) and set `OMNIGIT_GITHUB_CLIENT_ID`; a token works there without any of that.
 
 The sync button performs whatever its label says — pull when behind, push when ahead,
 otherwise fetch — and sets the upstream on a branch's first push so you don't have to
@@ -220,7 +220,7 @@ a commit whose remote URL carried no credentials, confirmed server-side.
 
 ## Does it need git?
 
-**No.** LibGit2Sharp bundles native `libgit2` binaries, and because GitGui publishes
+**No.** LibGit2Sharp bundles native `libgit2` binaries, and because Omnigit publishes
 self-contained, they end up inside every installer. Users need no git, no .NET, nothing.
 The bundled library covers every platform we ship: `linux-x64`, `linux-arm64`, `win-x64`,
 `osx-arm64` and `osx-x64`.
@@ -259,7 +259,7 @@ behaves identically on all three platforms.
 ## Project layout
 
 ```
-src/GitGui/
+src/Omnigit/
   Models/        Domain types — hosts, accounts, repos, commits, diffs
   Services/
     GitService.cs          libgit2 implementation of IGitService
@@ -280,7 +280,7 @@ src/GitGui/
   Views/         MainWindow, RepositoryView, DiffView, CloneView, SettingsView
   Styles/        Tokens.axaml (theme colours + icons), Controls.axaml (control styles)
   Assets/        App icon
-tests/GitGui.Tests/
+tests/Omnigit.Tests/
                  xunit — pure functions, plus branch switching, commit operations
                  and conflicts against real throwaway repositories. See "Tests".
 build/
@@ -300,7 +300,7 @@ with `DynamicResource`. To restyle the app, that's the only file you need.
 Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```bash
-dotnet run --project src/GitGui/GitGui.csproj
+dotnet run --project src/Omnigit/Omnigit.csproj
 ```
 
 In VS Code, <kbd>F5</kbd> works via the checked-in `.vscode/launch.json`. (If you press
@@ -356,7 +356,7 @@ pwsh build/windows/package.ps1 -Rid win-x64
 ```
 
 Artifacts land in `dist/`. None of those commands names a version: every one of them
-defaults to `<Version>` in `GitGui.csproj`, which is the single place it is written
+defaults to `<Version>` in `Omnigit.csproj`, which is the single place it is written
 down. Pass one as the last argument to override it, as release CI does.
 
 The macOS build signs and notarises itself when the `APPLE_*` variables are set — see the
@@ -394,7 +394,7 @@ why, and how a release reaches Flathub.
 git push origin HEAD && git push origin v1.2.3
 ```
 
-That bumps `<Version>` in `GitGui.csproj`, adds a `<release>` entry to the metainfo,
+That bumps `<Version>` in `Omnigit.csproj`, adds a `<release>` entry to the metainfo,
 commits and tags. Those two edits are all a release needs, and both have to be *inside*
 the tagged commit rather than derived from the tag: the csproj is what the app reports
 and what the Flatpak build reads (it never passes `-p:Version`, because Flathub would
@@ -424,7 +424,7 @@ attaches the results to a GitHub Release:
 
 You can also run it manually from the Actions tab and pass a version.
 
-Once GitGui is on Flathub, `flathub.yml` picks up from there: a successful release
+Once Omnigit is on Flathub, `flathub.yml` picks up from there: a successful release
 opens the pull request that publishes it, leaving the test build for a human to install
 and merge. It needs one repository secret and does nothing at all until that exists —
 [docs/flatpak.md](docs/flatpak.md) has both the one-time submission and the token.
@@ -468,7 +468,7 @@ build would ever notice were wrong.
   `PublishTrimmed` would cut that substantially, but Avalonia needs trimming feed
   configuration and `ViewLocator`'s reflection would have to go first.
 - **Not on Flathub yet.** The Flatpak builds, and every release attaches one, but it is
-  installed from a `.flatpak` file rather than from `flatpak install flathub gitgui`.
+  installed from a `.flatpak` file rather than from `flatpak install flathub omnigit`.
   Getting there is a pull request against `flathub/flathub` and a review of the sandbox
   permissions; [docs/flatpak.md](docs/flatpak.md) has the steps and the arguments.
 
@@ -480,7 +480,7 @@ a mistake is expensive. The gaps listed above are the honest backlog — say so 
 before starting on one, so two people don't write it twice.
 
 Found a security problem? Don't open an issue —
-[report it privately](https://github.com/Polemus/GitGui/security/advisories/new). See
+[report it privately](https://github.com/Polemus/Omnigit/security/advisories/new). See
 [SECURITY.md](.github/SECURITY.md).
 
 ## Licence
@@ -490,4 +490,4 @@ MIT — see [LICENSE](LICENSE).
 Release builds are self-contained, so they bundle the .NET runtime, Avalonia, Skia and
 libgit2. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists all of it. The one worth
 knowing about is **libgit2**, which is GPLv2 — under a linking exception that explicitly
-permits exactly this, so it places no obligation on GitGui's own source or yours.
+permits exactly this, so it places no obligation on Omnigit's own source or yours.

@@ -34,12 +34,12 @@ Linux, Keychain on macOS, DPAPI on Windows, with a `0600` file fallback that rep
 `IsSecure = false` so the UI can warn rather than pretending.
 
 **The GitHub OAuth client id is checked in, and that is not a leak.** `DefaultClientId`
-in `GitHubProvider` is GitGui's own OAuth App on github.com. A client id names the
+in `GitHubProvider` is Omnigit's own OAuth App on github.com. A client id names the
 application on the approval screen and authorises nothing by itself; the device flow is a
 public-client grant with no client secret, so there is no second half to protect.
 Shipping it is what lets browser sign-in work out of the box instead of asking every user
 to register their own app. It is gated to github.com — an Enterprise server has never
-heard of it, so those still need `GITGUI_GITHUB_CLIENT_ID`, which overrides the default
+heard of it, so those still need `OMNIGIT_GITHUB_CLIENT_ID`, which overrides the default
 everywhere.
 
 **libgit2 handles are opened per call, not cached.** They aren't thread-safe and the UI
@@ -132,7 +132,7 @@ that was never committed — the one place in this codebase where a bug is unrec
 
 **Two `.dmg`s in one job collide over the volume name.** `hdiutil create` attaches the
 image while it builds it, so building osx-arm64 and then osx-x64 — which the release
-job does — has the second one mounting `/Volumes/GitGui <version>` while the first is
+job does — has the second one mounting `/Volumes/Omnigit <version>` while the first is
 still releasing it. It fails with `Resource busy`, on the second RID only, with the
 first `.dmg` already in `dist/`. `build/macos/package.sh` detaches a stale volume and
 retries rather than renaming the volume per architecture.

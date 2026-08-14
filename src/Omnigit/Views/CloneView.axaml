@@ -1,0 +1,100 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Omnigit.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
+             x:Class="Omnigit.Views.CloneView"
+             x:DataType="vm:MainWindowViewModel"
+             x:Name="Root">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,Auto,*" Background="{DynamicResource AppBackground}">
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="12" Margin="32,28,32,16">
+            <Button Classes="secondary" HorizontalAlignment="Left"
+                    Command="{Binding CloseCloneCommand}"
+                    Content="← Back to repository" />
+
+            <TextBlock Classes="h1" Text="Clone a repository" />
+            <TextBlock Classes="caption" TextWrapping="Wrap"
+                       Text="Everything your signed-in accounts can see, from every hosting site at once. Cloning uses that site's own token, so private repositories work without touching a terminal." />
+        </StackPanel>
+
+        <!-- Filter and refresh -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="32,0,32,14">
+            <TextBox Grid.Column="0" Classes="commitBox"
+                     Text="{Binding RemoteFilter, Mode=TwoWay}"
+                     PlaceholderText="Filter by name or description" />
+            <Button Grid.Column="1" Classes="secondary" Content="Refresh"
+                    IsEnabled="{Binding !IsLoadingRemotes}"
+                    Command="{Binding LoadRemoteRepositoriesCommand}" />
+        </Grid>
+
+        <!-- Results -->
+        <Panel Grid.Row="2">
+            <TextBlock Classes="caption"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding IsLoadingRemotes}"
+                       Text="Asking every signed-in site…" />
+
+            <TextBlock Classes="caption" TextWrapping="Wrap" MaxWidth="420"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center"
+                       Text="{Binding RemoteEmptyLabel}">
+                <TextBlock.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="!HasRemoteResults" />
+                        <Binding Path="!IsLoadingRemotes" />
+                    </MultiBinding>
+                </TextBlock.IsVisible>
+            </TextBlock>
+
+            <ScrollViewer IsVisible="{Binding HasRemoteResults}" Padding="32,0,32,32">
+                <ItemsControl ItemsSource="{Binding RemoteRepositories}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RemoteRepositoryViewModel">
+                            <Border Classes="card" Margin="0,0,0,10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="5">
+                                        <StackPanel Orientation="Horizontal" Spacing="9">
+                                            <TextBlock Classes="h2" Text="{Binding FullName}" />
+                                            <Border Classes="chip" VerticalAlignment="Center">
+                                                <TextBlock Classes="muted" Text="{Binding VisibilityLabel}" />
+                                            </Border>
+                                            <TextBlock Classes="muted" VerticalAlignment="Center"
+                                                       Text="{Binding UpdatedLabel}" />
+                                        </StackPanel>
+
+                                        <TextBlock Classes="muted" TextWrapping="Wrap"
+                                                   Text="{Binding Description}" />
+
+                                        <TextBlock Classes="muted"
+                                                   FontFamily="{DynamicResource MonoFont}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Text="{Binding CloneUrl}" />
+                                    </StackPanel>
+
+                                    <Button Grid.Column="1" Classes="primary" Content="Clone"
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding CanClone}"
+                                            Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CloneRepositoryCommand}"
+                                            CommandParameter="{Binding}" />
+
+                                    <Border Grid.Column="1" Classes="chip" VerticalAlignment="Center"
+                                            IsVisible="{Binding IsCloned}">
+                                        <TextBlock Classes="muted" Text="Already added" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Panel>
+    </Grid>
+</UserControl>

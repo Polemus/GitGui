@@ -24,7 +24,7 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-run-session >/dev/n
     exec dbus-run-session -- "$0" "$@"
 fi
 
-APP_ID=io.github.polemus.GitGui
+APP_ID=io.github.polemus.Omnigit
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SDK=org.freedesktop.Sdk//25.08
 

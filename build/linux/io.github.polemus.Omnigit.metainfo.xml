@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata. This is what software centres read: the name, the
+  description, the screenshots and the release history all come from here, and
+  a package without it shows up as a bare filename with no description.
+
+  Installed by every Linux package we build - .deb, .rpm, AppImage and Flatpak
+  alike - so there is one description of Omnigit rather than four that drift.
+
+  The file name, the <id> and the desktop file name must all be the same
+  reverse-DNS string. Flathub requires it, and AppStream needs the <id> and the
+  <launchable> to agree or it will not attach the metadata to the launcher.
+
+  Validate after editing with build/linux/flatpak/validate.sh, which runs
+  appstreamcli out of the freedesktop SDK against this file and the desktop entry.
+-->
+<component type="desktop-application">
+  <id>io.github.polemus.Omnigit</id>
+
+  <!-- The licence of this file, not of the app. -->
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>Omnigit</name>
+  <summary>Git client for GitHub, Gitea and more</summary>
+
+  <developer id="io.github.polemus">
+    <name>Polemus</name>
+  </developer>
+
+  <description>
+    <p>
+      A desktop git client in the spirit of GitHub Desktop, except it is not tied to
+      GitHub. Omnigit talks to GitHub, Gitea and GitLab - including self-hosted
+      instances behind your own domain - and to anything else you describe in a JSON
+      file, without writing any code.
+    </p>
+    <p>
+      No git installation is required. The native libgit2 library ships inside the
+      app, so there is nothing else to install.
+    </p>
+    <p>Day to day it does the usual work of a git client:</p>
+    <ul>
+      <li>Working-tree status, unified diffs, staging and committing</li>
+      <li>History with tag badges, and a commit menu that amends, resets, reverts, tags, branches and cherry-picks</li>
+      <li>Fetch, push and pull, with sign-in by token or - on GitHub - through your browser</li>
+      <li>Branch switching that asks what to do with uncommitted work instead of refusing</li>
+      <li>Merges, reverts and cherry-picks that stop on conflicts are finished from inside the app</li>
+      <li>Browsing and cloning repositories from every hosting site you are signed in to</li>
+    </ul>
+    <p>
+      Access tokens go to your system keyring, never to a settings file. Pull requests
+      and issues are not implemented yet.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.polemus.Omnigit.desktop</launchable>
+
+  <url type="homepage">https://github.com/Polemus/Omnigit</url>
+  <url type="bugtracker">https://github.com/Polemus/Omnigit/issues</url>
+  <url type="vcs-browser">https://github.com/Polemus/Omnigit</url>
+  <url type="contribute">https://github.com/Polemus/Omnigit/blob/main/.github/CONTRIBUTING.md</url>
+
+  <!--
+    Absolute URLs, because a software centre reads this file without the
+    repository around it. They point at the default branch rather than a tag, so
+    refreshing the screenshots does not mean editing this file too.
+  -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/Polemus/Omnigit/main/docs/screenshots/changes-dark.png</image>
+      <caption>The working tree and a unified diff, side by side</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Polemus/Omnigit/main/docs/screenshots/history-dark.png</image>
+      <caption>History, with the files and diff of the selected commit</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Polemus/Omnigit/main/docs/screenshots/conflicts-dark.png</image>
+      <caption>Finishing a merge that stopped on conflicts</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Polemus/Omnigit/main/docs/screenshots/repository-picker.png</image>
+      <caption>Repositories grouped by the hosting site they came from</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Polemus/Omnigit/main/docs/screenshots/changes-light.png</image>
+      <caption>The same working tree in the light theme</caption>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>Development</category>
+    <category>RevisionControl</category>
+  </categories>
+
+  <keywords>
+    <keyword>git</keyword>
+    <keyword>github</keyword>
+    <keyword>gitea</keyword>
+    <keyword>gitlab</keyword>
+    <keyword>forge</keyword>
+    <keyword>version control</keyword>
+    <keyword>vcs</keyword>
+    <keyword>commit</keyword>
+    <keyword>diff</keyword>
+  </keywords>
+
+  <!--
+    Backdrop the software centre paints behind the icon. These are a light tint
+    and a dark shade of BrandAccentColor (#3399CC) in Styles/Tokens.axaml - the
+    accent itself is too saturated to sit a name on top of.
+  -->
+  <branding>
+    <color type="primary" scheme_preference="light">#a8d8ee</color>
+    <color type="primary" scheme_preference="dark">#1d4b66</color>
+  </branding>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <!-- Three resizable panes side by side; it does not fold down to a phone. -->
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <!-- Nothing to warn about, but the element has to be present and typed. -->
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-08-14">
+      <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.1.0</url>
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

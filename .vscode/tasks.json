@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/GitGui.slnx",
+                "${workspaceFolder}/Omnigit.slnx",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -25,7 +25,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/src/GitGui/GitGui.csproj"
+                "${workspaceFolder}/src/Omnigit/Omnigit.csproj"
             ],
             "problemMatcher": "$msCompile"
         }
