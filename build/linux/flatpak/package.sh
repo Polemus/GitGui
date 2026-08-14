@@ -30,9 +30,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$ROOT/build/version.sh"
 CSPROJ_VERSION="$(project_version "$ROOT")"
 
-VERSION="${1:-$CSPROJ_VERSION}"
+# --install in either position, because the version is optional now: both
+# "package.sh --install" and "package.sh 1.2.3 --install" have to work, and the
+# first is what the documented command looks like.
+VERSION=""
 INSTALL=no
-[ "${2:-}" = "--install" ] && INSTALL=yes
+
+for arg in "$@"; do
+    case "$arg" in
+        --install) INSTALL=yes ;;
+        -*) echo "!! unknown option: $arg" >&2 ; exit 1 ;;
+        *)  VERSION="$arg" ;;
+    esac
+done
+
+VERSION="${VERSION:-$CSPROJ_VERSION}"
 
 APP_ID=io.github.polemus.Omnigit
 HERE="$ROOT/build/linux/flatpak"
