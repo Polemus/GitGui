@@ -23,12 +23,22 @@ on:
         description: 'Version to publish (without the leading v)'
         required: true
 
+  # PAUSED. The automatic trigger was:
+  #
+  #   workflow_run:
+  #     workflows: [Release]
+  #     types: [completed]
+  #
   # Releases created with the workflow's own GITHUB_TOKEN do not raise a release
   # event - that is GitHub's loop protection - so watching the Release workflow
-  # is what makes this happen on its own.
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
+  # is what made this happen on its own. Put those three lines back to restore
+  # it. Until then the job only runs when someone asks for it by hand, which is
+  # what the `if:` below still allows for.
+  #
+  # Paused because the submission itself is unfinished: the app is not on
+  # Flathub yet, so there is no repository to open a pull request against and
+  # nothing this could usefully do after a release. docs/flatpak.md has the
+  # one-time steps that come first.
 
 # The GitHub token is only ever used to read this repository. Everything done to
 # the Flathub repository uses FLATHUB_TOKEN, which is scoped to that repository
