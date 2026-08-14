@@ -273,6 +273,21 @@ sign_bundle() {
     local entitlements
     entitlements="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/entitlements.plist"
 
+    # Everything except this gets signed on its own. Handing codesign the path of
+    # a bundle's main executable does not sign that file - codesign resolves it to
+    # the enclosing .app and signs the whole bundle, early and with none of the
+    # entitlements. It then fails sealing a bundle whose nested code is only
+    # half done:
+    #
+    #     Contents/MacOS/GitGui: code object is not signed at all
+    #     In subcomponent: .../System.Diagnostics.Contracts.dll
+    #
+    # The main executable is signed by signing the bundle, at the end, which is
+    # also the only way it can carry the entitlements it needs.
+    local main
+    main="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \
+        "$app/Contents/Info.plist" 2>/dev/null || echo GitGui)"
+
     echo "==> Signing the binaries inside $(basename "$app")"
 
     # Mach-O by content, not by extension: a self-contained publish drops
@@ -280,6 +295,8 @@ sign_bundle() {
     # unsigned one of those fails notarisation after everything else succeeded.
     local count=0
     while IFS= read -r -d '' file; do
+        [ "$file" = "$main" ] && continue
+
         case "$(file -b "$file")" in
             *Mach-O*)
                 _codesign "$file"
@@ -290,10 +307,16 @@ sign_bundle() {
 
     echo "==> Signed $count nested binar$([ "$count" = 1 ] && echo y || echo ies)"
 
-    # The bundle last, and the only thing that carries the entitlements.
+    # The bundle last: this is what signs the main executable, and the only thing
+    # that carries the entitlements.
     _codesign --entitlements "$entitlements" "$app"
 
-    codesign --verify --deep --strict --verbose=2 "$app"
+    # Not --deep. Apple has discouraged it for years, and here it also walks the
+    # managed .dll files a .NET publish leaves beside the executable and wants
+    # them signed, which they neither are nor need to be - they are not Mach-O,
+    # and notarisation does not ask for it either. spctl in verify_gatekeeper is
+    # the check that means anything.
+    codesign --verify --strict --verbose=2 "$app"
 }
 
 sign_dmg() {
