@@ -94,39 +94,56 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
         if (string.IsNullOrEmpty(manifest.Endpoints.Repositories))
             return [];
 
-        using var document = await GetJsonAsync(
-            Combine(account.BaseUrl, manifest.Endpoints.Repositories), account.Token, cancellationToken);
-
-        var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Array)
-            throw new HostProviderException($"{DisplayName} returned an unexpected repository list.");
+        // Paged the same way as GitHub, and for the same reason: the endpoints in our
+        // own manifests ask for 100 at a time because that is all Gitea and GitLab will
+        // give, and anyone with more than that was quietly missing the rest. Following
+        // the Link header needs no per-site paging scheme in the manifest format - a
+        // site that sends the header is paged, and one that does not returns one page.
+        Uri? url = Combine(account.BaseUrl, manifest.Endpoints.Repositories);
 
         var fields = manifest.RepositoryFields;
         var repositories = new List<RemoteRepository>();
 
-        foreach (var item in root.EnumerateArray())
+        for (var page = 0; url is not null && page < MaxPages; page++)
         {
-            var name = fields.Name.GetString(item);
-            var cloneUrl = fields.CloneUrl.GetString(item);
+            var (document, next) = await GetJsonPageAsync(url, account.Token, cancellationToken);
 
-            // A repo we can't name or clone is useless; skip rather than fail the lot.
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(cloneUrl))
-                continue;
-
-            repositories.Add(new RemoteRepository
+            using (document)
             {
-                Name = name,
-                Owner = fields.Owner.GetString(item) ?? string.Empty,
-                CloneUrl = cloneUrl,
-                DefaultBranch = Blank(fields.DefaultBranch.GetString(item)) ?? "main",
-                IsPrivate = fields.IsPrivate.GetBool(item),
-                Description = fields.Description.GetString(item),
-                UpdatedAt = fields.UpdatedAt.GetDate(item),
-            });
+                var root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Array)
+                    throw new HostProviderException($"{DisplayName} returned an unexpected repository list.");
+
+                foreach (var item in root.EnumerateArray())
+                {
+                    var name = fields.Name.GetString(item);
+                    var cloneUrl = fields.CloneUrl.GetString(item);
+
+                    // A repo we can't name or clone is useless; skip rather than fail the lot.
+                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(cloneUrl))
+                        continue;
+
+                    repositories.Add(new RemoteRepository
+                    {
+                        Name = name,
+                        Owner = fields.Owner.GetString(item) ?? string.Empty,
+                        CloneUrl = cloneUrl,
+                        DefaultBranch = Blank(fields.DefaultBranch.GetString(item)) ?? "main",
+                        IsPrivate = fields.IsPrivate.GetBool(item),
+                        Description = fields.Description.GetString(item),
+                        UpdatedAt = fields.UpdatedAt.GetDate(item),
+                    });
+                }
+            }
+
+            url = next;
         }
 
         return repositories;
     }
+
+    /// <summary>The same stop on runaway paging as GitHubProvider applies.</summary>
+    private const int MaxPages = 50;
 
     public GitCredentials GetGitCredentials(HostAccount account) => new(
         Substitute(manifest.GitCredentials.Username, account),
@@ -137,6 +154,10 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
     // ---------------------------------------------------------------- helpers
 
     private async Task<JsonDocument> GetJsonAsync(Uri url, string token, CancellationToken cancellationToken)
+        => (await GetJsonPageAsync(url, token, cancellationToken)).Document;
+
+    private async Task<(JsonDocument Document, Uri? Next)> GetJsonPageAsync(
+        Uri url, string token, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
 
@@ -168,11 +189,16 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
             if (!response.IsSuccessStatusCode)
                 throw new HostProviderException($"{url} returned {(int)response.StatusCode} {response.ReasonPhrase}.");
 
+            // Read before the response is disposed at the end of this block.
+            var next = response.Headers.TryGetValues("Link", out var link)
+                ? LinkHeader.Next(link, url)
+                : null;
+
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
             try
             {
-                return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                return (await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken), next);
             }
             catch (JsonException ex)
             {

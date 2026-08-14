@@ -177,34 +177,47 @@ public sealed class GitHubProvider(HttpClient http, string? configuredClientId) 
     public async Task<IReadOnlyList<RemoteRepository>> ListRepositoriesAsync(
         HostAccount account, CancellationToken cancellationToken)
     {
-        var url = new Uri(ApiBase(account.BaseUrl), "user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member");
-
-        using var document = await GetJsonAsync(url, account.Token, cancellationToken);
-        var root = document.RootElement;
-
-        if (root.ValueKind != JsonValueKind.Array)
-            throw new HostProviderException("GitHub returned an unexpected repository list.");
+        // 100 is the most GitHub will return at once. An organisation with more than
+        // that - which is most of them - needs the rest fetching page by page, or the
+        // repositories simply are not there to be cloned and nothing says why.
+        Uri? url = new(ApiBase(account.BaseUrl),
+            "user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member");
 
         var repositories = new List<RemoteRepository>();
 
-        foreach (var item in root.EnumerateArray())
+        for (var page = 0; url is not null && page < MaxPages; page++)
         {
-            var name = Str(item, "name");
-            var cloneUrl = Str(item, "clone_url");
+            var (document, next) = await GetJsonPageAsync(url, account.Token, cancellationToken);
 
-            if (name is null || cloneUrl is null)
-                continue;
-
-            repositories.Add(new RemoteRepository
+            using (document)
             {
-                Name = name,
-                Owner = item.TryGetProperty("owner", out var owner) ? Str(owner, "login") ?? string.Empty : string.Empty,
-                CloneUrl = cloneUrl,
-                DefaultBranch = Str(item, "default_branch") ?? "main",
-                IsPrivate = item.TryGetProperty("private", out var p) && p.ValueKind == JsonValueKind.True,
-                Description = Str(item, "description"),
-                UpdatedAt = DateTimeOffset.TryParse(Str(item, "updated_at"), out var when) ? when : null,
-            });
+                var root = document.RootElement;
+
+                if (root.ValueKind != JsonValueKind.Array)
+                    throw new HostProviderException("GitHub returned an unexpected repository list.");
+
+                foreach (var item in root.EnumerateArray())
+                {
+                    var name = Str(item, "name");
+                    var cloneUrl = Str(item, "clone_url");
+
+                    if (name is null || cloneUrl is null)
+                        continue;
+
+                    repositories.Add(new RemoteRepository
+                    {
+                        Name = name,
+                        Owner = item.TryGetProperty("owner", out var owner) ? Str(owner, "login") ?? string.Empty : string.Empty,
+                        CloneUrl = cloneUrl,
+                        DefaultBranch = Str(item, "default_branch") ?? "main",
+                        IsPrivate = item.TryGetProperty("private", out var p) && p.ValueKind == JsonValueKind.True,
+                        Description = Str(item, "description"),
+                        UpdatedAt = DateTimeOffset.TryParse(Str(item, "updated_at"), out var when) ? when : null,
+                    });
+                }
+            }
+
+            url = next;
         }
 
         return repositories;
@@ -279,16 +292,29 @@ public sealed class GitHubProvider(HttpClient http, string? configuredClientId) 
         request.Headers.Remove("Accept");
         request.Headers.TryAddWithoutValidation("Accept", "application/json");
 
-        return await SendJsonAsync(request, cancellationToken);
+        // The device flow is never paged; only the document matters.
+        return (await SendJsonAsync(request, cancellationToken)).Document;
     }
 
+    /// <summary>
+    /// A stop on runaway paging. Fifty pages is five thousand repositories, past any
+    /// real account, and a server that answered every page with a link to another one
+    /// would otherwise be followed until the request was cancelled.
+    /// </summary>
+    private const int MaxPages = 50;
+
     private async Task<JsonDocument> GetJsonAsync(Uri url, string token, CancellationToken cancellationToken)
+        => (await GetJsonPageAsync(url, token, cancellationToken)).Document;
+
+    private async Task<(JsonDocument Document, Uri? Next)> GetJsonPageAsync(
+        Uri url, string token, CancellationToken cancellationToken)
     {
         using var request = Request(HttpMethod.Get, url, token);
         return await SendJsonAsync(request, cancellationToken);
     }
 
-    private async Task<JsonDocument> SendJsonAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    private async Task<(JsonDocument Document, Uri? Next)> SendJsonAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken)
     {
         HttpResponseMessage response;
         try
@@ -308,11 +334,16 @@ public sealed class GitHubProvider(HttpClient http, string? configuredClientId) 
                     "GitHub rejected the token. Check it has not expired and carries the 'repo' scope.");
             }
 
+            // Read before the response is disposed at the end of this block.
+            var next = response.Headers.TryGetValues("Link", out var link)
+                ? LinkHeader.Next(link, request.RequestUri)
+                : null;
+
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 
             try
             {
-                return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                return (await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken), next);
             }
             catch (JsonException ex)
             {
