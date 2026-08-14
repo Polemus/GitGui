@@ -57,7 +57,7 @@
                     <Border Grid.Column="0" Width="26" Height="26" CornerRadius="7"
                             VerticalAlignment="Center"
                             Background="{DynamicResource AccentBrush}">
-                        <TextBlock Text="G" FontSize="15" FontWeight="Bold"
+                        <TextBlock Text="OG" FontSize="12" FontWeight="Bold"
                                    Foreground="{DynamicResource TextOnAccent}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
