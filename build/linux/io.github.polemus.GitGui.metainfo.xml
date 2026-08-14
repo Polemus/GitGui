@@ -130,6 +130,18 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.3.2" date="2026-08-14">
+      <url type="details">https://github.com/Polemus/GitGui/releases/tag/v0.3.2</url>
+      <description>
+        <p>
+          Every page of the repository list is now fetched, so an
+          account at an organisation with more than a hundred
+          repositories can see and clone all of them. macOS builds are
+          signed and notarised, so the disk image opens and GitGui
+          launches without a trip through System Settings.
+        </p>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-08-14">
       <url type="details">https://github.com/Polemus/GitGui/releases/tag/v0.3.1</url>
       <description>

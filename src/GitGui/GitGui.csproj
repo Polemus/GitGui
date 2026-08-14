@@ -10,7 +10,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>GitGui</RootNamespace>
     <AssemblyName>GitGui</AssemblyName>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <Company>Polemus</Company>
     <Product>GitGui</Product>
     <ApplicationIcon>Assets/gitgui.ico</ApplicationIcon>
