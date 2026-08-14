@@ -136,7 +136,21 @@
 
     </ResourceDictionary.ThemeDictionaries>
 
-    <!-- No font is embedded; this is a fallback chain across the three platforms. -->
+    <!--
+        The UI font, named by its avares URI so the copy embedded in
+        Avalonia.Fonts.Inter is the one used.
+
+        WithInterFont() in Program.cs is not enough on its own: it supplies a
+        *default* family, which only applies where nothing else resolves, so
+        controls inherit whatever fontconfig calls the default sans instead. That
+        is Adwaita Sans on a current Fedora - a fork of Inter, so it looks nearly
+        right - and DejaVu Sans inside the Flatpak runtime, which is 15% wider at
+        the same size and looks obviously wrong beside it. Asking for the embedded
+        file by URI takes the system out of the decision entirely.
+    -->
+    <FontFamily x:Key="UiFont">avares://Avalonia.Fonts.Inter/Assets#Inter</FontFamily>
+
+    <!-- No mono font is embedded; this is a fallback chain across the three platforms. -->
     <FontFamily x:Key="MonoFont">Cascadia Mono,JetBrains Mono,DejaVu Sans Mono,SF Mono,Menlo,Consolas,monospace</FontFamily>
 
     <!--

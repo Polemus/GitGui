@@ -3,6 +3,15 @@
 
     <!-- ===================== Typography ===================== -->
 
+    <!--
+        Set on the window so everything inherits it. Without this the app renders
+        in whatever fontconfig calls the default sans, which differs per machine
+        and per sandbox - see the UiFont note in Tokens.axaml.
+    -->
+    <Style Selector="Window">
+        <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
+    </Style>
+
     <Style Selector="TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />

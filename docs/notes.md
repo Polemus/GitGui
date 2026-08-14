@@ -179,18 +179,20 @@ that is offline is refused. Two round trips per architecture is why the macOS re
 allows 90 minutes. Copy the signed bundle into the image with `ditto`, never `cp` — it is
 the copy documented to preserve what a signature and a stapled ticket depend on.
 
-**Text looks different in the Flatpak because the sandbox cannot see the host's subpixel
-setting.** Same font — Inter is embedded and the runtime mounts host fonts at
-`/run/host/fonts` — but `fc-match -v` reports `rgba: 1` (subpixel RGB) on a Fedora host and
-`rgba: 5` (none) inside `org.freedesktop.Platform`, so glyphs are greyscale-antialiased and
-read as softer and slightly wider. Antialiasing, hinting and hint style all match; only
-that one value differs.
+**`WithInterFont()` does not make the app use Inter.** It supplies a *default* family name,
+which only applies where nothing else resolves — so controls inherit whatever fontconfig
+calls the default sans instead, and the embedded font is shipped but never drawn. On a
+current Fedora that default is Adwaita Sans, a fork of Inter, so it looks near enough right
+that nobody notices. Inside the Flatpak runtime it is DejaVu Sans, which is **15% wider at
+the same size**: the word "Changes" measures 53px on the host and 61px in the Flatpak, both
+13px tall. Same size, different advance widths, which is what says "different typeface"
+rather than "different rendering".
 
-Do **not** force it in the manifest. The value is the user's choice and depends on their
-panel — hardcoding `rgb` would look wrong for anyone on greyscale or a non-RGB layout.
-Toolkits that get this right read `org.freedesktop.portal.Settings`, which Avalonia does
-not. A user who wants it can write `~/.config/fontconfig/fonts.conf`, which the sandbox
-already sees through `--filesystem=home`, and which fixes every Flatpak at once.
+The `UiFont` token in Tokens.axaml names the embedded file by its avares URI and
+Controls.axaml sets it on `Window`, so everything inherits it and the system is out of the
+decision. Don't diagnose this as a rendering difference — subpixel and hinting settings do
+differ between host and sandbox, and they cannot change glyph widths, so a width difference
+rules them out.
 
 **ImageMagick: `-background none` must come *before* the input file.** After it, the SVG
 has already been rasterised onto white and the alpha is gone.
