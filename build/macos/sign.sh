@@ -311,12 +311,10 @@ sign_bundle() {
     # that carries the entitlements.
     _codesign --entitlements "$entitlements" "$app"
 
-    # Not --deep. Apple has discouraged it for years, and here it also walks the
-    # managed .dll files a .NET publish leaves beside the executable and wants
-    # them signed, which they neither are nor need to be - they are not Mach-O,
-    # and notarisation does not ask for it either. spctl in verify_gatekeeper is
-    # the check that means anything.
-    codesign --verify --strict --verbose=2 "$app"
+    # --deep here and not above: Apple discourages it for signing, where it would
+    # apply one set of entitlements to every binary it touched, and recommends it
+    # for verifying, where walking the whole bundle is the point.
+    codesign --verify --deep --strict --verbose=2 "$app"
 }
 
 sign_dmg() {

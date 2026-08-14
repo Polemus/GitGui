@@ -29,10 +29,28 @@ echo "==> Publishing $RID (self-contained, $VERSION)"
 rm -rf "$STAGE"
 mkdir -p "$DIST" "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
+# PublishSingleFile, and only on macOS - the Linux and Windows packages keep the
+# plain layout.
+#
+# Contents/MacOS is a code location: codesign treats everything in it as code and
+# refuses to seal a bundle holding anything there it cannot verify. A plain
+# self-contained publish drops ~200 managed assemblies in beside the executable,
+# none of them Mach-O, and sealing the bundle fails with
+#
+#     GitGui.app: code object is not signed at all
+#     In subcomponent: .../Contents/MacOS/System.Diagnostics.Contracts.dll
+#
+# Single-file publishing packs the managed assemblies into the executable itself
+# and leaves the native libraries beside it, so everything left in that directory
+# is Mach-O and signable. IncludeNativeLibrariesForSelfExtract is deliberately
+# left off: the .dylib files stay visible and get signed individually, which is
+# the inside-out order Apple asks for, and nothing has to be extracted to a
+# temporary directory at run time to be loaded.
 dotnet publish "$ROOT/src/GitGui/GitGui.csproj" \
     --configuration Release \
     --runtime "$RID" \
     --self-contained true \
+    -p:PublishSingleFile=true \
     -p:Version="$VERSION" \
     -p:DebugType=None \
     -p:DebugSymbols=false \
