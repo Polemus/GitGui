@@ -73,39 +73,100 @@ _decode_p12() {
     fi
 }
 
-# Says which of the three things went wrong, without printing any of them.
-_explain_p12_failure() {
+# True when the password opens the file, whatever macOS makes of the container.
+# This is the question _explain_p12_failure used to answer by inference, and the
+# inference was wrong: not opening with an empty password does not make a
+# password correct.
+_p12_password_ok() {
     local p12="${1:?}"
+
+    openssl pkcs12 -in "$p12" -passin pass:"$APPLE_CERTIFICATE_PASSWORD" -noout 2>/dev/null \
+        || openssl pkcs12 -legacy -in "$p12" -passin pass:"$APPLE_CERTIFICATE_PASSWORD" -noout 2>/dev/null
+}
+
+# Rewrites the file with the algorithms macOS will actually read.
+#
+# OpenSSL 3 defaults a .p12 to AES-256-CBC with a PBKDF2/SHA-256 MAC. security(1)
+# does not accept that container and reports "MAC verification failed during
+# PKCS12 import (wrong password?)" - the same message it gives for a genuinely
+# wrong password, which is the trap. Anyone without a Mac to export from
+# Keychain Access has one of these, because openssl is how they had to make it.
+#
+# The three -pbe/-macalg options ask for the older algorithms explicitly, and are
+# spelled the same way by OpenSSL and by the LibreSSL that macOS ships as
+# /usr/bin/openssl, so this works whichever is on the runner.
+_convert_p12_for_macos() {
+    local p12="${1:?}"
+    local pem="${p12%.p12}.pem"
+
+    echo "==> Rewriting the certificate in the format security(1) reads"
+
+    # An unencrypted private key on disk, briefly. The runner is thrown away
+    # after the job, and it is removed the moment the re-export is done.
+    ( umask 077
+      openssl pkcs12 -in "$p12" -passin pass:"$APPLE_CERTIFICATE_PASSWORD" -nodes -out "$pem" 2>/dev/null \
+        || openssl pkcs12 -legacy -in "$p12" -passin pass:"$APPLE_CERTIFICATE_PASSWORD" -nodes -out "$pem" 2>/dev/null )
+
+    if [ ! -s "$pem" ]; then
+        rm -f "$pem"
+        return 1
+    fi
+
+    openssl pkcs12 -export \
+        -in "$pem" \
+        -out "$p12.macos" \
+        -passout pass:"$APPLE_CERTIFICATE_PASSWORD" \
+        -keypbe PBE-SHA1-3DES \
+        -certpbe PBE-SHA1-3DES \
+        -macalg sha1 2>/dev/null
+
+    rm -f "$pem"
+
+    [ -s "$p12.macos" ] || { rm -f "$p12.macos"; return 1; }
+    mv "$p12.macos" "$p12"
+}
+
+# Imports the certificate, converting the container first if that is what is in
+# the way, and saying which secret is at fault if it is not.
+_import_p12() {
+    local p12="${1:?}"
+    local import=(security import "$p12"
+        -k "$SIGNING_KEYCHAIN"
+        -P "$APPLE_CERTIFICATE_PASSWORD"
+        -T /usr/bin/codesign
+        -T /usr/bin/security)
+
+    "${import[@]}" 2>/dev/null && return 0
+
     local size
     size="$(wc -c < "$p12" | tr -d ' ')"
 
-    echo "!! could not import the signing certificate" >&2
-    echo "   the decoded file is $size bytes" >&2
-
     # A PKCS#12 is DER, so it always begins with 0x30 (SEQUENCE). Anything else
     # means APPLE_CERTIFICATE_P12 is not the base64 of a .p12 - most often a .cer
-    # with no private key in it, or base64 of the wrong file entirely.
+    # export, which carries no private key and cannot sign anything.
     if [ "$(head -c 1 "$p12" | od -An -tx1 | tr -d ' ')" != "30" ]; then
-        echo "   it is not a PKCS#12 file at all - check APPLE_CERTIFICATE_P12" >&2
-        echo "   (a .cer export has no private key and cannot sign)" >&2
-        return 0
+        echo "!! APPLE_CERTIFICATE_P12 is not a PKCS#12 file ($size bytes decoded)" >&2
+        echo "   a .cer export has no private key in it and cannot sign" >&2
+        return 1
     fi
 
-    # It is a .p12, so the password is the remaining suspect. Ask openssl, which
-    # distinguishes the two cases where security does not. -legacy for the old
-    # ciphers Keychain Access still exports with, which OpenSSL 3 will not read
-    # without being told.
-    if openssl pkcs12 -in "$p12" -passin pass:"" -noout 2>/dev/null \
-       || openssl pkcs12 -legacy -in "$p12" -passin pass:"" -noout 2>/dev/null; then
-        echo "   it opens with an EMPTY password - so it was exported without one." >&2
-        echo "   Either re-export it with a password, or set APPLE_CERTIFICATE_PASSWORD" >&2
-        echo "   to an empty string. A .p12 with no password cannot be imported here" >&2
-        echo "   with a non-empty one." >&2
-    else
-        echo "   it is a valid PKCS#12, so APPLE_CERTIFICATE_PASSWORD is wrong." >&2
-        echo "   It is the password typed when exporting from Keychain Access -" >&2
-        echo "   not the Apple ID password and not APPLE_KEYCHAIN_PASSWORD." >&2
-        echo "   Watch for a trailing newline if the secret was set from a file." >&2
+    if ! _p12_password_ok "$p12"; then
+        echo "!! APPLE_CERTIFICATE_PASSWORD does not open the certificate" >&2
+        echo "   openssl rejects it too, so this is the password and not the format." >&2
+        echo "   Check it with:" >&2
+        echo "       openssl pkcs12 -in Certificates.p12 -noout -passin pass:'...'" >&2
+        return 1
+    fi
+
+    # The password is right and security still refused, so it is the container.
+    if ! _convert_p12_for_macos "$p12"; then
+        echo "!! the certificate opens but could not be rewritten for macOS" >&2
+        return 1
+    fi
+
+    if ! "${import[@]}"; then
+        echo "!! the certificate still will not import after being rewritten" >&2
+        return 1
     fi
 }
 
@@ -135,18 +196,7 @@ signing_prepare() {
         local p12="$work/certificate.p12"
         _decode_p12 "$p12"
 
-        # security's own message for this is "MAC verification failed during
-        # PKCS12 import (wrong password?)", which is the same message whether the
-        # password is wrong, the base64 is truncated, or the file is not a .p12
-        # at all. Tell those apart here, because the difference is which secret
-        # has to be set again.
-        if ! security import "$p12" \
-            -k "$SIGNING_KEYCHAIN" \
-            -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign \
-            -T /usr/bin/security
-        then
-            _explain_p12_failure "$p12"
+        if ! _import_p12 "$p12"; then
             rm -f "$p12"
             return 1
         fi
