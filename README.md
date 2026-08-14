@@ -45,20 +45,25 @@ The Flatpak sees your home directory, `/mnt`, `/media` and `/run/media`, which i
 where repositories nearly always are. If yours are somewhere else,
 `flatpak override --user --filesystem=host io.github.polemus.GitGui` widens it.
 
-**The builds are unsigned**, so the first launch needs a nudge past the OS — once, then
-never again:
+**macOS builds are signed and notarised** from 0.3.2 onward, so the `.dmg` opens and
+GitGui launches with no warning and nothing to click past. The ticket is stapled to both
+the disk image and the app inside it, so a first launch works even with no network.
 
-- **macOS 15 and later** — open GitGui, let it be blocked, then **System Settings →
-  Privacy & Security**, scroll to the bottom, **Open Anyway**. The old right-click trick
-  was removed in macOS 15 and no longer helps.
-- **macOS 14 and earlier** — Control-click GitGui in Applications → **Open** → **Open**.
-  It has to be the right-click menu; double-clicking won't offer the choice.
+**Windows builds are unsigned**, and 0.3.1 and earlier are unsigned on both platforms.
+Those need a nudge past the OS — once, then never again:
+
 - **Windows** — "More info" → "Run anyway". For the portable `.zip`, you may also need
   right-click the `.exe` → Properties → **Unblock**.
+- **macOS 15 and later** (0.3.1 and earlier) — open GitGui, let it be blocked, then
+  **System Settings → Privacy & Security**, scroll to the bottom, **Open Anyway**. The
+  old right-click trick was removed in macOS 15 and no longer helps.
+- **macOS 14 and earlier** (0.3.1 and earlier) — Control-click GitGui in Applications →
+  **Open** → **Open**. It has to be the right-click menu; double-clicking won't offer
+  the choice.
 
-Signing needs an Apple Developer account and a code-signing certificate, and neither
-exists yet. Download only from the Releases page linked above — everything there is built
-by GitHub Actions from a tagged commit in this repository, with a public build log.
+Signing Windows needs a certificate from a commercial authority, which nothing here has
+yet. Download only from the Releases page linked above — everything there is built by
+GitHub Actions from a tagged commit in this repository, with a public build log.
 
 ---
 

@@ -223,7 +223,24 @@ jobs:
     name: macOS (dmg, arm64 + x64)
     needs: [version, test]
     runs-on: macos-latest
-    timeout-minutes: 40
+
+    # Four notarisations - the .app and the .dmg, for each of two architectures -
+    # and each is a wait on Apple's service rather than on this runner. Usually
+    # a couple of minutes each; occasionally far longer, and a queue on their
+    # side is not a reason to throw away a release that had otherwise built.
+    timeout-minutes: 90
+
+    # Read by build/macos/sign.sh. Absent on a fork, where secrets do not exist -
+    # the build stays unsigned there rather than failing, which is what keeps a
+    # pull request from a fork able to prove it compiles.
+    env:
+      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+      APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+
     steps:
       - uses: actions/checkout@v7
 

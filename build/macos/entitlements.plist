@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the hardened runtime, which notarisation requires and which
+  otherwise stops a .NET app dead.
+
+  The first two are about the JIT. .NET compiles IL to machine code at run time,
+  which means allocating memory and then executing what it just wrote there -
+  exactly what the hardened runtime exists to prevent. Without both of these the
+  app does not reach its first window; it is killed on startup with no dialog.
+
+  disable-library-validation is for the native libraries a self-contained publish
+  ships beside the executable - libSkiaSharp, libHarfBuzzSharp, libgit2 and the
+  runtime's own. They are signed with the same identity as the bundle, so library
+  validation would in principle accept them, but .NET loads them through dlopen
+  at run time rather than as linked dependencies, and that path checks the team
+  identifier of the *loading process* against a library it has not sealed. This
+  is the entitlement every .NET desktop app on macOS ends up with.
+
+  Nothing here is an App Sandbox key: this is a Developer ID build for direct
+  download, not a Mac App Store one, and the sandbox would cut off the user's
+  own repositories.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

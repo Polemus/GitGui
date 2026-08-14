@@ -8,13 +8,18 @@
 #   version: defaults to <Version> in the csproj - see build/version.sh
 #
 # Runs on macOS only - uses sips, iconutil and hdiutil.
-# The bundle is unsigned; see README for the Gatekeeper note.
+#
+# Signs and notarises when the APPLE_* environment variables are set, and builds
+# the same unsigned artifacts it always did when they are not - see
+# build/macos/sign.sh for which ones and why there is no secret naming the
+# identity.
 set -euo pipefail
 
 RID="${1:?usage: package.sh <osx-arm64|osx-x64> [version]}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$ROOT/build/version.sh"
+. "$ROOT/build/macos/sign.sh"
 VERSION="${2:-$(project_version "$ROOT")}"
 DIST="$ROOT/dist"
 STAGE="$ROOT/build/.stage-$RID"
@@ -57,10 +62,39 @@ echo "==> Writing Info.plist"
 sed -e "s/@VERSION@/$VERSION/g" \
     "$ROOT/build/macos/Info.plist.in" > "$APP/Contents/Info.plist"
 
+# Signing comes after everything that writes into the bundle - the signature
+# seals the contents, so a file added afterwards invalidates it. The Info.plist
+# above is the last of those.
+if signing_available; then
+    trap signing_cleanup EXIT
+    signing_prepare
+    sign_bundle "$APP"
+
+    if notarisation_available; then
+        # The .app is notarised and stapled on its own, before the disk image is
+        # built around it. Notarising only the .dmg would leave the copy the user
+        # drags into Applications with no ticket of its own, and a first launch
+        # on a machine that is offline would be refused.
+        notarize "$APP"
+        verify_gatekeeper "$APP"
+    else
+        echo "!! signed but not notarised - APPLE_API_* is not set" >&2
+        echo "   Gatekeeper will still refuse this on a machine that has not seen it" >&2
+    fi
+else
+    echo "!! building unsigned - no APPLE_CERTIFICATE_P12 in the environment" >&2
+fi
+
 echo "==> Building .dmg"
 DMG_ROOT="$STAGE/dmg"
 mkdir -p "$DMG_ROOT"
-cp -R "$APP" "$DMG_ROOT/"
+
+# ditto rather than cp -R. The bundle now carries a code signature and a stapled
+# notarisation ticket, and ditto is the copy that is documented to preserve
+# everything they depend on - extended attributes and all. cp is the tool people
+# find out about the hard way, from a signature that verifies here and not on the
+# machine that mounted the disk image.
+ditto "$APP" "$DMG_ROOT/GitGui.app"
 ln -s /Applications "$DMG_ROOT/Applications"
 
 # hdiutil attaches the image while it builds it, and both RIDs ask for the same
@@ -97,6 +131,19 @@ for attempt in 1 2 3; do
     echo "!! hdiutil create failed - retrying in 10s (attempt $attempt of 3)" >&2
     sleep 10
 done
+
+DMG="$DIST/GitGui-$VERSION-$RID.dmg"
+
+# And again for the disk image itself, which Gatekeeper checks on mount quite
+# separately from the app inside it.
+if signing_available; then
+    sign_dmg "$DMG"
+
+    if notarisation_available; then
+        notarize "$DMG"
+        verify_gatekeeper "$DMG"
+    fi
+fi
 
 echo "==> Done:"
 ls -la "$DIST"
