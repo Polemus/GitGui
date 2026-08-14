@@ -314,12 +314,21 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
     public partial int Ahead { get; set; }
 
-    /// <summary>False when the branch has never been pushed; see <see cref="CanAmend"/>.</summary>
+    /// <summary>False when the branch is not on the remote yet; see <see cref="CanAmend"/>.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SyncActionLabel))]
     [NotifyPropertyChangedFor(nameof(CanAmend))]
     [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
     [NotifyCanExecuteChangedFor(nameof(AmendSelectedCommitCommand))]
-    public partial bool HasUpstream { get; set; }
+    public partial bool IsPublished { get; set; }
+
+    /// <summary>False for a repository with no remote, where publishing means nothing.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SyncActionLabel))]
+    public partial bool HasRemote { get; set; }
+
+    /// <summary>The branch exists nowhere but here, and there is a remote to send it to.</summary>
+    public bool CanPublish => HasRemote && !IsPublished;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SyncActionLabel))]
@@ -391,7 +400,13 @@ public partial class MainWindowViewModel : ViewModelBase
         "Keep one side whole, or edit the file yourself and mark it resolved. "
         + "Committing finishes the operation; abandoning puts everything back.";
 
-    public string SyncActionLabel => Behind > 0 ? "Pull origin"
+    /// <remarks>
+    /// Publish comes first because a branch the remote has never seen has nothing to be
+    /// ahead or behind of, and "Fetch origin" was the wrong offer there - the whole point
+    /// is to get the branch out.
+    /// </remarks>
+    public string SyncActionLabel => CanPublish ? "Publish branch"
+                                   : Behind > 0 ? "Pull origin"
                                    : Ahead > 0 ? "Push origin"
                                    : "Fetch origin";
 
@@ -439,7 +454,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// </summary>
     public bool CanAmend => SelectedRepository is not null
                             && !IsDetachedHead
-                            && (Ahead > 0 || !HasUpstream);
+                            && (Ahead > 0 || !IsPublished);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanCommit))]
@@ -975,8 +990,8 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Performs whatever the sync button says: pull when behind, push when ahead,
-    /// otherwise fetch.
+    /// Performs whatever the sync button says: publish when the remote has never seen
+    /// this branch, pull when behind, push when ahead, otherwise fetch.
     /// </summary>
     [RelayCommand]
     private async Task SyncAsync()
@@ -985,8 +1000,11 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
 
         var path = repo.LocalPath;
+
+        // Publishing is a push - to a branch that isn't there yet. Push writes the
+        // tracking config on the way, so this only ever happens once per branch.
+        var push = CanPublish || (Behind == 0 && Ahead > 0);
         var behind = Behind;
-        var ahead = Ahead;
 
         await RunAsync(async () =>
         {
@@ -994,8 +1012,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
             void Trace(string line) => _log.Write(ActivityLevel.Trace, line);
 
-            var result = await Task.Run(() => behind > 0 ? _git.Pull(path, credentials, Trace)
-                                            : ahead > 0 ? _git.Push(path, credentials, Trace)
+            var result = await Task.Run(() => push ? _git.Push(path, credentials, Trace)
+                                            : behind > 0 ? _git.Pull(path, credentials, Trace)
                                             : _git.Fetch(path, credentials, Trace));
 
             // Being signed out is an ordinary outcome, so it arrives as a result rather
@@ -1918,7 +1936,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
         Ahead = info.Ahead;
         Behind = info.Behind;
-        HasUpstream = info.HasUpstream;
+        HasRemote = info.HasRemote;
+        IsPublished = info.IsPublished;
         LastFetched = info.LastFetched;
         IsDetachedHead = info.IsDetached;
         HeadShortSha = info.HeadShortSha;

@@ -45,6 +45,8 @@ public static class MockData
             IsPrivate = true,
             Ahead = 2,
             Behind = 0,
+            HasRemote = true,
+            IsPublished = true,
             LastFetched = DateTimeOffset.Now.AddMinutes(-12),
         },
         new RepositoryInfo
@@ -57,6 +59,8 @@ public static class MockData
             IsPrivate = true,
             Ahead = 0,
             Behind = 3,
+            HasRemote = true,
+            IsPublished = true,
             LastFetched = DateTimeOffset.Now.AddHours(-2),
         },
         new RepositoryInfo
@@ -69,6 +73,8 @@ public static class MockData
             IsPrivate = false,
             Ahead = 0,
             Behind = 0,
+            HasRemote = true,
+            IsPublished = true,
             LastFetched = DateTimeOffset.Now.AddDays(-1),
         },
         new RepositoryInfo
@@ -81,6 +87,8 @@ public static class MockData
             IsPrivate = true,
             Ahead = 1,
             Behind = 0,
+            HasRemote = true,
+            IsPublished = true,
             LastFetched = DateTimeOffset.Now.AddMinutes(-40),
         },
         new RepositoryInfo
@@ -93,6 +101,11 @@ public static class MockData
             IsPrivate = true,
             Ahead = 0,
             Behind = 0,
+
+            // The one that has never been pushed, so the sync button reads
+            // "Publish branch" in the designer as well as at runtime.
+            HasRemote = true,
+            IsPublished = false,
             LastFetched = DateTimeOffset.Now.AddDays(-3),
         },
     ];

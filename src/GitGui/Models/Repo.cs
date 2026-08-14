@@ -24,11 +24,17 @@ public sealed class RepositoryInfo
     /// <summary>Commits on the remote branch not yet merged locally.</summary>
     public int Behind { get; init; }
 
+    /// <summary>A remote is configured, so there is somewhere for a push to go.</summary>
+    public bool HasRemote { get; init; }
+
     /// <summary>
-    /// False when the current branch has never been pushed. Lets the UI tell "nothing to
-    /// push" apart from "nowhere to push to", which decides whether amending is safe.
+    /// The current branch exists on the remote. Deliberately not "has an upstream": a
+    /// branch pushed without <c>-u</c> is plainly on the remote and yet tracks nothing,
+    /// and treating that as unpublished is what made the sync button offer a fetch over
+    /// commits that were sitting there unpushed. Also decides whether amending is safe -
+    /// rewriting a commit only matters once the remote has seen it.
     /// </summary>
-    public bool HasUpstream { get; init; }
+    public bool IsPublished { get; init; }
 
     /// <summary>Null when the clone has never been fetched from.</summary>
     public DateTimeOffset? LastFetched { get; init; }

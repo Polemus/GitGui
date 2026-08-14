@@ -47,7 +47,7 @@ public sealed partial class GitService : IGitService
         var identity = HostResolver.Parse(origin?.Url);
 
         var head = repo.Head;
-        var tracking = head?.TrackingDetails;
+        var standing = Standing(repo, head);
 
         return new RepositoryInfo
         {
@@ -57,9 +57,10 @@ public sealed partial class GitService : IGitService
             LocalPath = workdir,
             DefaultBranch = head?.FriendlyName ?? "HEAD",
             IsPrivate = null, // Not knowable locally; the host API fills this in later.
-            Ahead = tracking?.AheadBy ?? 0,
-            Behind = tracking?.BehindBy ?? 0,
-            HasUpstream = head?.TrackedBranch is not null,
+            Ahead = standing.Ahead,
+            Behind = standing.Behind,
+            HasRemote = standing.HasRemote,
+            IsPublished = standing.IsPublished,
             LastFetched = LastFetchTime(repo.Info.Path),
             IsDetached = repo.Info.IsHeadDetached,
             HeadSha = head?.Tip?.Sha ?? string.Empty,
@@ -716,7 +717,9 @@ public sealed partial class GitService : IGitService
             return failure;
         }
 
-        var behind = repo.Head?.TrackingDetails?.BehindBy ?? 0;
+        // Not TrackingDetails: a branch with no upstream would report zero and the fetch
+        // would claim to be up to date over commits it had just brought down.
+        var behind = Standing(repo, repo.Head).Behind;
 
         return SyncResult.Ok(behind > 0
             ? $"Fetched from {remote.Name} — {behind} commit{(behind == 1 ? "" : "s")} to pull"
@@ -733,6 +736,12 @@ public sealed partial class GitService : IGitService
         var remote = FindRemote(repo);
         if (remote is null)
             return NoRemote("pull from");
+
+        // Commands.Pull needs an upstream to merge from. A branch already on the remote
+        // may still have none - see EnsureTracking - and the remote-tracking ref is the
+        // proof that this is the same branch rather than a guess at one.
+        if (repo.Head is { } head && Mirror(repo, remote, head) is not null)
+            EnsureTracking(repo, head, remote);
 
         var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
         MergeResult? result = null;
@@ -768,17 +777,8 @@ public sealed partial class GitService : IGitService
         if (FindRemote(repo) is not { } remote)
             return NoRemote("push to");
 
-        // A branch created locally has no upstream, and libgit2 refuses to push it.
-        // Setting it here saves the user dropping to the command line for their first
-        // push of a new branch, which is exactly when a GUI should help.
-        if (!branch.IsTracking)
-        {
-            repo.Branches.Update(branch,
-                b => b.Remote = remote.Name,
-                b => b.UpstreamBranch = branch.CanonicalName);
-
-            branch = repo.Branches[branch.FriendlyName];
-        }
+        // Covers both a branch created locally and one pushed without -u.
+        branch = EnsureTracking(repo, branch, remote);
 
         var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
         var pushed = 0;
@@ -927,6 +927,76 @@ public sealed partial class GitService : IGitService
 
     private static Remote? FindRemote(Repository repo)
         => repo.Network.Remotes["origin"] ?? repo.Network.Remotes.FirstOrDefault();
+
+    /// <summary>Where the current branch stands relative to its copy on the remote.</summary>
+    private readonly record struct BranchStanding(
+        int Ahead, int Behind, bool HasRemote, bool IsPublished);
+
+    /// <summary>
+    /// Counts unpushed and unpulled commits, falling back to the remote-tracking ref when
+    /// git never recorded an upstream.
+    /// </summary>
+    /// <remarks>
+    /// <c>TrackingDetails</c> answers only when <c>branch.&lt;name&gt;.merge</c> is set,
+    /// and returns nulls otherwise. That config is written by <c>git clone</c>, and by
+    /// <c>git push -u</c> - but a plain <c>git push origin main</c> does not write it
+    /// unless <c>push.autoSetupRemote</c> says so, and neither does a pull that names its
+    /// refspec. So a repository that was init'ed and pushed rather than cloned has a
+    /// branch that is plainly on the remote and yet tracks nothing, and reading the nulls
+    /// as zero left the sync button offering a fetch over commits waiting to go out.
+    ///
+    /// <c>refs/remotes/&lt;remote&gt;/&lt;branch&gt;</c> is maintained by the fetch
+    /// refspec regardless, so comparing against that reaches the same commit git would
+    /// have compared against, without needing to be told where to look.
+    /// </remarks>
+    private static BranchStanding Standing(Repository repo, Branch? head)
+    {
+        if (FindRemote(repo) is not { } remote)
+            return new(0, 0, HasRemote: false, IsPublished: false);
+
+        if (head?.Tip is null)
+            return new(0, 0, HasRemote: true, IsPublished: false);
+
+        if (head.TrackingDetails is { AheadBy: { } ahead, BehindBy: { } behind })
+            return new(ahead, behind, HasRemote: true, IsPublished: true);
+
+        if (Mirror(repo, remote, head)?.Tip is not { } mirrorTip)
+            return new(0, 0, HasRemote: true, IsPublished: false);
+
+        var divergence = repo.ObjectDatabase.CalculateHistoryDivergence(head.Tip, mirrorTip);
+
+        return new(
+            divergence.AheadBy ?? 0,
+            divergence.BehindBy ?? 0,
+            HasRemote: true,
+            IsPublished: true);
+    }
+
+    /// <summary>The remote-tracking ref for a branch, or null if it was never pushed.</summary>
+    private static Branch? Mirror(Repository repo, Remote remote, Branch branch)
+        => repo.Branches[$"{remote.Name}/{branch.FriendlyName}"];
+
+    /// <summary>
+    /// Records <c>branch.&lt;name&gt;.remote</c> and <c>.merge</c> when git never did, and
+    /// hands back the branch as it now reads.
+    /// </summary>
+    /// <remarks>
+    /// libgit2 refuses to push or pull a branch that tracks nothing, so without this the
+    /// app can see the divergence and still be unable to act on it - and the user has to
+    /// drop to the command line for a <c>git push -u</c> to get out, which is exactly the
+    /// errand a GUI should save them. This writes what that command would have written.
+    /// </remarks>
+    private static Branch EnsureTracking(Repository repo, Branch branch, Remote remote)
+    {
+        if (branch.IsTracking)
+            return branch;
+
+        repo.Branches.Update(branch,
+            b => b.Remote = remote.Name,
+            b => b.UpstreamBranch = branch.CanonicalName);
+
+        return repo.Branches[branch.FriendlyName];
+    }
 
     private static SyncResult NoRemote(string what)
         => new(SyncOutcome.NoRemote, $"This repository has no remote to {what}.");

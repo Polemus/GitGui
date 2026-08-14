@@ -47,6 +47,60 @@ public sealed class TempRepository : IDisposable
         repo.Commit(message, signature, signature);
     }
 
+    /// <summary>
+    /// Gives the repository an "origin" pointing at a bare repository next door. A local
+    /// path is a transport libgit2 supports, so pushing to it needs no network and no
+    /// server - the same thing a real remote does, minus the wire.
+    /// </summary>
+    public void AddOrigin()
+    {
+        var bare = System.IO.Path.Combine(Path + "-origin.git");
+        Repository.Init(bare, isBare: true);
+
+        using var repo = new Repository(Path);
+        repo.Network.Remotes.Add("origin", bare);
+    }
+
+    /// <summary>
+    /// Pushes the current branch the way <c>git push origin &lt;branch&gt;</c> does -
+    /// without <c>-u</c>, so nothing records an upstream. That is the state a repository
+    /// ends up in when it was init'ed and pushed rather than cloned.
+    /// </summary>
+    public void PushWithoutUpstream()
+    {
+        using var repo = new Repository(Path);
+        var branch = repo.Head;
+
+        repo.Network.Push(repo.Network.Remotes["origin"], branch.CanonicalName);
+
+        Assert.False(repo.Branches[branch.FriendlyName].IsTracking,
+            "the push was meant to leave the branch untracked");
+    }
+
+    /// <summary>Records branch.&lt;name&gt;.remote/.merge, as clone and push -u do.</summary>
+    public void SetUpstream()
+    {
+        using var repo = new Repository(Path);
+        var branch = repo.Head;
+
+        repo.Branches.Update(branch,
+            b => b.Remote = "origin",
+            b => b.UpstreamBranch = branch.CanonicalName);
+    }
+
+    public bool IsTracking()
+    {
+        using var repo = new Repository(Path);
+        return repo.Head.IsTracking;
+    }
+
+    /// <summary>Moves the branch back, leaving the remote-tracking ref where it was.</summary>
+    public void ResetHardTo(string sha)
+    {
+        using var repo = new Repository(Path);
+        repo.Reset(ResetMode.Hard, repo.Lookup<Commit>(sha));
+    }
+
     public string CurrentBranch()
     {
         using var repo = new Repository(Path);
@@ -110,13 +164,24 @@ public sealed class TempRepository : IDisposable
 
     public void Dispose()
     {
+        // The bare origin from AddOrigin sits beside the working copy, so it needs
+        // removing too or every test that pushes leaves one behind.
+        Remove(Path);
+        Remove(Path + "-origin.git");
+    }
+
+    private static void Remove(string directory)
+    {
         try
         {
+            if (!Directory.Exists(directory))
+                return;
+
             // Git marks objects read-only, which blocks a plain recursive delete.
-            foreach (var file in Directory.EnumerateFiles(Path, "*", SearchOption.AllDirectories))
+            foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
                 File.SetAttributes(file, FileAttributes.Normal);
 
-            Directory.Delete(Path, recursive: true);
+            Directory.Delete(directory, recursive: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
