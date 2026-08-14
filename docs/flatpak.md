@@ -27,7 +27,7 @@ flatpak install flathub org.flatpak.Builder \
     org.freedesktop.Sdk//25.08 \
     org.freedesktop.Sdk.Extension.dotnet10//25.08
 
-./build/linux/flatpak/package.sh 0.3.0 --install
+./build/linux/flatpak/package.sh --install
 flatpak run io.github.polemus.GitGui
 ```
 
@@ -36,7 +36,7 @@ installed. A `.flatpak` bundle installs with no remote involved, which is what
 makes it worth attaching to a release:
 
 ```bash
-flatpak install --user ./dist/GitGui-0.3.0-x86_64.flatpak
+flatpak install --user ./dist/GitGui-*-x86_64.flatpak
 ```
 
 **The Flatpak is the one Linux artifact that cannot be cross-built.** The `.deb`,
@@ -150,10 +150,10 @@ makes a local checkout build. Rather than keep a second manifest and let the two
 drift, generate it:
 
 ```bash
-git tag -a v0.3.0 -m "GitGui 0.3.0"
-git push origin v0.3.0
+git tag -a v1.2.3 -m "GitGui 1.2.3"
+git push origin v1.2.3
 
-./build/linux/flatpak/flathub-manifest.sh 0.3.0
+./build/linux/flatpak/flathub-manifest.sh 1.2.3
 ```
 
 That writes `dist/flathub/`: the manifest with its source swapped for a `type:
@@ -180,7 +180,7 @@ and a human reviewer.
 the build the same way Flathub will:
 
 ```bash
-./build/linux/flatpak/package.sh 0.3.0 --install
+./build/linux/flatpak/package.sh --install
 flatpak run io.github.polemus.GitGui        # actually use it
 ./build/linux/flatpak/validate.sh --repo
 ```

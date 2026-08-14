@@ -5,15 +5,17 @@
 #
 # Usage: build/macos/package.sh <rid> [version]
 #   rid: osx-arm64 (Apple silicon) | osx-x64 (Intel)
+#   version: defaults to <Version> in the csproj - see build/version.sh
 #
 # Runs on macOS only - uses sips, iconutil and hdiutil.
 # The bundle is unsigned; see README for the Gatekeeper note.
 set -euo pipefail
 
 RID="${1:?usage: package.sh <osx-arm64|osx-x64> [version]}"
-VERSION="${2:-0.1.0}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$ROOT/build/version.sh"
+VERSION="${2:-$(project_version "$ROOT")}"
 DIST="$ROOT/dist"
 STAGE="$ROOT/build/.stage-$RID"
 APP="$STAGE/GitGui.app"

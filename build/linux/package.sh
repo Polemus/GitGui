@@ -8,15 +8,17 @@
 #
 # Usage: build/linux/package.sh <rid> [version]
 #   rid: linux-x64 | linux-arm64
+#   version: defaults to <Version> in the csproj - see build/version.sh
 #
 # Requires: dotnet SDK, tar, and fpm (gem install fpm) for deb/rpm. The
 # AppImage additionally needs curl, and is skipped without it.
 set -euo pipefail
 
 RID="${1:?usage: package.sh <linux-x64|linux-arm64> [version]}"
-VERSION="${2:-0.1.0}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$ROOT/build/version.sh"
+VERSION="${2:-$(project_version "$ROOT")}"
 DIST="$ROOT/dist"
 STAGE="$ROOT/build/.stage-$RID"
 

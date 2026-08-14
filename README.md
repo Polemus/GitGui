@@ -337,20 +337,22 @@ Each script publishes a **self-contained** build, so end users don't need .NET i
 
 ```bash
 # Linux — .deb, .rpm, .tar.gz and .AppImage  (needs fpm: gem install fpm)
-./build/linux/package.sh linux-x64 0.3.0
-./build/linux/package.sh linux-arm64 0.3.0
+./build/linux/package.sh linux-x64
+./build/linux/package.sh linux-arm64
 
 # Linux — .flatpak  (needs flatpak: flatpak install flathub org.flatpak.Builder)
-./build/linux/flatpak/package.sh 0.3.0
+./build/linux/flatpak/package.sh
 
 # macOS — .app bundle inside a .dmg  (run on macOS)
-./build/macos/package.sh osx-arm64 0.3.0
+./build/macos/package.sh osx-arm64
 
 # Windows — portable .zip and an Inno Setup installer
-pwsh build/windows/package.ps1 -Rid win-x64 -Version 0.3.0
+pwsh build/windows/package.ps1 -Rid win-x64
 ```
 
-Artifacts land in `dist/`.
+Artifacts land in `dist/`. None of those commands names a version: every one of them
+defaults to `<Version>` in `GitGui.csproj`, which is the single place it is written
+down. Pass one as the last argument to override it, as release CI does.
 
 The AppImage is built by `build/linux/appimage.sh`, which `package.sh` calls once the
 publish is staged. `appimagetool` and the AppImage runtime are downloaded on first use and
@@ -359,7 +361,7 @@ artifacts are still produced. Run the script on its own to rebuild only the AppI
 it reuses whatever `package.sh` last staged instead of publishing again:
 
 ```bash
-./build/linux/appimage.sh linux-x64 0.3.0
+./build/linux/appimage.sh linux-x64
 ```
 
 The architecture of the output comes from the runtime handed to `appimagetool`, not from
@@ -376,12 +378,27 @@ why, and how a release reaches Flathub.
 
 ## Releasing
 
-Tag and push:
-
 ```bash
-git tag -a v0.3.0 -m "GitGui 0.3.0"
-git push origin v0.3.0
+./build/release.sh 1.2.3 "What changed, in a sentence or two."
+git push origin HEAD && git push origin v1.2.3
 ```
+
+That bumps `<Version>` in `GitGui.csproj`, adds a `<release>` entry to the metainfo,
+commits and tags. Those two edits are all a release needs, and both have to be *inside*
+the tagged commit rather than derived from the tag: the csproj is what the app reports
+and what the Flatpak build reads (it never passes `-p:Version`, because Flathub would
+not either), and the metainfo entry is the release notes a software centre shows —
+Flathub rejects a build whose newest `<release>` isn't the version being built. A tag
+names a commit; it can't put anything in one.
+
+Everything else is derived from the tag by CI: artifact names, the GitHub Release, the
+Flathub manifest. Nothing is pushed until you say so, since pushing the tag is what
+starts a forty-minute build.
+
+Two guards, because both edits are the kind you can forget: `release.sh` refuses a
+dirty tree, a version that already exists, or one the csproj already claims, and
+`release.yml` refuses to build at all if the tag and the csproj disagree — rather than
+shipping fourteen artifacts labelled one version by an app that calls itself another.
 
 `release.yml` runs the tests first — `ci.yml` only triggers on pushes to a branch, so
 without that gate a tag would package untested code — then builds every target and

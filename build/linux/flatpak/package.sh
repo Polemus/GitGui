@@ -7,7 +7,7 @@
 #   --install  also install the bundle for the current user, so you can run it
 #
 # A .flatpak bundle installs without a remote:
-#     flatpak install --user ./GitGui-0.3.0-x86_64.flatpak
+#     flatpak install --user ./GitGui-<version>-x86_64.flatpak
 # which is what the release attaches. Flathub installs the same manifest from
 # its own build servers instead - see docs/flatpak.md.
 #
@@ -27,11 +27,8 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
-# The csproj is the only thing that decides what the app reports - the build
-# never passes -p:Version, because Flathub would not either - so it is also what
-# the default should be. Hard-coding one here just meant a stale number that made
-# the check below fail on the first release after a bump.
-CSPROJ_VERSION="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$ROOT/src/GitGui/GitGui.csproj")"
+. "$ROOT/build/version.sh"
+CSPROJ_VERSION="$(project_version "$ROOT")"
 
 VERSION="${1:-$CSPROJ_VERSION}"
 INSTALL=no

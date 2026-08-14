@@ -10,15 +10,19 @@
 .PARAMETER Rid
     win-x64 or win-arm64.
 
+.PARAMETER Version
+    Defaults to <Version> in GitGui.csproj, which is the one place a version is
+    written down - see build/version.sh for why.
+
 .EXAMPLE
-    pwsh build/windows/package.ps1 -Rid win-x64 -Version 0.1.0
+    pwsh build/windows/package.ps1 -Rid win-x64
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('win-x64', 'win-arm64')]
     [string]$Rid = 'win-x64',
 
-    [string]$Version = '0.1.0'
+    [string]$Version
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,6 +30,16 @@ $ErrorActionPreference = 'Stop'
 $root  = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $dist  = Join-Path $root 'dist'
 $stage = Join-Path $root "build\.stage-$Rid"
+
+# build/version.sh is the bash half of this; there is no sourcing a shell script
+# from PowerShell, so the read is repeated rather than shared.
+if (-not $Version) {
+    $csproj = Join-Path $root 'src\GitGui\GitGui.csproj'
+    $Version = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version |
+        Where-Object { $_ } | Select-Object -First 1
+
+    if (-not $Version) { throw "no <Version> in $csproj" }
+}
 
 Write-Host "==> Publishing $Rid (self-contained, $Version)"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }

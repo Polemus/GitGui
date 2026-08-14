@@ -41,13 +41,31 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+
       - id: v
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            version="${{ inputs.version }}"
           else
-            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            version="${GITHUB_REF_NAME#v}"
           fi
+
+          # The tag names the artifacts; <Version> in the csproj is what the app
+          # reports, and the Flatpak build never passes -p:Version because
+          # Flathub would not either. Nothing downstream compares the two, so a
+          # tag pushed before the bump would ship fourteen artifacts labelled one
+          # version by an app that calls itself another - and it would look fine.
+          . build/version.sh
+          csproj="$(project_version .)"
+
+          if [ "$version" != "$csproj" ]; then
+              echo "::error::v$version was asked for, but the csproj says $csproj."
+              echo "::error::Bump <Version> in src/GitGui/GitGui.csproj and tag that commit."
+              exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   # ------------------------------------------------------------------- test
   # ci.yml only runs on pushes to a branch, so a tag would otherwise reach the

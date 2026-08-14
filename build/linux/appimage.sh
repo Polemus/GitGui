@@ -5,6 +5,7 @@
 #
 # Usage: build/linux/appimage.sh <rid> [version] [stage-dir]
 #   rid: linux-x64 | linux-arm64
+#   version: defaults to <Version> in the csproj - see build/version.sh
 #
 # package.sh calls this at the end of its run. Call it directly to rebuild
 # only the AppImage without republishing - the stage directory is reused
@@ -15,9 +16,10 @@
 set -euo pipefail
 
 RID="${1:?usage: appimage.sh <linux-x64|linux-arm64> [version] [stage-dir]}"
-VERSION="${2:-0.1.0}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+. "$ROOT/build/version.sh"
+VERSION="${2:-$(project_version "$ROOT")}"
 DIST="$ROOT/dist"
 STAGE="${3:-$ROOT/build/.stage-$RID}"
 TOOLS="$ROOT/build/.tools"
