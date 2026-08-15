@@ -130,6 +130,19 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.0" date="2026-08-15">
+      <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.2.0</url>
+      <description>
+        <p>
+          Pull requests can now be listed, checked out and opened from
+          the branch picker, on every hosting site rather than just
+          GitHub. Fixed deleted files being left out of commits,
+          branches renamed after being pushed reporting as published,
+          and accounts and settings being lost after the rename to
+          Omnigit.
+        </p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-08-14">
       <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.1.0</url>
       <description>
