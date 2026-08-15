@@ -134,6 +134,12 @@ is conflicted
 
 ![Conflict panel, dark theme](docs/screenshots/conflicts-dark.png)
 
+**Pull requests, listed for the repository you're on** — checking one out fetches its head
+and lands you on `pr/<number>`; **Create pull request** pushes the branch first if the site
+hasn't seen it
+
+![Pull requests, dark theme](docs/screenshots/pull-requests-dark.png)
+
 **Repository picker — grouped by the hosting site each clone actually came from**
 
 ![Repository picker](docs/screenshots/repository-picker.png)
@@ -173,7 +179,8 @@ Roughly in order of intent:
 - **Installers are ~45 MB**, because each build bundles the .NET runtime. `PublishTrimmed`
   would cut that substantially, but Avalonia needs trimming configuration and
   `ViewLocator`'s reflection would have to go first.
-- **The screenshots above predate the rename** and still show the old name in the title bar.
+- **The screenshots above are taken against demonstration repositories**, not a real
+  project, so the names and commits in them are invented.
 
 ## Contributing
 
