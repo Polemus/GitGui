@@ -5,6 +5,7 @@
         xmlns:views="using:Omnigit.Views"
         xmlns:conv="using:Omnigit.Converters"
         xmlns:svc="using:Omnigit.Services"
+        xmlns:hp="using:Omnigit.HostProviders"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
@@ -117,10 +118,71 @@
                         <Flyout Placement="BottomEdgeAlignedLeft"
                                 FlyoutPresenterClasses="picker">
                             <Grid Width="340" RowDefinitions="Auto,Auto,*,Auto,Auto">
-                                <TextBlock Grid.Row="0" Classes="sectionLabel" Text="BRANCHES"
-                                           Margin="10,6,10,8" />
+                                <!-- Branches / pull requests. The second tab is hidden
+                                     for a site that can't list them, rather than shown
+                                     empty over a list that could never fill. -->
+                                <Grid Grid.Row="0" ColumnDefinitions="*,*">
+                                    <Button Grid.Column="0" Classes="tab"
+                                            Classes.active="{Binding IsBranchesTab}"
+                                            Command="{Binding ShowBranchesTabCommand}"
+                                            Content="Branches" />
+                                    <Button Grid.Column="1" Classes="tab"
+                                            Classes.active="{Binding IsPullRequestsTab}"
+                                            IsVisible="{Binding CanListPullRequests}"
+                                            Command="{Binding ShowPullRequestsTabCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="7"
+                                                    HorizontalAlignment="Center">
+                                            <TextBlock Text="Pull requests" />
+                                            <Border Classes="chip" Padding="6,1"
+                                                    IsVisible="{Binding HasPullRequests}">
+                                                <TextBlock Classes="muted"
+                                                           Text="{Binding PullRequests.Count}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
                                 <Border Grid.Row="1" Classes="divider" Margin="0,0,0,6" />
-                                <ScrollViewer Grid.Row="2" MaxHeight="380">
+
+                                <!-- Pull requests. Checking one out fetches its head and
+                                     switches to pr/<number>, then the ordinary branch
+                                     switch prompt handles any uncommitted work. -->
+                                <Grid Grid.Row="2" RowDefinitions="Auto,*"
+                                      IsVisible="{Binding IsPullRequestsTab}">
+                                    <TextBlock Grid.Row="0" Classes="muted" Margin="10,4,10,10"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding !HasPullRequests}"
+                                               Text="{Binding PullRequestsEmptyLabel}" />
+
+                                    <ScrollViewer Grid.Row="1" MaxHeight="380">
+                                        <ItemsControl ItemsSource="{Binding PullRequests}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="hp:PullRequest">
+                                                    <Button Classes="rowButton"
+                                                            Click="OnBranchRowClick"
+                                                            Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CheckoutPullRequestCommand}"
+                                                            CommandParameter="{Binding}">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                                                            <Path Grid.Column="0" Classes="icon"
+                                                                  Data="{DynamicResource IconBranch}" />
+                                                            <StackPanel Grid.Column="1">
+                                                                <TextBlock Classes="body" Text="{Binding TitleLabel}" />
+                                                                <TextBlock Classes="muted" Text="{Binding AuthorLabel}" />
+                                                                <TextBlock Classes="muted" Text="{Binding BranchLabel}" />
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="2" Classes="muted"
+                                                                       VerticalAlignment="Center"
+                                                                       Text="{Binding RelativeTime}" />
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+
+                                <ScrollViewer Grid.Row="2" MaxHeight="380"
+                                              IsVisible="{Binding IsBranchesTab}">
                                     <ItemsControl ItemsSource="{Binding Branches}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="m:BranchInfo">
@@ -151,7 +213,8 @@
                                 <!-- New branch. Branches from whatever HEAD is now and
                                      checks it out, which is what "git checkout -b" does. -->
                                 <Grid Grid.Row="4" ColumnDefinitions="*,Auto" ColumnSpacing="8"
-                                      Margin="10,0,10,8">
+                                      Margin="10,0,10,8"
+                                      IsVisible="{Binding IsBranchesTab}">
                                     <TextBox Grid.Column="0" Classes="commitBox"
                                              Text="{Binding NewBranchName, Mode=TwoWay}"
                                              PlaceholderText="New branch name" />
@@ -159,6 +222,25 @@
                                             Click="OnBranchRowClick"
                                             Command="{Binding CreateBranchCommand}" />
                                 </Grid>
+
+                                <!-- Opening one is a hand-off to the site's own form,
+                                     after a push if the branch isn't there yet. The line
+                                     above the buttons says what would be proposed, or why
+                                     nothing can be - a greyed button that never explains
+                                     itself is the thing being avoided. -->
+                                <StackPanel Grid.Row="4" Spacing="8" Margin="10,0,10,8"
+                                            IsVisible="{Binding IsPullRequestsTab}">
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="{Binding CreatePullRequestLabel}" />
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                        <Button Grid.Column="0" Classes="secondary" Content="Refresh"
+                                                Command="{Binding RefreshPullRequestsCommand}" />
+                                        <Button Grid.Column="1" Classes="primary"
+                                                Content="Create pull request"
+                                                Click="OnBranchRowClick"
+                                                Command="{Binding CreatePullRequestCommand}" />
+                                    </Grid>
+                                </StackPanel>
                             </Grid>
                         </Flyout>
                     </Button.Flyout>

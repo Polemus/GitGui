@@ -51,6 +51,35 @@ from work already in the tree afterwards is guesswork. `SwitchBranch` earns its 
 dance because switching branches with changes in flight is routine; reverting with them
 is not.
 
+**A branch is published when the remote has a branch of that name.** Nothing else counts.
+`GitService.Standing` compares HEAD against `refs/remotes/<remote>/<branch>` and consults
+nothing else — that ref exists, or the branch is new. `TrackingDetails` was consulted first
+and must not be again: it answers about whatever `branch.<name>.merge` points at, which is
+not always a branch of the same name. `git branch -m` renames the local branch and leaves
+the upstream untouched, so a branch renamed after being pushed reported as published and in
+sync while its new name was on no server anywhere — "Publish branch" vanished for a branch
+nobody could see, and a pull request was offered from a ref GitHub had never heard of.
+GitHub Desktop keys on the name too, and git itself refuses the push under the default
+`push.default=simple` rather than following the mismatch. `EnsureTracking` repoints such an
+upstream instead of following it.
+
+**Pull requests are listed and checked out; opening one hands off to the browser.** The
+same split GitHub Desktop makes, for the same reason: the create form asks for reviewers,
+labels and templates that differ per site and can't be described as data, while listing is
+one GET and checking out is one ref. Nothing is POSTed. All of it — the list endpoint, the
+field mapping, the ref, the form URL — is manifest data, so a site added from the UI gets
+pull requests too. Anything added to `IHostProvider` has to be expressible in a manifest,
+*and* carried by the settings form, which round-trips the whole manifest: a field the form
+forgets is dropped from the file the moment someone edits that host.
+
+**A pull request's head is fetched into `refs/remotes/<remote>/pr/<n>`, never straight into
+a branch.** libgit2 will happily move a branch ref that HEAD is standing on, leaving the
+working tree disagreeing with what is committed; git's own fetch refuses for exactly that
+reason. The local branch is always `pr/<n>` rather than the source branch's name, because a
+fork's branch can be called anything — including a branch already here with work on it. A
+second checkout fast-forwards only when the branch is strictly behind what was fetched; a
+force-push or local commits leave it alone and say so.
+
 **Cherry-pick switches to the target branch first, and stays there.** A cherry-pick
 applies to whatever HEAD is on — there is no "apply to that branch from here" in git. If
 it conflicts, the half-applied state is on the target branch, which is exactly where the
@@ -112,6 +141,15 @@ fire on whichever thread happens to be transferring.
 up after itself. *Abandoning* one does not — `AbortOperation` deletes `MERGE_HEAD`,
 `REVERT_HEAD`, `CHERRY_PICK_HEAD`, `MERGE_MSG`, `MERGE_MODE` and `sequencer/` by hand.
 Miss one and the app keeps showing a conflict banner over a clean tree.
+
+**Rename detection in `RetrieveStatus` swallows deletions.** With `DetectRenamesInWorkDir`,
+libgit2 pairs a delete with a similar-enough add into a single entry naming only the *new*
+path. The old path then never reaches the change list, so it can't be ticked, isn't staged,
+and is still deleted-but-uncommitted after the commit — with nothing in the UI to say so.
+Moving a set of files hit this: the ones that came across byte-identical paired up and
+vanished, while a large binary beside them changed enough not to pair and committed fine.
+Detection is off, and the patch rendered alongside does none either, so a paired entry
+showed as a plain "Added" anyway — the collapsing cost a deletion and bought nothing.
 
 **`repo.Tags["bad name"]` throws.** Even *looking a tag up* validates the ref name, so the
 "does it already exist" check has to sit inside the same try/catch as the write —

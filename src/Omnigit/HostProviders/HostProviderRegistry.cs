@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Omnigit.Services;
 
 namespace Omnigit.HostProviders;
 
@@ -46,8 +47,7 @@ public sealed class HostProviderRegistry
     public IReadOnlyList<string> Warnings => _warnings;
 
     /// <summary>Where a user drops their own site descriptions.</summary>
-    public static string UserManifestDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Omnigit", "hosts");
+    public static string UserManifestDirectory { get; } = AppPaths.In("hosts");
 
     public static HostProviderRegistry Create(HttpClient http, string? gitHubClientId = null)
     {

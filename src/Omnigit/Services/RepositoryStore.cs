@@ -22,17 +22,7 @@ public sealed class RepositoryStore : IRepositoryStore
 {
     private readonly string _file;
 
-    public RepositoryStore()
-    {
-        // ApplicationData maps to %APPDATA% on Windows, ~/.config on Linux and
-        // ~/Library/Application Support on macOS.
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Omnigit");
-
-        Directory.CreateDirectory(dir);
-        _file = Path.Combine(dir, "repositories.json");
-    }
+    public RepositoryStore() => _file = AppPaths.In("repositories.json");
 
     public IReadOnlyList<string> Load()
     {

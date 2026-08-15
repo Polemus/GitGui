@@ -102,12 +102,30 @@ public sealed class SecretToolCredentialStore : ICredentialStore
     public string Description => "system keyring (libsecret)";
     public bool IsSecure => true;
 
+    /// <summary>What the service attribute was before the app was renamed.</summary>
+    private const string FormerService = "gitgui";
+
     public async Task<string?> GetAsync(string key)
     {
         var (exitCode, output) = await ProcessRunner.RunAsync(
             "secret-tool", ["lookup", "service", "omnigit", "account", key]);
 
-        return exitCode == 0 && output.Length > 0 ? output.TrimEnd('\n') : null;
+        if (exitCode == 0 && output.Length > 0)
+            return output.TrimEnd('\n');
+
+        // The rename changed the attribute every token was filed under, so tokens
+        // saved by GitGui were invisible and the account was dropped as signed out.
+        // Found once, they are re-filed under the new name and never looked for again.
+        var (formerExit, formerOutput) = await ProcessRunner.RunAsync(
+            "secret-tool", ["lookup", "service", FormerService, "account", key]);
+
+        if (formerExit != 0 || formerOutput.Length == 0)
+            return null;
+
+        var secret = formerOutput.TrimEnd('\n');
+        await SetAsync(key, secret);
+
+        return secret;
     }
 
     public async Task SetAsync(string key, string secret)
@@ -124,7 +142,13 @@ public sealed class SecretToolCredentialStore : ICredentialStore
     }
 
     public async Task DeleteAsync(string key)
-        => await ProcessRunner.RunAsync("secret-tool", ["clear", "service", "omnigit", "account", key]);
+    {
+        await ProcessRunner.RunAsync("secret-tool", ["clear", "service", "omnigit", "account", key]);
+
+        // Signing out has to take the pre-rename copy with it, or the next launch
+        // carries it back over.
+        await ProcessRunner.RunAsync("secret-tool", ["clear", "service", FormerService, "account", key]);
+    }
 }
 
 /// <summary>macOS: the login keychain.</summary>
@@ -133,12 +157,28 @@ public sealed class MacKeychainCredentialStore : ICredentialStore
     public string Description => "macOS Keychain";
     public bool IsSecure => true;
 
+    /// <summary>The service name items were filed under before the app was renamed.</summary>
+    private const string FormerService = "GitGui";
+
     public async Task<string?> GetAsync(string key)
     {
         var (exitCode, output) = await ProcessRunner.RunAsync(
             "security", ["find-generic-password", "-a", key, "-s", "Omnigit", "-w"]);
 
-        return exitCode == 0 ? output.TrimEnd('\n') : null;
+        if (exitCode == 0)
+            return output.TrimEnd('\n');
+
+        // Same rename problem as the Linux keyring: re-file it under the new name.
+        var (formerExit, formerOutput) = await ProcessRunner.RunAsync(
+            "security", ["find-generic-password", "-a", key, "-s", FormerService, "-w"]);
+
+        if (formerExit != 0)
+            return null;
+
+        var secret = formerOutput.TrimEnd('\n');
+        await SetAsync(key, secret);
+
+        return secret;
     }
 
     public async Task SetAsync(string key, string secret)
@@ -154,7 +194,10 @@ public sealed class MacKeychainCredentialStore : ICredentialStore
     }
 
     public async Task DeleteAsync(string key)
-        => await ProcessRunner.RunAsync("security", ["delete-generic-password", "-a", key, "-s", "Omnigit"]);
+    {
+        await ProcessRunner.RunAsync("security", ["delete-generic-password", "-a", key, "-s", "Omnigit"]);
+        await ProcessRunner.RunAsync("security", ["delete-generic-password", "-a", key, "-s", FormerService]);
+    }
 }
 
 /// <summary>
@@ -164,8 +207,7 @@ public sealed class MacKeychainCredentialStore : ICredentialStore
 [SupportedOSPlatform("windows")]
 public sealed class DpapiCredentialStore : ICredentialStore
 {
-    private readonly string _directory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Omnigit", "credentials");
+    private readonly string _directory = AppPaths.In("credentials");
 
     public string Description => "Windows DPAPI";
     public bool IsSecure => true;
@@ -222,8 +264,7 @@ public sealed class DpapiCredentialStore : ICredentialStore
 /// </summary>
 public sealed class FileCredentialStore : ICredentialStore
 {
-    private readonly string _directory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Omnigit", "credentials");
+    private readonly string _directory = AppPaths.In("credentials");
 
     public string Description => "a local file (no system keyring found)";
     public bool IsSecure => false;

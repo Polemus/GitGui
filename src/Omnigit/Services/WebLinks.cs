@@ -17,6 +17,16 @@ public static class WebLinks
     public const string DefaultCommitTemplate = "{base}/{owner}/{repo}/commit/{sha}";
 
     /// <summary>
+    /// The compare page, which is where GitHub and Gitea open a new pull request from.
+    /// <c>expand=1</c> opens the form rather than the diff.
+    /// </summary>
+    public const string DefaultNewPullRequestTemplate =
+        "{base}/{owner}/{repo}/compare/{target}...{source}?expand=1";
+
+    /// <summary>Where a pull request's head lives on the origin remote.</summary>
+    public const string DefaultPullRequestRefSpec = "refs/pull/{number}/head";
+
+    /// <summary>
     /// Fills in a commit template. Null when the pieces don't make an absolute URL,
     /// which is what a template with a typo in it produces.
     /// </summary>
@@ -46,6 +56,44 @@ public static class WebLinks
             ? url
             : null;
     }
+
+    /// <summary>
+    /// The page for opening a pull request from <paramref name="source"/> into
+    /// <paramref name="target"/>. Branch names are escaped: a branch called
+    /// <c>fix/#12</c> would otherwise cut the URL short at the fragment.
+    /// </summary>
+    public static Uri? NewPullRequestUrl(
+        Uri baseUrl, string owner, string repository, string source, string target, string? template = null)
+    {
+        if (string.IsNullOrWhiteSpace(repository) || string.IsNullOrWhiteSpace(source))
+            return null;
+
+        var text = string.IsNullOrWhiteSpace(template) ? DefaultNewPullRequestTemplate : template;
+
+        if (string.IsNullOrEmpty(owner))
+            text = text.Replace("{owner}/", string.Empty, StringComparison.Ordinal);
+
+        text = text
+            .Replace("{base}", baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/'), StringComparison.Ordinal)
+            .Replace("{owner}", owner, StringComparison.Ordinal)
+            .Replace("{repo}", repository, StringComparison.Ordinal)
+            .Replace("{source}", Uri.EscapeDataString(source), StringComparison.Ordinal)
+            .Replace("{target}", Uri.EscapeDataString(target), StringComparison.Ordinal);
+
+        return Uri.TryCreate(text, UriKind.Absolute, out var url)
+               && url.Scheme is "http" or "https"
+            ? url
+            : null;
+    }
+
+    /// <summary>
+    /// The ref a pull request's head sits at on the remote, e.g.
+    /// <c>refs/pull/12/head</c>. Empty when the template names no ref.
+    /// </summary>
+    public static string PullRequestRef(int number, string? template = null)
+        => (string.IsNullOrWhiteSpace(template) ? DefaultPullRequestRefSpec : template)
+            .Replace("{number}", number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                StringComparison.Ordinal);
 
     /// <summary>
     /// The same, worked out from a remote URL alone. Used when no account is signed in

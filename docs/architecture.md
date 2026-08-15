@@ -34,6 +34,12 @@ never seen, so `GitService` reads the file and builds an all-added diff, which m
 files read like any other addition. Binary and oversized files are detected and skipped
 rather than dumped into the view as noise.
 
+**A branch is published when the remote has a branch of that name**, and that is the only
+question asked. `Standing` compares HEAD against `refs/remotes/<remote>/<branch>`; git's own
+`TrackingDetails` is deliberately not consulted, because it answers about whatever the
+upstream config points at — which `git branch -m` leaves pointing at the old name after a
+rename, making a branch that exists on no server report as published and in sync.
+
 **Expected outcomes return; faults throw.** `Fetch`/`Pull`/`Push` return `SyncResult`.
 Being signed out is an everyday condition for a git client — treating it as an exception
 muddles control flow and makes the debugger halt on it during every development run.
@@ -100,6 +106,17 @@ Gitea and GitLab ship *as manifests* on purpose. If the built-ins were code and 
 wrote manifests, the format would quietly rot into something that works in theory.
 
 See [host-manifests.md](host-manifests.md) for the format.
+
+**Anything added to `IHostProvider` has to be expressible in a manifest**, or sites defined
+by one silently lose the feature and become second-tier. Pull requests were added under that
+rule: listing them is an endpoint plus a field mapping, checking one out is a ref template
+(`refs/pull/{number}/head`, but not on GitLab), and creating one is a URL template pointing
+at the site's own form. Nothing is POSTed — the create form asks for reviewers, labels and
+templates that differ per site, which is the same split GitHub Desktop makes.
+
+The settings form is the other half of that rule. It round-trips a whole manifest, so a
+field it doesn't carry is dropped from the file the moment someone edits that host through
+the UI — a new manifest field means a new form field.
 
 ## Two things that group repositories, and why both exist
 

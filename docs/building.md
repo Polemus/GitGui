@@ -84,6 +84,20 @@ them worth writing is what libgit2 actually leaves behind:
   abandoning outright, each checked against the index rather than the working tree.
 - **Sync state.** What the sync button is told about a branch, including one pushed without
   an upstream, against a bare "origin" beside the working copy.
+- **Publish state.** A branch pushed under one name and then renamed locally — git carries
+  the upstream across, so it claims to be published and in sync while its new name is on no
+  server. It has to read as a new branch, and publishing has to send it to a branch of the
+  same name.
+- **Staging.** That a deleted file, and both halves of a moved one, actually reach the
+  commit — a change that never reaches the list can never be ticked, so it survives every
+  commit without anyone being told.
+- **Pull requests.** Fetching a pull request's head from an origin that really has a
+  `refs/pull/1/head`, checking it out again after it has been added to, and refusing to
+  move a branch that has diverged from it.
+
+The manifest side is covered against a stub `HttpMessageHandler`, reading the manifests
+that actually ship rather than a copy — so a typo in `gitea.json` fails a test instead of a
+sign-in.
 
 LibGit2Sharp bundles its own native library, so none of this needs git installed.
 

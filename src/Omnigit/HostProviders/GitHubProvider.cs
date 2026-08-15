@@ -36,6 +36,7 @@ public sealed class GitHubProvider(HttpClient http, string? configuredClientId) 
     public HostCapabilities Capabilities { get; } = new()
     {
         AuthMethods = [AuthMethod.BrowserDeviceLogin, AuthMethod.PersonalAccessToken],
+        CanListPullRequests = true,
     };
 
     /// <summary>
@@ -223,6 +224,52 @@ public sealed class GitHubProvider(HttpClient http, string? configuredClientId) 
         return repositories;
     }
 
+    public async Task<IReadOnlyList<PullRequest>> ListPullRequestsAsync(
+        HostAccount account, string owner, string repository, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(owner) || string.IsNullOrEmpty(repository))
+            return [];
+
+        // One page, most recently touched first: this fills a dropdown, not a report.
+        var url = new Uri(ApiBase(account.BaseUrl),
+            $"repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(repository)}"
+            + "/pulls?state=open&sort=updated&direction=desc&per_page=50");
+
+        var (document, _) = await GetJsonPageAsync(url, account.Token, cancellationToken);
+        var pullRequests = new List<PullRequest>();
+
+        using (document)
+        {
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Array)
+                throw new HostProviderException("GitHub returned an unexpected pull request list.");
+
+            foreach (var item in root.EnumerateArray())
+            {
+                if (!item.TryGetProperty("number", out var numberElement)
+                    || !numberElement.TryGetInt32(out var number))
+                {
+                    continue;
+                }
+
+                pullRequests.Add(new PullRequest
+                {
+                    Number = number,
+                    Title = Str(item, "title") is { Length: > 0 } title ? title : $"#{number}",
+                    Author = item.TryGetProperty("user", out var user) ? Str(user, "login") ?? string.Empty : string.Empty,
+                    SourceBranch = item.TryGetProperty("head", out var head) ? Str(head, "ref") ?? string.Empty : string.Empty,
+                    TargetBranch = item.TryGetProperty("base", out var wanted) ? Str(wanted, "ref") ?? string.Empty : string.Empty,
+                    IsDraft = item.TryGetProperty("draft", out var draft) && draft.ValueKind == JsonValueKind.True,
+                    UpdatedAt = DateTimeOffset.TryParse(Str(item, "updated_at"), out var when) ? when : null,
+                    WebUrl = Str(item, "html_url"),
+                });
+            }
+        }
+
+        return pullRequests;
+    }
+
     /// <summary>
     /// GitHub accepts the token as the password over HTTPS. The username is ignored
     /// but must not be empty.
@@ -231,6 +278,15 @@ public sealed class GitHubProvider(HttpClient http, string? configuredClientId) 
 
     /// <summary>GitHub, and Enterprise with it, uses the shape everything else copied.</summary>
     public string CommitUrlTemplate => Services.WebLinks.DefaultCommitTemplate;
+
+    public string NewPullRequestUrlTemplate => Services.WebLinks.DefaultNewPullRequestTemplate;
+
+    /// <summary>
+    /// GitHub keeps every pull request's head on the base repository under
+    /// <c>refs/pull/&lt;n&gt;/head</c>, forks included. That is the whole reason a fork's
+    /// pull request can be checked out without its remote being added.
+    /// </summary>
+    public string PullRequestRefSpec => Services.WebLinks.DefaultPullRequestRefSpec;
 
     // ---------------------------------------------------------------- helpers
 

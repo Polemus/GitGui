@@ -55,7 +55,7 @@ public sealed partial class GitService : IGitService
             Owner = identity?.Owner ?? string.Empty,
             Host = identity?.Host ?? HostResolver.LocalOnly,
             LocalPath = workdir,
-            DefaultBranch = head?.FriendlyName ?? "HEAD",
+            DefaultBranch = DefaultBranchName(repo, origin),
             IsPrivate = null, // Not knowable locally; the host API fills this in later.
             Ahead = standing.Ahead,
             Behind = standing.Behind,
@@ -69,11 +69,64 @@ public sealed partial class GitService : IGitService
         };
     }
 
+    /// <summary>
+    /// The branch this repository's work merges back into.
+    /// </summary>
+    /// <remarks>
+    /// This used to be the branch currently checked out, which is not a default branch
+    /// but the opposite of the question - it made "open a pull request from here into the
+    /// default" a proposal to merge a branch into itself, so the button was disabled on
+    /// every repository and never said why.
+    ///
+    /// <c>refs/remotes/&lt;remote&gt;/HEAD</c> is the local record of what the server calls
+    /// default, written by <c>git clone</c>. A repository that was init'ed and pushed has
+    /// no such ref - the same gap <c>EnsureTracking</c> exists for - so the usual names
+    /// are tried next, on the remote before locally: what the forge has is the answer,
+    /// and a local <c>main</c> next to a remote <c>master</c> is the case that decides it.
+    /// </remarks>
+    private static string DefaultBranchName(Repository repo, Remote? remote)
+    {
+        if (remote is not null
+            && repo.Refs[$"refs/remotes/{remote.Name}/HEAD"] is SymbolicReference symbolic)
+        {
+            var prefix = $"refs/remotes/{remote.Name}/";
+            var target = symbolic.Target?.CanonicalName ?? symbolic.TargetIdentifier;
+
+            if (target?.StartsWith(prefix, StringComparison.Ordinal) == true)
+                return target[prefix.Length..];
+        }
+
+        string[] usual = ["main", "master", "trunk", "develop"];
+
+        if (remote is not null)
+        {
+            foreach (var name in usual)
+            {
+                if (repo.Refs[$"refs/remotes/{remote.Name}/{name}"] is not null)
+                    return name;
+            }
+        }
+
+        foreach (var name in usual)
+        {
+            if (repo.Branches[name] is not null)
+                return name;
+        }
+
+        return repo.Head?.FriendlyName ?? "HEAD";
+    }
+
     public IReadOnlyList<BranchInfo> GetBranches(string path)
     {
         using var repo = new Repository(Discover(path));
 
         var currentName = repo.Head?.FriendlyName;
+
+        // The same answer the repository header uses, rather than a second guess at it:
+        // a project whose trunk is called something else has one default branch, not one
+        // here and a different one there.
+        var defaultName = DefaultBranchName(repo, repo.Network.Remotes["origin"]
+                                                  ?? repo.Network.Remotes.FirstOrDefault());
 
         return repo.Branches
             .Where(b => !b.IsRemote)
@@ -83,7 +136,7 @@ public sealed partial class GitService : IGitService
                 LastCommitSummary = b.Tip?.MessageShort ?? string.Empty,
                 LastCommitAt = b.Tip?.Committer.When ?? DateTimeOffset.MinValue,
                 IsCurrent = b.FriendlyName == currentName,
-                IsDefault = b.FriendlyName is "main" or "master",
+                IsDefault = b.FriendlyName == defaultName,
             })
             .OrderByDescending(b => b.IsCurrent)
             .ThenByDescending(b => b.LastCommitAt)
@@ -94,12 +147,17 @@ public sealed partial class GitService : IGitService
     {
         using var repo = new Repository(Discover(path));
 
+        // Rename detection is deliberately off. It pairs a delete with a similar-enough
+        // add into one entry carrying only the *new* path, so moving a file listed one
+        // row, the commit staged that one path, and the deletion of the old path was
+        // left behind in the working tree - silently, since it never appeared in the
+        // list to begin with. The patch below does no rename detection either, so a
+        // paired entry was rendered as a plain "Added" anyway: the collapsing cost us
+        // the deletion and bought nothing.
         var status = repo.RetrieveStatus(new StatusOptions
         {
             IncludeUntracked = true,
             RecurseUntrackedDirs = true,
-            DetectRenamesInWorkDir = true,
-            DetectRenamesInIndex = true,
         });
 
         var entries = status
@@ -726,6 +784,99 @@ public sealed partial class GitService : IGitService
             : $"Fetched from {remote.Name} — already up to date");
     }
 
+    /// <summary>
+    /// Brings a pull request's head down into <c>refs/remotes/&lt;remote&gt;/pr/&lt;n&gt;</c>
+    /// and reports what the caller has to do to get onto it.
+    /// </summary>
+    /// <remarks>
+    /// Fetched into a remote-tracking ref rather than straight into a branch on purpose.
+    /// A branch may be the one checked out, and moving that ref under the working tree
+    /// leaves the two disagreeing about what is committed - git's own fetch refuses for
+    /// exactly this reason, while libgit2 will do as it is told.
+    ///
+    /// The local branch is <c>pr/&lt;n&gt;</c>, never the source branch's own name: a pull
+    /// request from a fork can be called anything, up to and including the name of a
+    /// branch already here with work on it.
+    /// </remarks>
+    public PullRequestFetch FetchPullRequest(
+        string path, int number, string? refSpecTemplate, GitCredentials? credentials, Action<string>? trace = null)
+    {
+        using var repo = new Repository(Discover(path));
+
+        var local = $"pr/{number}";
+
+        if (FindRemote(repo) is not { } remote)
+            return new PullRequestFetch(NoRemote("fetch a pull request from"), local, false, false);
+
+        var head = WebLinks.PullRequestRef(number, refSpecTemplate);
+        var mirror = $"refs/remotes/{remote.Name}/pr/{number}";
+        var probe = new AuthProbe { Host = HostOf(remote), HadCredentials = credentials is not null };
+
+        trace?.Invoke($"Fetching {head} from {remote.Url}");
+
+        if (RunNetwork(probe, () => Commands.Fetch(
+                repo, remote.Name, [$"+{head}:{mirror}"],
+                // Prune would delete every other remote-tracking ref: the refspec names
+                // one ref, so from its point of view the rest of the remote is gone.
+                BuildFetchOptions(credentials, probe, trace, prune: false),
+                $"fetch pull request {number} by Omnigit")) is { } failure)
+        {
+            return new PullRequestFetch(failure, local, false, false);
+        }
+
+        if (repo.Refs[mirror]?.ResolveToDirectReference()?.Target is not Commit fetched)
+        {
+            return new PullRequestFetch(
+                new SyncResult(SyncOutcome.Failed,
+                    $"The remote has no {head} — the pull request may have been merged or closed."),
+                local, false, false);
+        }
+
+        var branch = repo.Branches[local];
+
+        if (branch is null)
+            return new PullRequestFetch(SyncResult.Ok($"Fetched pull request #{number}"), local, IsNew: true, IsStale: false);
+
+        // Already here from a previous checkout. Fast-forwarding it is safe only while
+        // it is strictly behind what was just fetched; anything else means the pull
+        // request was force-pushed or the branch has local commits, and moving it would
+        // throw one of the two away.
+        var behind = branch.Tip is { } tip
+                     && repo.ObjectDatabase.FindMergeBase(tip, fetched)?.Sha == tip.Sha
+                     && tip.Sha != fetched.Sha;
+
+        if (!behind)
+        {
+            return new PullRequestFetch(
+                SyncResult.Ok($"Fetched pull request #{number}"), local,
+                IsNew: false, IsStale: branch.Tip?.Sha != fetched.Sha);
+        }
+
+        // Moving a ref nothing is standing on is just a ref write. Moving the one HEAD
+        // points at has to take the working tree with it, so that only happens with
+        // nothing uncommitted in the way - a fast-forward is not worth risking work over.
+        if (branch.IsCurrentRepositoryHead)
+        {
+            if (ChangedPaths(repo).Count > 0)
+            {
+                return new PullRequestFetch(
+                    SyncResult.Ok($"Fetched pull request #{number}"),
+                    local, IsNew: false, IsStale: true);
+            }
+
+            Commands.Checkout(repo, fetched);
+        }
+
+        repo.Refs.UpdateTarget(repo.Refs[branch.CanonicalName], fetched.Id);
+
+        if (branch.IsCurrentRepositoryHead)
+            repo.Refs.UpdateTarget("HEAD", branch.CanonicalName);
+
+        return new PullRequestFetch(
+            SyncResult.Ok($"Updated {local} to the latest on pull request #{number}"),
+            local, IsNew: false, IsStale: false);
+    }
+
     public SyncResult Pull(string path, GitCredentials? credentials, Action<string>? trace = null)
     {
         using var repo = new Repository(Discover(path));
@@ -822,8 +973,13 @@ public sealed partial class GitService : IGitService
         public required string Host { get; init; }
     }
 
+    /// <param name="prune">
+    /// False when the fetch names a single ref rather than the remote's own refspecs:
+    /// pruning against one ref would delete every remote-tracking branch, since from
+    /// that refspec's point of view none of them are on the remote any more.
+    /// </param>
     private static FetchOptions BuildFetchOptions(
-        GitCredentials? credentials, AuthProbe probe, Action<string>? trace = null)
+        GitCredentials? credentials, AuthProbe probe, Action<string>? trace = null, bool prune = true)
     {
         // libgit2 reports transfer progress per object, which would flood the console.
         // Only the crossing of each 10% boundary is reported.
@@ -833,7 +989,7 @@ public sealed partial class GitService : IGitService
         {
             CredentialsProvider = CredentialsFor(credentials, probe),
             TagFetchMode = TagFetchMode.Auto,
-            Prune = true,
+            Prune = prune,
             OnTransferProgress = progress =>
             {
                 if (trace is null || progress.TotalObjects == 0)
@@ -933,21 +1089,24 @@ public sealed partial class GitService : IGitService
         int Ahead, int Behind, bool HasRemote, bool IsPublished);
 
     /// <summary>
-    /// Counts unpushed and unpulled commits, falling back to the remote-tracking ref when
-    /// git never recorded an upstream.
+    /// Counts unpushed and unpulled commits against the branch of the same name on the
+    /// remote, and nothing else.
     /// </summary>
     /// <remarks>
-    /// <c>TrackingDetails</c> answers only when <c>branch.&lt;name&gt;.merge</c> is set,
-    /// and returns nulls otherwise. That config is written by <c>git clone</c>, and by
-    /// <c>git push -u</c> - but a plain <c>git push origin main</c> does not write it
-    /// unless <c>push.autoSetupRemote</c> says so, and neither does a pull that names its
-    /// refspec. So a repository that was init'ed and pushed rather than cloned has a
-    /// branch that is plainly on the remote and yet tracks nothing, and reading the nulls
-    /// as zero left the sync button offering a fetch over commits waiting to go out.
+    /// The name is the whole question: a branch is published when
+    /// <c>refs/remotes/&lt;remote&gt;/&lt;branch&gt;</c> exists, and unpublished when it
+    /// does not. That ref is maintained by the fetch refspec whether or not git ever
+    /// recorded an upstream, which matters because a repository that was init'ed and
+    /// pushed has branches plainly on the remote that track nothing at all.
     ///
-    /// <c>refs/remotes/&lt;remote&gt;/&lt;branch&gt;</c> is maintained by the fetch
-    /// refspec regardless, so comparing against that reaches the same commit git would
-    /// have compared against, without needing to be told where to look.
+    /// <c>TrackingDetails</c> used to be consulted first and is deliberately not any
+    /// more. It answers about whatever <c>branch.&lt;name&gt;.merge</c> points at, which
+    /// is not always a branch of the same name: <c>git branch -m</c> renames the local
+    /// branch and leaves the upstream untouched, so a branch renamed after being pushed
+    /// still reports as published and in sync while its new name is on no server
+    /// anywhere. That is how "Publish branch" went missing for a branch nobody could
+    /// see, and how a pull request was offered from a ref GitHub had never heard of.
+    /// If the name isn't there, it's a new branch.
     /// </remarks>
     private static BranchStanding Standing(Repository repo, Branch? head)
     {
@@ -956,9 +1115,6 @@ public sealed partial class GitService : IGitService
 
         if (head?.Tip is null)
             return new(0, 0, HasRemote: true, IsPublished: false);
-
-        if (head.TrackingDetails is { AheadBy: { } ahead, BehindBy: { } behind })
-            return new(ahead, behind, HasRemote: true, IsPublished: true);
 
         if (Mirror(repo, remote, head)?.Tip is not { } mirrorTip)
             return new(0, 0, HasRemote: true, IsPublished: false);
@@ -977,19 +1133,29 @@ public sealed partial class GitService : IGitService
         => repo.Branches[$"{remote.Name}/{branch.FriendlyName}"];
 
     /// <summary>
-    /// Records <c>branch.&lt;name&gt;.remote</c> and <c>.merge</c> when git never did, and
-    /// hands back the branch as it now reads.
+    /// Points <c>branch.&lt;name&gt;.remote</c> and <c>.merge</c> at the branch of the same
+    /// name on the remote, and hands back the branch as it now reads.
     /// </summary>
     /// <remarks>
     /// libgit2 refuses to push or pull a branch that tracks nothing, so without this the
     /// app can see the divergence and still be unable to act on it - and the user has to
     /// drop to the command line for a <c>git push -u</c> to get out, which is exactly the
     /// errand a GUI should save them. This writes what that command would have written.
+    ///
+    /// An upstream naming a *different* branch is corrected rather than followed. It is
+    /// what <c>git branch -m</c> leaves behind, and pushing down it would send this
+    /// branch's commits to a branch of another name on the server - silently, since
+    /// nothing in the app ever showed that name. Git will not do that either: with the
+    /// default <c>push.default=simple</c> it refuses the push outright and says the
+    /// upstream does not match the current branch's name.
     /// </remarks>
     private static Branch EnsureTracking(Repository repo, Branch branch, Remote remote)
     {
-        if (branch.IsTracking)
+        if (branch.IsTracking
+            && string.Equals(branch.UpstreamBranchCanonicalName, branch.CanonicalName, StringComparison.Ordinal))
+        {
             return branch;
+        }
 
         repo.Branches.Update(branch,
             b => b.Remote = remote.Name,

@@ -33,3 +33,16 @@ public sealed record SyncResult(SyncOutcome Outcome, string Message)
 
     public static SyncResult Ok(string message) => new(SyncOutcome.Succeeded, message);
 }
+
+/// <summary>
+/// What fetching a pull request left behind, so the caller knows whether the branch it
+/// is about to switch to has to be created first.
+/// </summary>
+/// <param name="BranchName">The local branch a checkout should land on.</param>
+/// <param name="IsNew">The branch isn't here yet, so switching to it means creating it.</param>
+/// <param name="IsStale">
+/// The branch is here and differs from what was fetched, and could not be moved without
+/// risking work - it was force-pushed, has local commits, or the tree is dirty.
+/// </param>
+public sealed record PullRequestFetch(
+    SyncResult Result, string BranchName, bool IsNew, bool IsStale);

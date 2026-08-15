@@ -14,9 +14,11 @@
     "value": "{token}"
   },
 
+  "//endpoints": "GitLab addresses a project by a URL-encoded owner/name pair rather than a path, so {owner} and {repo} are separated by %2F here rather than a slash.",
   "endpoints": {
     "currentUser": "/api/v4/user",
-    "repositories": "/api/v4/projects?membership=true&per_page=100"
+    "repositories": "/api/v4/projects?membership=true&per_page=100",
+    "pullRequests": "/api/v4/projects/{owner}%2F{repo}/merge_requests?state=opened&order_by=updated_at&per_page=50"
   },
 
   "userFields": {
@@ -42,8 +44,24 @@
     "password": "{token}"
   },
 
-  "//webUrls": "The one place GitLab's website differs in shape from everyone else's: a /-/ between the project and the page.",
+  "//pullRequestFields": "A merge request is a pull request under another name. Note iid, not id: the per-project number is what appears in the URL and in the ref, while id is global and would name someone else's merge request entirely.",
+  "pullRequestFields": {
+    "number": "iid",
+    "title": "title",
+    "author": "author.username",
+    "sourceBranch": "source_branch",
+    "targetBranch": "target_branch",
+    "isDraft": "draft",
+    "updatedAt": "updated_at",
+    "webUrl": "web_url"
+  },
+
+  "//pullRequestRef": "GitLab files merge request heads somewhere else entirely, which is why this is a manifest field and not a constant.",
+  "pullRequestRef": "refs/merge-requests/{number}/head",
+
+  "//webUrls": "The one place GitLab's website differs in shape from everyone else's: a /-/ between the project and the page. Opening a merge request is a form with its own query parameters rather than a compare page.",
   "webUrls": {
-    "commit": "{base}/{owner}/{repo}/-/commit/{sha}"
+    "commit": "{base}/{owner}/{repo}/-/commit/{sha}",
+    "newPullRequest": "{base}/{owner}/{repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D={source}&merge_request%5Btarget_branch%5D={target}"
   }
 }

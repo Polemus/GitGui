@@ -46,6 +46,13 @@ public interface IHostProvider
     Task<IReadOnlyList<RemoteRepository>> ListRepositoriesAsync(HostAccount account, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Open pull requests for one repository, newest first. Empty when the provider
+    /// can't list them - see <see cref="HostCapabilities.CanListPullRequests"/>.
+    /// </summary>
+    Task<IReadOnlyList<PullRequest>> ListPullRequestsAsync(
+        HostAccount account, string owner, string repository, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The username/password libgit2 should use for HTTPS fetch and push. Sites differ:
     /// GitHub wants the token as the password, GitLab wants a fixed username.
     /// </summary>
@@ -58,4 +65,21 @@ public interface IHostProvider
     /// else's and that has to be describable without writing code.
     /// </summary>
     string CommitUrlTemplate { get; }
+
+    /// <summary>
+    /// The site's "open a pull request" page, as a template over <c>{base}</c>,
+    /// <c>{owner}</c>, <c>{repo}</c>, <c>{source}</c> and <c>{target}</c>. Creating one
+    /// is deliberately a hand-off to the browser rather than an API call: the form asks
+    /// for reviewers, labels, templates and a dozen other things that differ per site,
+    /// and GitHub Desktop hands off for the same reason.
+    /// </summary>
+    string NewPullRequestUrlTemplate { get; }
+
+    /// <summary>
+    /// The ref on the origin remote holding a pull request's head, over
+    /// <c>{number}</c> - <c>refs/pull/{number}/head</c> nearly everywhere, but GitLab
+    /// files merge requests somewhere else entirely. This is what makes checking one
+    /// out possible without adding the contributor's fork as a remote.
+    /// </summary>
+    string PullRequestRefSpec { get; }
 }

@@ -35,8 +35,7 @@ public sealed class AccountStore(ICredentialStore credentials) : IAccountStore
         PropertyNameCaseInsensitive = true,
     };
 
-    private readonly string _file = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Omnigit", "accounts.json");
+    private readonly string _file = AppPaths.In("accounts.json");
 
     public async Task<IReadOnlyList<HostAccount>> LoadAsync()
     {

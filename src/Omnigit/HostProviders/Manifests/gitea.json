@@ -15,7 +15,8 @@
 
   "endpoints": {
     "currentUser": "/api/v1/user",
-    "repositories": "/api/v1/user/repos?limit=100"
+    "repositories": "/api/v1/user/repos?limit=100",
+    "pullRequests": "/api/v1/repos/{owner}/{repo}/pulls?state=open&sort=recentupdate&limit=50"
   },
 
   "userFields": {
@@ -34,8 +35,27 @@
     "updatedAt": "updated_at"
   },
 
+  "//pullRequestFields": "Gitea copied GitHub's shape here, so these are the defaults. Written out anyway, since a manifest is also the worked example.",
+  "pullRequestFields": {
+    "number": "number",
+    "title": "title",
+    "author": "user.login",
+    "sourceBranch": "head.ref",
+    "targetBranch": "base.ref",
+    "isDraft": "draft",
+    "updatedAt": "updated_at",
+    "webUrl": "html_url"
+  },
+
+  "pullRequestRef": "refs/pull/{number}/head",
+
   "gitCredentials": {
     "username": "{login}",
     "password": "{token}"
+  },
+
+  "webUrls": {
+    "commit": "{base}/{owner}/{repo}/commit/{sha}",
+    "newPullRequest": "{base}/{owner}/{repo}/compare/{target}...{source}?expand=1"
   }
 }

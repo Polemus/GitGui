@@ -347,6 +347,9 @@
                                             <TextBox Classes="commitBox"
                                                      Text="{Binding RepositoriesEndpoint, Mode=TwoWay}"
                                                      PlaceholderText="/api/v1/user/repos?limit=100" />
+                                            <TextBox Classes="commitBox"
+                                                     Text="{Binding PullRequestsEndpoint, Mode=TwoWay}"
+                                                     PlaceholderText="{}{owner}/{repo} pull requests — leave empty if the site has none" />
                                         </StackPanel>
 
                                         <Expander Header="Where the values sit in the responses">
@@ -401,6 +404,42 @@
                                                 </StackPanel>
 
                                                 <StackPanel Spacing="6">
+                                                    <TextBlock Classes="muted" Text="Pull request: number, title, author, draft" />
+                                                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                                                        <TextBox Grid.Column="0" Classes="commitBox"
+                                                                 Text="{Binding PrNumberField, Mode=TwoWay}" />
+                                                        <TextBox Grid.Column="1" Classes="commitBox"
+                                                                 Text="{Binding PrTitleField, Mode=TwoWay}" />
+                                                        <TextBox Grid.Column="2" Classes="commitBox"
+                                                                 Text="{Binding PrAuthorField, Mode=TwoWay}" />
+                                                        <TextBox Grid.Column="3" Classes="commitBox"
+                                                                 Text="{Binding PrDraftField, Mode=TwoWay}" />
+                                                    </Grid>
+                                                </StackPanel>
+
+                                                <StackPanel Spacing="6">
+                                                    <TextBlock Classes="muted" Text="Pull request: source branch, target branch, updated at, page URL" />
+                                                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+                                                        <TextBox Grid.Column="0" Classes="commitBox"
+                                                                 Text="{Binding PrSourceBranchField, Mode=TwoWay}" />
+                                                        <TextBox Grid.Column="1" Classes="commitBox"
+                                                                 Text="{Binding PrTargetBranchField, Mode=TwoWay}" />
+                                                        <TextBox Grid.Column="2" Classes="commitBox"
+                                                                 Text="{Binding PrUpdatedAtField, Mode=TwoWay}" />
+                                                        <TextBox Grid.Column="3" Classes="commitBox"
+                                                                 Text="{Binding PrWebUrlField, Mode=TwoWay}" />
+                                                    </Grid>
+                                                </StackPanel>
+
+                                                <StackPanel Spacing="6">
+                                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                                               Text="Checking a pull request out fetches this ref from the remote, so a contributor's fork needs no remote of its own." />
+                                                    <TextBox Classes="commitBox"
+                                                             Text="{Binding PullRequestRef, Mode=TwoWay}"
+                                                             PlaceholderText="refs/pull/{}{number}/head" />
+                                                </StackPanel>
+
+                                                <StackPanel Spacing="6">
                                                     <TextBlock Classes="muted" Text="What git gets for HTTPS: username, password" />
                                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                                                         <TextBox Grid.Column="0" Classes="commitBox"
@@ -416,6 +455,14 @@
                                                     <TextBox Classes="commitBox"
                                                              Text="{Binding CommitUrlTemplate, Mode=TwoWay}"
                                                              PlaceholderText="{}{base}/{owner}/{repo}/commit/{sha}" />
+                                                </StackPanel>
+
+                                                <StackPanel Spacing="6">
+                                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                                               Text="Where &quot;Create pull request&quot; sends a browser. Opening one is left to the site's own form, which asks for reviewers and templates this app knows nothing about." />
+                                                    <TextBox Classes="commitBox"
+                                                             Text="{Binding NewPullRequestUrlTemplate, Mode=TwoWay}"
+                                                             PlaceholderText="{}{base}/{owner}/{repo}/compare/{target}...{source}?expand=1" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Expander>

@@ -58,7 +58,8 @@ path yours will:
 
   "endpoints": {
     "currentUser": "/api/v1/user",
-    "repositories": "/api/v1/user/repos?limit=100"
+    "repositories": "/api/v1/user/repos?limit=100",
+    "pullRequests": "/api/v1/repos/{owner}/{repo}/pulls?state=open&sort=recentupdate&limit=50"
   },
 
   "userFields": {
@@ -77,9 +78,27 @@ path yours will:
     "updatedAt": "updated_at"
   },
 
+  "pullRequestFields": {
+    "number": "number",
+    "title": "title",
+    "author": "user.login",
+    "sourceBranch": "head.ref",
+    "targetBranch": "base.ref",
+    "isDraft": "draft",
+    "updatedAt": "updated_at",
+    "webUrl": "html_url"
+  },
+
+  "pullRequestRef": "refs/pull/{number}/head",
+
   "gitCredentials": {
     "username": "{login}",
     "password": "{token}"
+  },
+
+  "webUrls": {
+    "commit": "{base}/{owner}/{repo}/commit/{sha}",
+    "newPullRequest": "{base}/{owner}/{repo}/compare/{target}...{source}?expand=1"
   }
 }
 ```
@@ -121,6 +140,10 @@ The HTTP header carrying the token. `{token}` is substituted.
 - `currentUser` — returns the signed-in user. Required; sign-in can't work without it.
 - `repositories` — returns an array of repositories. Include any paging or filter query
   string you need.
+- `pullRequests` — returns an array of open pull requests for one repository. `{owner}`
+  and `{repo}` are substituted, since unlike the other two this endpoint is about a
+  particular clone. Leave it out and Omnigit hides the pull request tab for this site
+  rather than showing a list that could never fill.
 
 ### `userFields` and `repositoryFields`
 
@@ -134,6 +157,49 @@ When a site encodes a boolean as a string, use the object form instead:
 ```
 
 GitLab needs exactly that, which is why the shorthand alone isn't enough.
+
+### `pullRequestFields`
+
+Where each part of a pull request sits in that array's entries. The defaults are
+GitHub's shape, which Gitea copied. GitLab needs all of them, and note `iid` rather than
+`id` — `id` is global across the instance and would name someone else's merge request:
+
+```json
+"pullRequestFields": {
+  "number": "iid",
+  "author": "author.username",
+  "sourceBranch": "source_branch",
+  "targetBranch": "target_branch",
+  "webUrl": "web_url"
+}
+```
+
+### `pullRequestRef`
+
+The ref on the origin remote holding a pull request's head, over `{number}`. This is
+what lets Omnigit check out a pull request opened from someone's fork without adding
+that fork as a remote — the head is already on the remote you cloned from.
+
+```json
+"pullRequestRef": "refs/pull/{number}/head"           // GitHub, Gitea
+"pullRequestRef": "refs/merge-requests/{number}/head" // GitLab
+```
+
+The checkout lands on a local branch named `pr/<number>`, never the source branch's own
+name: a branch on a fork can be called anything, including something already here.
+
+### `webUrls`
+
+Pages on the site's own website, as opposed to its API. Built from what a clone already
+knows rather than fetched, so `{base}`, `{owner}` and `{repo}` are always available.
+
+- `commit` — where "View on …" sends a browser. `{sha}` is substituted.
+- `newPullRequest` — where "Create pull request" sends it. `{source}` and `{target}` are
+  the branch being proposed and the one it would merge into, both URL-escaped.
+
+Opening a pull request is deliberately a hand-off to the site's own form rather than an
+API call: that form asks for reviewers, labels and templates that differ per site, and
+GitHub Desktop hands off for the same reason.
 
 ### `gitCredentials`
 
@@ -174,5 +240,6 @@ carries on with the rest — one bad file never stops the app starting.
 - **Token sign-in only.** Browser-based OAuth needs code, not data.
 - **One page of results.** Put a large `per_page`/`limit` in the endpoint query string;
   automatic paging isn't implemented yet.
-- **Listing and cloning only.** Pull requests and issues aren't covered by the format
-  yet, since their shapes diverge much more between sites.
+- **Pull requests are listed, checked out and opened — not merged or reviewed.** There
+  is no way to comment, approve or merge from Omnigit, and no check/CI status. Issues
+  aren't covered by the format at all.

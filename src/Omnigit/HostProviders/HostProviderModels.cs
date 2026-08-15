@@ -47,6 +47,48 @@ public sealed class RemoteRepository
     public string FullName => string.IsNullOrEmpty(Owner) ? Name : $"{Owner}/{Name}";
 }
 
+/// <summary>An open pull request, as the site describes it.</summary>
+/// <remarks>
+/// Deliberately the same shape for every site. What a forge calls this differs - GitLab
+/// says merge request - but a number, a title, and the two branches involved is all the
+/// list and the checkout need, and every forge has those.
+/// </remarks>
+public sealed class PullRequest
+{
+    public required int Number { get; init; }
+    public required string Title { get; init; }
+    public required string Author { get; init; }
+
+    /// <summary>The branch being proposed. On a fork, it exists only on the fork.</summary>
+    public required string SourceBranch { get; init; }
+
+    /// <summary>The branch it would be merged into.</summary>
+    public required string TargetBranch { get; init; }
+
+    public bool IsDraft { get; init; }
+    public DateTimeOffset? UpdatedAt { get; init; }
+
+    /// <summary>The page on the site. Sites return this, so it needs no template.</summary>
+    public string? WebUrl { get; init; }
+
+    public string Reference => $"#{Number}";
+
+    /// <summary>
+    /// The local branch a checkout lands on. Always <c>pr/&lt;number&gt;</c>, never the
+    /// source branch's own name: a pull request from a fork can be called anything,
+    /// including something already checked out here.
+    /// </summary>
+    public string LocalBranchName => $"pr/{Number}";
+
+    public string AuthorLabel => string.IsNullOrEmpty(Author) ? Reference : $"{Reference} by {Author}";
+
+    public string BranchLabel => $"{SourceBranch} → {TargetBranch}";
+
+    public string RelativeTime => UpdatedAt is { } when ? Models.TimeFormat.Relative(when) : string.Empty;
+
+    public string TitleLabel => IsDraft ? $"{Title} (draft)" : Title;
+}
+
 /// <summary>
 /// The pending half of a browser login. The UI shows <see cref="UserCode"/> and
 /// <see cref="VerificationUri"/> while the provider waits for the user to approve.
@@ -71,6 +113,14 @@ public sealed class HostCapabilities
 {
     public required IReadOnlyList<AuthMethod> AuthMethods { get; init; }
     public bool CanListRepositories { get; init; } = true;
+
+    /// <summary>
+    /// False for a manifest with no pullRequests endpoint, which is every host written
+    /// before the format had one. The picker hides the tab rather than showing an
+    /// empty list that can never fill.
+    /// </summary>
+    public bool CanListPullRequests { get; init; }
+
     public bool SupportsHttpsCredentials { get; init; } = true;
 }
 

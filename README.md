@@ -15,7 +15,8 @@ Runs on **Linux, Windows and macOS** from a single codebase. **No Git installati
 required** — the native library ships inside the app.
 
 > **Status: working, not finished.** Omnigit reads and writes real repositories and is used
-> to develop itself. Pull requests and issues aren't implemented yet.
+> to develop itself. Pull requests are listed, checked out and opened from the app; reviewing
+> and merging them, and issues, aren't implemented yet.
 
 ![Changes tab, dark theme](docs/screenshots/changes-dark.png)
 
@@ -69,6 +70,10 @@ icon rather than a generic one. `OMNIGIT_NO_DESKTOP_INTEGRATION=1` skips that.
 
 **Living with more than one hosting site**
 
+- **Pull requests in the branch picker.** A second tab lists the open ones for the
+  repository — checking one out fetches its head and lands you on `pr/<number>`, even when
+  it came from someone's fork, with no second remote to add. **Create pull request** pushes
+  the branch if the site hasn't seen it yet and then opens that site's own form.
 - **Browse and clone** everything your signed-in accounts can see, from every site at once
 - **Repositories grouped by where they actually came from**, derived from the `origin` URL
 - **Sign in with your browser** on github.com, or a personal access token anywhere
@@ -141,9 +146,10 @@ is conflicted
 
 Roughly in order of intent:
 
-1. **Pull requests and issues.** The biggest missing feature, and deliberately left out of
-   the manifest format for now — their shapes diverge far more between sites than
-   repositories and commits do.
+1. **Issues, and the rest of pull requests** — check/CI status, reviewing, merging.
+   Listing, checking out and opening one all work; status is where the manifest format
+   stops being enough, since GitHub's check-runs, Gitea's commit statuses and GitLab's
+   pipelines agree on nothing.
 2. **Removing a hosting site leaves its accounts orphaned.** They stay in the list with
    nothing able to talk to them. Should warn, or sign them out.
 3. **Git credential-helper fallback**, so people who already use Git on the command line

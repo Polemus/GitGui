@@ -25,6 +25,7 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
         // not a URL, so it needs real code.
         AuthMethods = [AuthMethod.PersonalAccessToken],
         CanListRepositories = !string.IsNullOrEmpty(manifest.Endpoints.Repositories),
+        CanListPullRequests = !string.IsNullOrEmpty(manifest.Endpoints.PullRequests),
     };
 
     public async Task<bool> RecognisesAsync(Uri baseUrl, CancellationToken cancellationToken)
@@ -142,6 +143,55 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
         return repositories;
     }
 
+    public async Task<IReadOnlyList<PullRequest>> ListPullRequestsAsync(
+        HostAccount account, string owner, string repository, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(manifest.Endpoints.PullRequests))
+            return [];
+
+        var path = manifest.Endpoints.PullRequests
+            .Replace("{owner}", Uri.EscapeDataString(owner), StringComparison.Ordinal)
+            .Replace("{repo}", Uri.EscapeDataString(repository), StringComparison.Ordinal);
+
+        // One page only. A branch picker showing every pull request an active project
+        // ever opened would be unusable, and the endpoint in each manifest asks the
+        // site to sort them so the page it does return is the useful one.
+        var (document, _) = await GetJsonPageAsync(
+            Combine(account.BaseUrl, path), account.Token, cancellationToken);
+
+        var fields = manifest.PullRequestFields;
+        var pullRequests = new List<PullRequest>();
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Array)
+                throw new HostProviderException($"{DisplayName} returned an unexpected pull request list.");
+
+            foreach (var item in root.EnumerateArray())
+            {
+                // Without a number there is nothing to fetch and nothing to open, so
+                // the row would be decoration. Skip it rather than fail the list.
+                if (fields.Number.GetInt(item) is not { } number)
+                    continue;
+
+                pullRequests.Add(new PullRequest
+                {
+                    Number = number,
+                    Title = Blank(fields.Title.GetString(item)) ?? $"#{number}",
+                    Author = fields.Author.GetString(item) ?? string.Empty,
+                    SourceBranch = fields.SourceBranch.GetString(item) ?? string.Empty,
+                    TargetBranch = fields.TargetBranch.GetString(item) ?? string.Empty,
+                    IsDraft = fields.IsDraft.GetBool(item),
+                    UpdatedAt = fields.UpdatedAt.GetDate(item),
+                    WebUrl = fields.WebUrl.GetString(item),
+                });
+            }
+        }
+
+        return pullRequests;
+    }
+
     /// <summary>The same stop on runaway paging as GitHubProvider applies.</summary>
     private const int MaxPages = 50;
 
@@ -150,6 +200,10 @@ public sealed class ManifestHostProvider(HostManifest manifest, HttpClient http)
         Substitute(manifest.GitCredentials.Password, account));
 
     public string CommitUrlTemplate => manifest.WebUrls.Commit;
+
+    public string NewPullRequestUrlTemplate => manifest.WebUrls.NewPullRequest;
+
+    public string PullRequestRefSpec => manifest.PullRequestRef;
 
     // ---------------------------------------------------------------- helpers
 

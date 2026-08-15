@@ -37,6 +37,15 @@ public sealed class HostManifest
 
     public RepositoryFieldMap RepositoryFields { get; set; } = new();
 
+    public PullRequestFieldMap PullRequestFields { get; set; } = new();
+
+    /// <summary>
+    /// Where the head of a pull request sits on the origin remote, over
+    /// <c>{number}</c>. Fetching this is what lets a pull request from a fork be
+    /// checked out without adding the fork as a remote.
+    /// </summary>
+    public string PullRequestRef { get; set; } = Services.WebLinks.DefaultPullRequestRefSpec;
+
     /// <summary>What to hand libgit2 for HTTPS push/fetch.</summary>
     public CredentialTemplate GitCredentials { get; set; } = new();
 
@@ -55,6 +64,12 @@ public sealed class HostManifest
 public sealed class WebUrlTemplates
 {
     public string Commit { get; set; } = Services.WebLinks.DefaultCommitTemplate;
+
+    /// <summary>
+    /// The page that opens a pull request, over the same substitutions plus
+    /// <c>{source}</c> and <c>{target}</c>.
+    /// </summary>
+    public string NewPullRequest { get; set; } = Services.WebLinks.DefaultNewPullRequestTemplate;
 }
 
 /// <summary>Probe a path and check a field exists, e.g. /api/v1/version -> "version".</summary>
@@ -76,6 +91,13 @@ public sealed class EndpointSet
 {
     public string CurrentUser { get; set; } = string.Empty;
     public string Repositories { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Open pull requests for one repository. <c>{owner}</c> and <c>{repo}</c> are
+    /// substituted, since unlike the others this endpoint is about a particular clone.
+    /// Empty means the site can't list them and the UI hides the tab.
+    /// </summary>
+    public string PullRequests { get; set; } = string.Empty;
 }
 
 public sealed class UserFieldMap
@@ -94,6 +116,22 @@ public sealed class RepositoryFieldMap
     public FieldRef IsPrivate { get; set; } = new("private");
     public FieldRef Description { get; set; } = new("description");
     public FieldRef UpdatedAt { get; set; } = new("updated_at");
+}
+
+/// <summary>
+/// Where a pull request's parts sit in the site's JSON. The defaults are GitHub's
+/// shape, which Gitea copied; GitLab needs every one of them overridden.
+/// </summary>
+public sealed class PullRequestFieldMap
+{
+    public FieldRef Number { get; set; } = new("number");
+    public FieldRef Title { get; set; } = new("title");
+    public FieldRef Author { get; set; } = new("user.login");
+    public FieldRef SourceBranch { get; set; } = new("head.ref");
+    public FieldRef TargetBranch { get; set; } = new("base.ref");
+    public FieldRef IsDraft { get; set; } = new("draft");
+    public FieldRef UpdatedAt { get; set; } = new("updated_at");
+    public FieldRef WebUrl { get; set; } = new("html_url");
 }
 
 public sealed class CredentialTemplate
@@ -175,6 +213,21 @@ public sealed class FieldRef(string path, string? matchValue = null)
             JsonValueKind.String => bool.TryParse(element.GetString(), out var b) && b,
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// Null when the field is missing or isn't a number. A site that sends the number
+    /// as a string - some do - still parses, since the string form is read back.
+    /// </summary>
+    public int? GetInt(JsonElement root)
+    {
+        if (Resolve(root) is not { } element)
+            return null;
+
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var number))
+            return number;
+
+        return int.TryParse(GetString(root), out var parsed) ? parsed : null;
     }
 
     public DateTimeOffset? GetDate(JsonElement root)

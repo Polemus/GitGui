@@ -226,11 +226,17 @@ public partial class MainWindowViewModel : ViewModelBase
     // ---- Selection ---------------------------------------------------------
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanListPullRequests))]
+    [NotifyPropertyChangedFor(nameof(PullRequestsEmptyLabel))]
+    [NotifyPropertyChangedFor(nameof(CreatePullRequestLabel))]
+    [NotifyCanExecuteChangedFor(nameof(CreatePullRequestCommand))]
     public partial RepositoryInfo? SelectedRepository { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CommitButtonLabel))]
     [NotifyPropertyChangedFor(nameof(HeadLabel))]
+    [NotifyPropertyChangedFor(nameof(CreatePullRequestLabel))]
+    [NotifyCanExecuteChangedFor(nameof(CreatePullRequestCommand))]
     public partial BranchInfo? SelectedBranch { get; set; }
 
     [ObservableProperty]
@@ -1268,6 +1274,319 @@ public partial class MainWindowViewModel : ViewModelBase
             Log(ActivityLevel.Warning, $"Couldn't open a browser. The commit is at {url}");
     }
 
+    // ---- Pull requests -----------------------------------------------------
+    // Deliberately the same shape as GitHub Desktop's: list them, check one out, and
+    // hand off to the browser to open a new one. Creating a pull request is a form with
+    // reviewers, labels and a template on it, all of which differ per site and none of
+    // which belong in a branch picker.
+
+    public ObservableCollection<PullRequest> PullRequests { get; } = [];
+
+    [ObservableProperty]
+    public partial bool IsLoadingPullRequests { get; set; }
+
+    /// <summary>Which half of the branch picker is showing.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBranchesTab))]
+    public partial bool IsPullRequestsTab { get; set; }
+
+    public bool IsBranchesTab => !IsPullRequestsTab;
+
+    /// <summary>The repository the list in hand was loaded for. Null means never loaded.</summary>
+    private string? _pullRequestsPath;
+
+    /// <summary>
+    /// Hidden entirely for a site that can't list them, rather than shown empty: an
+    /// empty list that can never fill reads as "this project has none".
+    /// </summary>
+    public bool CanListPullRequests
+        => HostFor(SelectedRepository) is { Provider.Capabilities.CanListPullRequests: true };
+
+    public bool HasPullRequests => PullRequests.Count > 0;
+
+    public string PullRequestsEmptyLabel => IsLoadingPullRequests
+        ? "Loading…"
+        : SelectedRepository is null ? "No repository open."
+        : HostFor(SelectedRepository) is null
+            ? "Sign in to this site to see its pull requests."
+            : "No open pull requests.";
+
+    /// <summary>
+    /// The signed-in account for a clone's host, with the provider that speaks to it.
+    /// The same domain match the git credentials use, so the two never disagree about
+    /// which account a repository belongs to.
+    /// </summary>
+    private (HostAccount Account, IHostProvider Provider)? HostFor(RepositoryInfo? repository)
+    {
+        if (repository is not { Host.Id.Length: > 0 })
+            return null;
+
+        var account = Accounts.FirstOrDefault(a =>
+            string.Equals(a.BaseUrl.Host, repository.Host.Id, StringComparison.OrdinalIgnoreCase));
+
+        if (account is null || _hosts.ById(account.ProviderId) is not { } provider)
+            return null;
+
+        return (account, provider);
+    }
+
+    [RelayCommand]
+    private void ShowBranchesTab() => IsPullRequestsTab = false;
+
+    /// <summary>
+    /// Loads on first look rather than on opening the repository. This is a network call
+    /// per repository, and the automatic refresh fires on every file saved - hanging it
+    /// off that would have meant an API request each time an editor wrote to disk.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowPullRequestsTabAsync()
+    {
+        IsPullRequestsTab = true;
+
+        if (SelectedRepository is { } repository && _pullRequestsPath != repository.LocalPath)
+            await LoadPullRequestsAsync(announce: false);
+    }
+
+    [RelayCommand]
+    private async Task RefreshPullRequestsAsync() => await LoadPullRequestsAsync(announce: true);
+
+    private async Task LoadPullRequestsAsync(bool announce)
+    {
+        if (SelectedRepository is not { } repository)
+            return;
+
+        if (HostFor(repository) is not { } host)
+        {
+            // Not an error: a clone of a site nobody has signed in to still works for
+            // everything local, and saying so on every look would be noise.
+            PullRequests.Clear();
+            NotifyPullRequestsChanged();
+            return;
+        }
+
+        IsLoadingPullRequests = true;
+        NotifyPullRequestsChanged();
+
+        try
+        {
+            var loaded = await host.Provider.ListPullRequestsAsync(
+                host.Account, repository.Owner, repository.Name, default);
+
+            PullRequests.Clear();
+            foreach (var pullRequest in loaded)
+                PullRequests.Add(pullRequest);
+
+            _pullRequestsPath = repository.LocalPath;
+
+            if (announce)
+            {
+                Log(ActivityLevel.Info, loaded.Count == 1
+                    ? "1 open pull request"
+                    : $"{loaded.Count} open pull requests");
+            }
+        }
+        catch (HostProviderException ex)
+        {
+            // The site refusing to list them is worth saying once, in the console, and
+            // is not a reason to tear the picker down.
+            Log(ActivityLevel.Warning, $"Couldn't list pull requests: {ex.Message}");
+            PullRequests.Clear();
+        }
+        finally
+        {
+            IsLoadingPullRequests = false;
+            NotifyPullRequestsChanged();
+        }
+    }
+
+    private void NotifyPullRequestsChanged()
+    {
+        OnPropertyChanged(nameof(HasPullRequests));
+        OnPropertyChanged(nameof(PullRequestsEmptyLabel));
+        OnPropertyChanged(nameof(CanListPullRequests));
+    }
+
+    /// <summary>
+    /// Fetches the pull request's head and switches to it, going through the ordinary
+    /// branch-switch prompt so uncommitted work is handled the same way it is everywhere
+    /// else rather than by a second, subtly different path.
+    /// </summary>
+    [RelayCommand]
+    private async Task CheckoutPullRequestAsync(PullRequest pullRequest)
+    {
+        if (SelectedRepository is not { } repository)
+            return;
+
+        var path = repository.LocalPath;
+        var refSpec = HostFor(repository)?.Provider.PullRequestRefSpec;
+        PullRequestFetch? fetch = null;
+
+        await RunAsync(async () =>
+        {
+            var credentials = await Task.Run(() => CredentialsFor(_git.GetRemoteUrl(path)));
+
+            void Trace(string line) => _log.Write(ActivityLevel.Trace, line);
+
+            fetch = await Task.Run(() =>
+                _git.FetchPullRequest(path, pullRequest.Number, refSpec, credentials, Trace));
+
+            Log(fetch.Result.Succeeded ? ActivityLevel.Success : ActivityLevel.Error, fetch.Result.Message);
+        });
+
+        if (fetch is not { Result.Succeeded: true })
+            return;
+
+        if (fetch.IsStale)
+        {
+            Log(ActivityLevel.Warning,
+                $"{fetch.BranchName} is already here and differs from the pull request — "
+                + "it was left as it is. Delete it, or move it yourself, to take the new version.");
+        }
+
+        await BeginBranchSwitchAsync(
+            fetch.BranchName,
+            create: fetch.IsNew,
+            startPoint: fetch.IsNew ? $"refs/remotes/origin/pr/{pullRequest.Number}" : null);
+    }
+
+    [RelayCommand]
+    private async Task ViewPullRequestOnHostAsync(PullRequest pullRequest)
+    {
+        if (!Uri.TryCreate(pullRequest.WebUrl, UriKind.Absolute, out var url))
+        {
+            Log(ActivityLevel.Warning, $"{pullRequest.Reference} came with no link to open.");
+            return;
+        }
+
+        if (!await _shell.OpenUrlAsync(url))
+            Log(ActivityLevel.Warning, $"Couldn't open a browser. The pull request is at {url}");
+    }
+
+    /// <summary>
+    /// Nothing to propose from the default branch, and nowhere to propose it without a
+    /// remote. A branch the site has not seen yet is fine - the push below sees to that.
+    /// </summary>
+    public bool CanCreatePullRequest
+        => SelectedRepository is { HasRemote: true, IsDetached: false }
+           && SelectedBranch is not null
+           && NewPullRequestUrl() is not null;
+
+    /// <summary>
+    /// Why the button is disabled, or what it would propose when it isn't. A greyed
+    /// button that never says what is wrong with it is the thing being avoided here.
+    /// </summary>
+    public string CreatePullRequestLabel
+    {
+        get
+        {
+            if (SelectedRepository is not { } repository)
+                return "Open a repository first.";
+
+            if (!repository.HasRemote)
+                return "This clone has no remote, so there is nowhere to open a pull request.";
+
+            if (repository.IsDetached || SelectedBranch is not { } branch)
+                return "You are not on a branch. Check one out to propose it.";
+
+            if (string.Equals(branch.Name, repository.DefaultBranch, StringComparison.Ordinal))
+            {
+                return $"You are on {repository.DefaultBranch}, which is what pull requests "
+                       + "merge into. Switch to another branch to propose changes.";
+            }
+
+            return NewPullRequestUrl() is null
+                ? $"{repository.Host.Name} didn't give a usable address for its pull request form."
+                : $"{branch.Name} → {repository.DefaultBranch}";
+        }
+    }
+
+    /// <summary>
+    /// Opens the site's own "new pull request" form, pushing first if the branch has
+    /// commits the site hasn't seen - proposing a branch that isn't there yet gives a
+    /// form with nothing to compare. This is the hand-off GitHub Desktop makes too.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanCreatePullRequest))]
+    private async Task CreatePullRequestAsync()
+    {
+        if (SelectedRepository is not { } repository || NewPullRequestUrl() is not { } url)
+            return;
+
+        var path = repository.LocalPath;
+
+        // Asked of git rather than read off the toolbar. The compare page needs the
+        // branch to be *on the remote*, and the properties behind that answer are
+        // whatever the last load left there - one refresh out of date is enough to skip
+        // the push and hand the user a compare page against a branch that isn't there.
+        var standing = await Task.Run(() => _git.OpenRepository(path));
+
+        var published = false;
+
+        if (!standing.IsPublished || standing.Ahead > 0)
+        {
+            Log(ActivityLevel.Info,
+                $"Pushing {SelectedBranch?.Name ?? "the branch"} before opening the pull request form");
+
+            await RunAsync(async () =>
+            {
+                var credentials = await Task.Run(() => CredentialsFor(_git.GetRemoteUrl(path)));
+
+                void Trace(string line) => _log.Write(ActivityLevel.Trace, line);
+
+                var result = await Task.Run(() => _git.Push(path, credentials, Trace));
+
+                Log(result.Succeeded ? ActivityLevel.Success : ActivityLevel.Error, result.Message);
+            });
+
+            await LoadRepositoryAsync(repository, announce: false);
+
+            // Re-read rather than trusting the push's own word for it: a fault anywhere
+            // in there is reported and swallowed by RunAsync, and "did the push work"
+            // was never the question - "is the branch on the remote" is.
+            published = await Task.Run(() => _git.OpenRepository(path).IsPublished);
+        }
+        else
+        {
+            published = true;
+        }
+
+        if (!published)
+        {
+            // The form would open on "There isn't anything to compare", which reads as a
+            // broken app rather than as a branch that never left this machine.
+            Log(ActivityLevel.Error,
+                $"{SelectedBranch?.Name ?? "The branch"} isn't on {repository.Host.Name} yet, so there is "
+                + "nothing to open a pull request from. The push above says why it didn't get there.");
+            return;
+        }
+
+        if (!await _shell.OpenUrlAsync(url))
+            Log(ActivityLevel.Warning, $"Couldn't open a browser. Open a pull request at {url}");
+    }
+
+    /// <summary>
+    /// The site's page for proposing the current branch. Built from a template so a host
+    /// added from the UI gets it too - GitLab's form is a different URL shape entirely.
+    /// </summary>
+    private Uri? NewPullRequestUrl()
+    {
+        if (SelectedRepository is not { Host.BaseUrl.Length: > 0 } repository
+            || SelectedBranch is not { } branch
+            || string.Equals(branch.Name, repository.DefaultBranch, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var host = HostFor(repository);
+        var template = host?.Provider.NewPullRequestUrlTemplate;
+        var baseUrl = host?.Account.BaseUrl;
+
+        if (baseUrl is null && !Uri.TryCreate(repository.Host.BaseUrl, UriKind.Absolute, out baseUrl))
+            return null;
+
+        return WebLinks.NewPullRequestUrl(
+            baseUrl, repository.Owner, repository.Name, branch.Name, repository.DefaultBranch, template);
+    }
+
     // ---- Branching and tagging from a commit -------------------------------
 
     [RelayCommand(CanExecute = nameof(HasSelectedCommit))]
@@ -1881,6 +2200,17 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task OpenRepositoryAsync(RepositoryInfo repository)
     {
+        // The list in hand belongs to whatever was open before. Cleared rather than
+        // reloaded: the picker fetches on first look, so a repository nobody opens the
+        // pull request tab on costs no request at all.
+        if (_pullRequestsPath is not null && _pullRequestsPath != repository.LocalPath)
+        {
+            PullRequests.Clear();
+            _pullRequestsPath = null;
+            IsPullRequestsTab = false;
+            NotifyPullRequestsChanged();
+        }
+
         SelectedRepository = repository;
         OnPropertyChanged(nameof(SyncDetailLabel));
         _watcher.Watch(repository.LocalPath);

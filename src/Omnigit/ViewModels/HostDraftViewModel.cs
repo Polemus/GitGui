@@ -45,6 +45,14 @@ public partial class HostDraftViewModel : ObservableObject
     [ObservableProperty]
     public partial string RepositoriesEndpoint { get; set; } = "/api/v1/user/repos?limit=100";
 
+    /// <summary>
+    /// Open pull requests for one repository. Empty is a fair answer - the branch picker
+    /// simply won't offer the tab for this site.
+    /// </summary>
+    [ObservableProperty]
+    public partial string PullRequestsEndpoint { get; set; } =
+        "/api/v1/repos/{owner}/{repo}/pulls?state=open&sort=recentupdate&limit=50";
+
     // ---- Where the values sit in the site's JSON ----------------------------
 
     [ObservableProperty] public partial string UserLoginField { get; set; } = "login";
@@ -66,6 +74,15 @@ public partial class HostDraftViewModel : ObservableObject
     [ObservableProperty] public partial string RepoDescriptionField { get; set; } = "description";
     [ObservableProperty] public partial string RepoUpdatedAtField { get; set; } = "updated_at";
 
+    [ObservableProperty] public partial string PrNumberField { get; set; } = "number";
+    [ObservableProperty] public partial string PrTitleField { get; set; } = "title";
+    [ObservableProperty] public partial string PrAuthorField { get; set; } = "user.login";
+    [ObservableProperty] public partial string PrSourceBranchField { get; set; } = "head.ref";
+    [ObservableProperty] public partial string PrTargetBranchField { get; set; } = "base.ref";
+    [ObservableProperty] public partial string PrDraftField { get; set; } = "draft";
+    [ObservableProperty] public partial string PrUpdatedAtField { get; set; } = "updated_at";
+    [ObservableProperty] public partial string PrWebUrlField { get; set; } = "html_url";
+
     // ---- What libgit2 gets for HTTPS ---------------------------------------
 
     [ObservableProperty] public partial string GitUsername { get; set; } = "{login}";
@@ -79,6 +96,17 @@ public partial class HostDraftViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     public partial string CommitUrlTemplate { get; set; } = WebLinks.DefaultCommitTemplate;
+
+    /// <summary>
+    /// The site's own "open a pull request" form. <c>{source}</c> and <c>{target}</c>
+    /// are the branches being proposed and merged into.
+    /// </summary>
+    [ObservableProperty]
+    public partial string NewPullRequestUrlTemplate { get; set; } = WebLinks.DefaultNewPullRequestTemplate;
+
+    /// <summary>Where the site keeps pull request heads, over <c>{number}</c>.</summary>
+    [ObservableProperty]
+    public partial string PullRequestRef { get; set; } = WebLinks.DefaultPullRequestRefSpec;
 
     /// <summary>True when editing an existing host rather than adding one.</summary>
     [ObservableProperty]
@@ -155,6 +183,17 @@ public partial class HostDraftViewModel : ObservableObject
         RepoPrivateEquals = "private",
         RepoUpdatedAtField = "last_activity_at",
         CommitUrlTemplate = "{base}/{owner}/{repo}/-/commit/{sha}",
+        PullRequestsEndpoint =
+            "/api/v4/projects/{owner}%2F{repo}/merge_requests?state=opened&order_by=updated_at&per_page=50",
+        PrNumberField = "iid",
+        PrAuthorField = "author.username",
+        PrSourceBranchField = "source_branch",
+        PrTargetBranchField = "target_branch",
+        PrWebUrlField = "web_url",
+        PullRequestRef = "refs/merge-requests/{number}/head",
+        NewPullRequestUrlTemplate =
+            "{base}/{owner}/{repo}/-/merge_requests/new"
+            + "?merge_request%5Bsource_branch%5D={source}&merge_request%5Btarget_branch%5D={target}",
     };
 
     public static HostDraftViewModel FromManifest(HostManifest manifest) => new()
@@ -168,6 +207,7 @@ public partial class HostDraftViewModel : ObservableObject
         AuthHeaderValue = manifest.AuthHeader?.Value ?? "Bearer {token}",
         CurrentUserEndpoint = manifest.Endpoints.CurrentUser,
         RepositoriesEndpoint = manifest.Endpoints.Repositories,
+        PullRequestsEndpoint = manifest.Endpoints.PullRequests,
         UserLoginField = manifest.UserFields.Login.Path,
         UserDisplayNameField = manifest.UserFields.DisplayName.Path,
         UserAvatarField = manifest.UserFields.AvatarUrl.Path,
@@ -179,9 +219,19 @@ public partial class HostDraftViewModel : ObservableObject
         RepoPrivateEquals = manifest.RepositoryFields.IsPrivate.MatchValue ?? string.Empty,
         RepoDescriptionField = manifest.RepositoryFields.Description.Path,
         RepoUpdatedAtField = manifest.RepositoryFields.UpdatedAt.Path,
+        PrNumberField = manifest.PullRequestFields.Number.Path,
+        PrTitleField = manifest.PullRequestFields.Title.Path,
+        PrAuthorField = manifest.PullRequestFields.Author.Path,
+        PrSourceBranchField = manifest.PullRequestFields.SourceBranch.Path,
+        PrTargetBranchField = manifest.PullRequestFields.TargetBranch.Path,
+        PrDraftField = manifest.PullRequestFields.IsDraft.Path,
+        PrUpdatedAtField = manifest.PullRequestFields.UpdatedAt.Path,
+        PrWebUrlField = manifest.PullRequestFields.WebUrl.Path,
+        PullRequestRef = manifest.PullRequestRef,
         GitUsername = manifest.GitCredentials.Username,
         GitPassword = manifest.GitCredentials.Password,
         CommitUrlTemplate = manifest.WebUrls.Commit,
+        NewPullRequestUrlTemplate = manifest.WebUrls.NewPullRequest,
     };
 
     public HostManifest ToManifest() => new()
@@ -197,6 +247,7 @@ public partial class HostDraftViewModel : ObservableObject
         {
             CurrentUser = CurrentUserEndpoint.Trim(),
             Repositories = RepositoriesEndpoint.Trim(),
+            PullRequests = PullRequestsEndpoint.Trim(),
         },
         UserFields = new UserFieldMap
         {
@@ -216,6 +267,20 @@ public partial class HostDraftViewModel : ObservableObject
             Description = new FieldRef(RepoDescriptionField.Trim()),
             UpdatedAt = new FieldRef(RepoUpdatedAtField.Trim()),
         },
+        PullRequestFields = new PullRequestFieldMap
+        {
+            Number = new FieldRef(PrNumberField.Trim()),
+            Title = new FieldRef(PrTitleField.Trim()),
+            Author = new FieldRef(PrAuthorField.Trim()),
+            SourceBranch = new FieldRef(PrSourceBranchField.Trim()),
+            TargetBranch = new FieldRef(PrTargetBranchField.Trim()),
+            IsDraft = new FieldRef(PrDraftField.Trim()),
+            UpdatedAt = new FieldRef(PrUpdatedAtField.Trim()),
+            WebUrl = new FieldRef(PrWebUrlField.Trim()),
+        },
+        PullRequestRef = string.IsNullOrWhiteSpace(PullRequestRef)
+            ? WebLinks.DefaultPullRequestRefSpec
+            : PullRequestRef.Trim(),
         GitCredentials = new CredentialTemplate
         {
             Username = GitUsername.Trim(),
@@ -227,6 +292,9 @@ public partial class HostDraftViewModel : ObservableObject
             Commit = string.IsNullOrWhiteSpace(CommitUrlTemplate)
                 ? WebLinks.DefaultCommitTemplate
                 : CommitUrlTemplate.Trim(),
+            NewPullRequest = string.IsNullOrWhiteSpace(NewPullRequestUrlTemplate)
+                ? WebLinks.DefaultNewPullRequestTemplate
+                : NewPullRequestUrlTemplate.Trim(),
         },
     };
 }

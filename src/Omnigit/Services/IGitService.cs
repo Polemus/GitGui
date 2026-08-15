@@ -161,6 +161,15 @@ public interface IGitService
     SyncResult Pull(string path, GitCredentials? credentials, Action<string>? trace = null);
 
     /// <summary>
+    /// Fetches one pull request's head from the remote, ready to be checked out as the
+    /// local branch named in the result. <paramref name="refSpecTemplate"/> comes from
+    /// the host, since only GitHub-shaped sites keep them under <c>refs/pull</c>.
+    /// </summary>
+    PullRequestFetch FetchPullRequest(
+        string path, int number, string? refSpecTemplate, GitCredentials? credentials,
+        Action<string>? trace = null);
+
+    /// <summary>
     /// Pushes the current branch, setting its upstream on first push so the user
     /// doesn't have to run git themselves for a freshly created branch.
     /// </summary>
