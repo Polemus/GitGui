@@ -48,13 +48,22 @@ public partial class RepositoryView : UserControl
     /// a right-click, so the menu would otherwise act on whichever row was last
     /// left-clicked. Selecting is also what lets the menu's commands read the selection
     /// rather than a CommandParameter that goes null as the popup opens.
+    ///
+    /// A row that is already part of a multiple selection is left alone, since selecting
+    /// it would throw away the other rows - and discarding the set that was ctrl-clicked
+    /// is the whole reason for right-clicking one of them.
     /// </summary>
     private static void SelectRowUnder(object? sender, object? source)
     {
         if (sender is not ListBox list || source is not Visual visual)
             return;
 
-        if (visual.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: { } item })
-            list.SelectedItem = item;
+        if (visual.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { DataContext: { } item })
+            return;
+
+        if (list.SelectedItems is { Count: > 1 } selected && selected.Contains(item))
+            return;
+
+        list.SelectedItem = item;
     }
 }

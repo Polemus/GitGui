@@ -90,6 +90,16 @@ public partial class MainWindowViewModel : ViewModelBase
         // An error the user can't see is an error they can't act on.
         log.ErrorLogged += (_, _) => IsConsoleExpanded = true;
 
+        // The ListBox mutates this rather than replacing it, so there is no property
+        // change to hang the menu's labels off - only the collection's own event.
+        SelectedChanges.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(IsOneChangeSelected));
+            OnPropertyChanged(nameof(CanIgnoreFolder));
+            OnPropertyChanged(nameof(CanIgnoreExtension));
+            OnPropertyChanged(nameof(DiscardChangesLabel));
+        };
+
         foreach (var provider in hosts.Providers)
             Providers.Add(provider);
 
@@ -240,7 +250,20 @@ public partial class MainWindowViewModel : ViewModelBase
     public partial BranchInfo? SelectedBranch { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOneChangeSelected))]
+    [NotifyPropertyChangedFor(nameof(CanIgnoreFolder))]
+    [NotifyPropertyChangedFor(nameof(CanIgnoreExtension))]
+    [NotifyPropertyChangedFor(nameof(DiscardChangesLabel))]
     public partial FileChangeViewModel? SelectedChange { get; set; }
+
+    /// <summary>
+    /// Every row the changes list has selected, which ctrl- and shift-click make more
+    /// than one. The ListBox is handed this instance and maintains it, so nothing here
+    /// writes to it except the refresh that restores a selection across a reload.
+    /// <see cref="SelectedChange"/> stays the anchor row and is what the diff pane shows;
+    /// this is what the discard acts on.
+    /// </summary>
+    public ObservableCollection<FileChangeViewModel> SelectedChanges { get; } = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAmendSelectedCommit))]
@@ -554,26 +577,67 @@ public partial class MainWindowViewModel : ViewModelBase
     // ---- Changed-file context menu -----------------------------------------
 
     /// <summary>
-    /// The file a discard is waiting on confirmation for. Discarding cannot be undone -
+    /// The files a discard is waiting on confirmation for. Discarding cannot be undone -
     /// the change was never committed, so there is nothing to recover it from - which is
-    /// the one thing in this app worth an extra click.
+    /// the one thing in this app worth an extra click. Held as paths rather than rows
+    /// because a refresh replaces every row while the prompt is up.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPendingDiscard))]
+    [NotifyPropertyChangedFor(nameof(PendingDiscardTitle))]
     [NotifyPropertyChangedFor(nameof(PendingDiscardSummary))]
-    public partial FileChangeViewModel? PendingDiscard { get; set; }
+    public partial IReadOnlyList<string>? PendingDiscard { get; set; }
 
-    public bool HasPendingDiscard => PendingDiscard is not null;
+    public bool HasPendingDiscard => PendingDiscard is { Count: > 0 };
 
-    public string PendingDiscardSummary => PendingDiscard is not { } change
-        ? string.Empty
-        : $"{change.Path} goes back to its last committed state. This cannot be undone.";
+    public string PendingDiscardTitle => PendingDiscard is not { Count: > 1 } pending
+        ? "Discard changes?"
+        : $"Discard changes to {pending.Count} files?";
+
+    public string PendingDiscardSummary => PendingDiscard switch
+    {
+        null or { Count: 0 } => string.Empty,
+        [var only] => $"{only} goes back to its last committed state. This cannot be undone.",
+
+        // Named while the list is short enough to read, counted once it isn't: a discard
+        // of thirty files would otherwise push the buttons off the bottom of the dialog.
+        { Count: <= 8 } some =>
+            $"{string.Join(", ", some)} go back to their last committed state. "
+            + "This cannot be undone.",
+        var many =>
+            $"{many.Count} files go back to their last committed state. "
+            + "This cannot be undone.",
+    };
+
+    /// <summary>
+    /// The rows a file command should act on: the whole selection where the row under the
+    /// pointer is part of it, and that row alone otherwise - which is what right-clicking
+    /// outside a selection already reduced it to.
+    /// </summary>
+    private List<FileChangeViewModel> SelectedChangeSet => SelectedChanges.Count > 0
+        ? [.. SelectedChanges]
+        : SelectedChange is { } one ? [one] : [];
+
+    /// <summary>
+    /// True while exactly one row is selected. The single-file entries in the changed-file
+    /// menu hide otherwise: they name one file, and with several rows selected there is no
+    /// saying which one they would mean.
+    /// </summary>
+    public bool IsOneChangeSelected => SelectedChangeSet.Count <= 1;
+
+    public bool CanIgnoreFolder => IsOneChangeSelected && SelectedChange?.HasDirectory == true;
+
+    public bool CanIgnoreExtension => IsOneChangeSelected && SelectedChange?.HasExtension == true;
+
+    public string DiscardChangesLabel => SelectedChangeSet is { Count: > 1 } many
+        ? $"Discard changes to {many.Count} files"
+        : "Discard changes";
 
     [RelayCommand]
-    private void AskDiscardChanges(FileChangeViewModel? change)
+    private void AskDiscardChanges()
     {
-        if (change is not null)
-            PendingDiscard = change;
+        if (SelectedChangeSet is { Count: > 0 } targets)
+            PendingDiscard = [.. targets.Select(c => c.Path)];
     }
 
     [RelayCommand]
@@ -582,17 +646,18 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task ConfirmDiscardAsync()
     {
-        if (PendingDiscard is not { } change || SelectedRepository is not { } repo)
+        if (PendingDiscard is not { Count: > 0 } targets || SelectedRepository is not { } repo)
             return;
 
         var path = repo.LocalPath;
-        var target = change.Path;
         PendingDiscard = null;
 
         await RunAsync(async () =>
         {
-            await Task.Run(() => _git.DiscardChanges(path, [target]));
-            Log(ActivityLevel.Success, $"Discarded changes to {target}");
+            await Task.Run(() => _git.DiscardChanges(path, targets));
+            Log(ActivityLevel.Success, targets is [var only]
+                ? $"Discarded changes to {only}"
+                : $"Discarded changes to {targets.Count} files");
         });
 
         await OpenRepositoryAsync(repo);
@@ -2253,6 +2318,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var knownPaths = Changes.Select(c => c.Path).ToHashSet();
         var stagedPaths = Changes.Where(c => c.IsStaged).Select(c => c.Path).ToHashSet();
         var selectedChangePath = SelectedChange?.Path;
+        var selectedChangePaths = SelectedChanges.Select(c => c.Path).ToList();
         var selectedSha = SelectedCommit?.Sha;
         var selectedCommitFilePath = SelectedCommitFile?.Path;
 
@@ -2321,6 +2387,16 @@ public partial class MainWindowViewModel : ViewModelBase
 
         SelectedChange = (announce ? null : Changes.FirstOrDefault(c => c.Path == selectedChangePath))
                          ?? Changes.FirstOrDefault();
+
+        // Setting the anchor row above collapsed the list down to it, so the rest of a
+        // ctrl-selection has to be put back by hand - otherwise a save on disk while
+        // several rows are picked out silently loses all but one of them.
+        if (!announce && selectedChangePaths.Count > 1)
+        {
+            foreach (var change in Changes.Where(c => selectedChangePaths.Contains(c.Path)
+                                                      && !SelectedChanges.Contains(c)))
+                SelectedChanges.Add(change);
+        }
 
         SelectedCommit = (announce ? null : History.FirstOrDefault(c => c.Sha == selectedSha))
                          ?? History.FirstOrDefault();

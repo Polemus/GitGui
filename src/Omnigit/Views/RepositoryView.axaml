@@ -242,44 +242,54 @@
                         <Border Grid.Row="3" Classes="divider" />
 
                         <!-- Same right-click handling as the history list: select the row
-                             under the pointer, then open the flyout ourselves. -->
+                             under the pointer, then open the flyout ourselves. Selection
+                             is Multiple so ctrl- and shift-click pick out a set of files
+                             to discard in one go; SelectedItem stays the anchor row and is
+                             what the diff pane shows. -->
                         <ListBox Grid.Row="4" Classes="plain"
                                  ItemsSource="{Binding Changes}"
+                                 SelectionMode="Multiple"
                                  SelectedItem="{Binding SelectedChange, Mode=TwoWay}"
+                                 SelectedItems="{Binding SelectedChanges}"
                                  ContextRequested="OnChangesContextRequested"
                                  PointerReleased="OnChangesPointerReleased">
                             <ListBox.ContextFlyout>
                                 <MenuFlyout Placement="Pointer">
-                                    <MenuItem Header="Discard changes"
-                                              Command="{Binding AskDiscardChangesCommand}"
-                                              CommandParameter="{Binding SelectedChange}" />
+                                    <MenuItem Header="{Binding DiscardChangesLabel}"
+                                              Command="{Binding AskDiscardChangesCommand}" />
                                     <Separator />
 
-                                    <!-- Each ignore entry is offered only where it means
-                                         something: no folder entry for a file at the root,
-                                         no extension entry for a Makefile. -->
+                                    <!-- Everything below names one file, so it is offered
+                                         only while one row is selected. Each ignore entry
+                                         is offered only where it means something besides:
+                                         no folder entry for a file at the root, no
+                                         extension entry for a Makefile. -->
                                     <MenuItem Header="Ignore file (add to .gitignore)"
+                                              IsVisible="{Binding IsOneChangeSelected}"
                                               Command="{Binding IgnoreCommand}"
                                               CommandParameter="{Binding SelectedChange.IgnoreFilePattern}" />
                                     <MenuItem Header="{Binding SelectedChange.IgnoreFolderLabel}"
-                                              IsVisible="{Binding SelectedChange.HasDirectory, FallbackValue=False}"
+                                              IsVisible="{Binding CanIgnoreFolder}"
                                               Command="{Binding IgnoreCommand}"
                                               CommandParameter="{Binding SelectedChange.IgnoreFolderPattern}" />
                                     <MenuItem Header="{Binding SelectedChange.IgnoreExtensionLabel}"
-                                              IsVisible="{Binding SelectedChange.HasExtension, FallbackValue=False}"
+                                              IsVisible="{Binding CanIgnoreExtension}"
                                               Command="{Binding IgnoreCommand}"
                                               CommandParameter="{Binding SelectedChange.IgnoreExtensionPattern}" />
-                                    <Separator />
+                                    <Separator IsVisible="{Binding IsOneChangeSelected}" />
 
                                     <MenuItem Header="Copy file path"
+                                              IsVisible="{Binding IsOneChangeSelected}"
                                               Command="{Binding CopyFilePathCommand}"
                                               CommandParameter="{Binding SelectedChange}" />
                                     <MenuItem Header="Copy relative file path"
+                                              IsVisible="{Binding IsOneChangeSelected}"
                                               Command="{Binding CopyRelativeFilePathCommand}"
                                               CommandParameter="{Binding SelectedChange}" />
-                                    <Separator />
+                                    <Separator IsVisible="{Binding IsOneChangeSelected}" />
 
                                     <MenuItem Header="Show in your file manager"
+                                              IsVisible="{Binding IsOneChangeSelected}"
                                               Command="{Binding ShowInFileManagerCommand}"
                                               CommandParameter="{Binding SelectedChange}" />
                                 </MenuFlyout>

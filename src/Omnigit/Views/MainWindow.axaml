@@ -306,7 +306,7 @@
                 <Border Classes="dialog"
                         HorizontalAlignment="Center" VerticalAlignment="Center">
                     <StackPanel Spacing="14">
-                        <TextBlock Classes="h2" Text="Discard changes?" />
+                        <TextBlock Classes="h2" Text="{Binding PendingDiscardTitle}" />
                         <TextBlock Classes="caption" TextWrapping="Wrap"
                                    Text="{Binding PendingDiscardSummary}" />
                         <StackPanel Orientation="Horizontal" Spacing="9"
