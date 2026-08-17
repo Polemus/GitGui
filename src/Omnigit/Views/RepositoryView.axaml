@@ -252,7 +252,8 @@
                                  SelectedItem="{Binding SelectedChange, Mode=TwoWay}"
                                  SelectedItems="{Binding SelectedChanges}"
                                  ContextRequested="OnChangesContextRequested"
-                                 PointerReleased="OnChangesPointerReleased">
+                                 PointerReleased="OnChangesPointerReleased"
+                                 DoubleTapped="OnChangesDoubleTapped">
                             <ListBox.ContextFlyout>
                                 <MenuFlyout Placement="Pointer">
                                     <MenuItem Header="{Binding DiscardChangesLabel}"
@@ -277,6 +278,15 @@
                                               Command="{Binding IgnoreCommand}"
                                               CommandParameter="{Binding SelectedChange.IgnoreExtensionPattern}" />
                                     <Separator IsVisible="{Binding IsOneChangeSelected}" />
+
+                                    <!-- Same thing a double-click on the row does; here so
+                                         it's discoverable, and so a keyboard-only
+                                         selection can reach it. -->
+                                    <MenuItem Header="Open in your default app"
+                                              IsVisible="{Binding CanOpenSelectedChange}"
+                                              Command="{Binding OpenChangeCommand}"
+                                              CommandParameter="{Binding SelectedChange}" />
+                                    <Separator IsVisible="{Binding CanOpenSelectedChange}" />
 
                                     <MenuItem Header="Copy file path"
                                               IsVisible="{Binding IsOneChangeSelected}"

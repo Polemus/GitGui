@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using Omnigit.ViewModels;
 
 namespace Omnigit.Views;
 
@@ -23,6 +24,31 @@ public partial class RepositoryView : UserControl
 
     private void OnChangesPointerReleased(object? sender, PointerReleasedEventArgs e)
         => OpenRowFlyout(sender, e);
+
+    /// <summary>
+    /// Double-clicking a change opens the file in whatever the desktop uses for its type.
+    /// The row under the pointer is passed rather than the selection: a double-click
+    /// selects that row on the way through, but reading the selection would be trusting
+    /// the ListBox to have caught up first.
+    ///
+    /// A double-click that landed on the row's checkbox is left alone - it has already
+    /// staged and unstaged the file, and opening on top of that isn't what was asked for.
+    /// </summary>
+    private void OnChangesDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not ListBox list || e.Source is not Visual visual)
+            return;
+
+        if (visual.FindAncestorOfType<CheckBox>(includeSelf: true) is not null)
+            return;
+
+        if (visual.FindAncestorOfType<ListBoxItem>(includeSelf: true)
+            is not { DataContext: FileChangeViewModel change })
+            return;
+
+        if (list.DataContext is MainWindowViewModel vm && vm.OpenChangeCommand.CanExecute(change))
+            vm.OpenChangeCommand.Execute(change);
+    }
 
     /// <summary>
     /// The fallback that actually gets the menu up. ContextRequested is raised by the

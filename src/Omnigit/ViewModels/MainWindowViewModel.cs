@@ -97,6 +97,7 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsOneChangeSelected));
             OnPropertyChanged(nameof(CanIgnoreFolder));
             OnPropertyChanged(nameof(CanIgnoreExtension));
+            OnPropertyChanged(nameof(CanOpenSelectedChange));
             OnPropertyChanged(nameof(DiscardChangesLabel));
         };
 
@@ -253,6 +254,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsOneChangeSelected))]
     [NotifyPropertyChangedFor(nameof(CanIgnoreFolder))]
     [NotifyPropertyChangedFor(nameof(CanIgnoreExtension))]
+    [NotifyPropertyChangedFor(nameof(CanOpenSelectedChange))]
     [NotifyPropertyChangedFor(nameof(DiscardChangesLabel))]
     public partial FileChangeViewModel? SelectedChange { get; set; }
 
@@ -629,6 +631,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool CanIgnoreExtension => IsOneChangeSelected && SelectedChange?.HasExtension == true;
 
+    /// <summary>A deleted file is still listed, but there is nothing left to hand an app.</summary>
+    public bool CanOpenSelectedChange => IsOneChangeSelected && SelectedChange is { IsDeleted: false };
+
     public string DiscardChangesLabel => SelectedChangeSet is { Count: > 1 } many
         ? $"Discard changes to {many.Count} files"
         : "Discard changes";
@@ -712,6 +717,32 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (!await _shell.ShowInFileManagerAsync(full))
             Log(ActivityLevel.Warning, "Could not open a file manager");
+    }
+
+    /// <summary>
+    /// What a double-click on a change does: hand the file to the app the desktop has for
+    /// its type. A deleted file has nothing to open - the menu entry is hidden for one, but
+    /// a double-click reaches here regardless, and so does a file deleted between the
+    /// refresh and the click.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenChangeAsync(FileChangeViewModel? change)
+    {
+        if (change is null || SelectedRepository is not { } repo)
+            return;
+
+        var full = System.IO.Path.Combine(
+            await Task.Run(() => _git.GetWorkingDirectory(repo.LocalPath)),
+            change.Path);
+
+        if (!System.IO.File.Exists(full))
+        {
+            Log(ActivityLevel.Warning, $"{change.FileName} is not on disk to open");
+            return;
+        }
+
+        if (!await _shell.OpenFileAsync(full))
+            Log(ActivityLevel.Warning, $"Nothing is set up to open {change.FileName}");
     }
 
     private async Task CopyAsync(string text, string what)

@@ -28,6 +28,12 @@ public interface ISystemShell
     /// manager. False if there was nothing to open it with.
     /// </summary>
     Task<bool> ShowInFileManagerAsync(string filePath);
+
+    /// <summary>
+    /// Hands a file to whatever the desktop has registered for its type. False if the file
+    /// is gone or nothing is registered for it.
+    /// </summary>
+    Task<bool> OpenFileAsync(string filePath);
 }
 
 /// <summary>
@@ -90,6 +96,28 @@ public sealed class SystemShell : ISystemShell
         try
         {
             return await window.Launcher.LaunchDirectoryInfoAsync(new System.IO.DirectoryInfo(folder));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The same hand-off <see cref="OpenUrlAsync"/> makes, aimed at a path: xdg-open,
+    /// ShellExecute or NSWorkspace picks the app the user has set for the extension. A
+    /// launcher can report false for a type nothing is registered for, and on Linux it
+    /// reports true whenever xdg-open was spawned - so a missing handler still surfaces as
+    /// nothing happening, which is why the caller says where the file was.
+    /// </summary>
+    public async Task<bool> OpenFileAsync(string filePath)
+    {
+        if (MainWindow is not { } window || !System.IO.File.Exists(filePath))
+            return false;
+
+        try
+        {
+            return await window.Launcher.LaunchFileInfoAsync(new System.IO.FileInfo(filePath));
         }
         catch (Exception)
         {
