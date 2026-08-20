@@ -154,29 +154,34 @@ jobs:
           winget settings --enable LocalManifestFiles
           exit 0
 
-      # --silent picks the manifest's Silent switches (/SP- /VERYSILENT ...) rather
-      # than SilentWithProgress, which draws a window nothing is there to watch.
-      # --disable-interactivity and the agreement flags because there is nobody
-      # to answer a prompt either.
-      #
-      # Output is NOT piped through Out-String: that buffers the lot until winget
-      # exits, so a stall shows as a silent job doing nothing until the timeout.
-      # Run bare and it streams.
-      #
-      # The exit code is not the gate - winget returns non-zero for reasons that
-      # are not a failed install. Whether the executable is on disk afterwards is
-      # the thing actually being tested, and the next step checks that.
-      - name: winget install
+      # TEMPORARY PROBE. winget install hangs at "Starting package install...",
+      # so this runs the installer directly with Inno's own /LOG to find out
+      # whether winget or Inno is the thing that stops. Restore the winget
+      # install step once the working switches are known.
+      - name: Probe the installer directly
         shell: pwsh
-        timeout-minutes: 8
+        timeout-minutes: 6
         run: |
-          winget install --manifest "${{ steps.dir.outputs.path }}" `
-            --silent `
-            --disable-interactivity `
-            --accept-package-agreements `
-            --accept-source-agreements `
-            --verbose
-          Write-Host "winget exit code: $LASTEXITCODE"
+          $url = "https://github.com/Polemus/Omnigit/releases/download/v${{ needs.manifests.outputs.version }}/Omnigit-${{ needs.manifests.outputs.version }}-win-x64-setup.exe"
+          Write-Host "downloading $url"
+          Invoke-WebRequest $url -OutFile setup.exe
+          Write-Host "size: $((Get-Item setup.exe).Length) bytes"
+
+          $log  = Join-Path $PWD 'inno.log'
+          $args = @('/SP-','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/ALLUSERS',"/LOG=$log")
+          Write-Host "running: setup.exe $($args -join ' ')"
+
+          $p = Start-Process -FilePath .\setup.exe -ArgumentList $args -PassThru
+          if (-not $p.WaitForExit(180000)) {
+            Write-Host "::error::STILL RUNNING after 180s - Inno itself is hanging"
+            try { $p.Kill() } catch {}
+            Start-Sleep -Seconds 2
+          } else {
+            Write-Host "exited with code $($p.ExitCode) after $([int]((Get-Date) - $p.StartTime).TotalSeconds)s"
+          }
+
+          Write-Host "===== Inno log ====="
+          if (Test-Path $log) { Get-Content $log } else { Write-Host "(no log written - Inno never got that far)" }
           exit 0
 
       - name: Confirm it actually landed
