@@ -1,0 +1,186 @@
+name: AUR
+
+# Publishes a release to the AUR as omnigit-bin. There is no review or merge:
+# pushing to ssh://aur@aur.archlinux.org/omnigit-bin.git is the release.
+#
+# Runs only once AUR_SSH_PRIVATE_KEY exists.
+#
+# ONE-TIME SETUP:
+#   1. AUR account, with an SSH public key added under My Account. Use a key of
+#      its own - the private half becomes a CI secret.
+#   2. Add that private key as AUR_SSH_PRIVATE_KEY.
+#   3. Create the package with the first push, by hand - an AUR repository does
+#      not exist until something is pushed to it:
+#        ./build/linux/aur/generate.sh <version>
+#        git clone ssh://aur@aur.archlinux.org/omnigit-bin.git aur-repo
+#        cp dist/aur/PKGBUILD aur-repo/
+#        cd aur-repo && makepkg --printsrcinfo > .SRCINFO
+#        git add PKGBUILD .SRCINFO && git commit -m 'Omnigit <version>' && git push
+#      Build it on Arch first. There is no review to catch a bad dependency.
+#
+# No third-party action: they all want the SSH key that can overwrite what every
+# user installs, and it cannot be scoped to one package.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (without the leading v)'
+        required: true
+
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+# The GitHub token is only ever used to read this repository. The push to the AUR
+# authenticates with AUR_SSH_PRIVATE_KEY, which has nothing to do with GitHub.
+permissions:
+  contents: read
+
+concurrency:
+  group: aur
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Push to the AUR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # workflow_run fires whatever the release did, including failing halfway
+    # through. A PKGBUILD whose checksums come from a half-uploaded release would
+    # be published broken, and generate.sh would not notice: the assets it hashes
+    # would simply 404, which it does catch - but only for the ones that are
+    # missing, and a release can fail after uploading everything.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Work out which version this is
+        id: target
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          TRIGGERING_REF: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            tag="v${DISPATCH_VERSION}"
+          else
+            tag="${TRIGGERING_REF}"
+          fi
+
+          case "$tag" in
+              v[0-9]*) ;;
+              *)
+                  echo "::notice::$tag is not a version tag - nothing to publish"
+                  echo "skip=yes" >> "$GITHUB_OUTPUT"
+                  exit 0
+                  ;;
+          esac
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check there is somewhere to publish to
+        id: key
+        if: steps.target.outputs.skip != 'yes'
+        run: |
+          if [ -z "${{ secrets.AUR_SSH_PRIVATE_KEY }}" ]; then
+            echo "::notice::AUR_SSH_PRIVATE_KEY is not set, so omnigit-bin is not on the AUR yet."
+            echo "::notice::The one-time setup is in the header of this workflow file."
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The tag, not the default branch. PKGBUILD.in is what gets published, and
+      # generating it from a later commit would ship a package description that
+      # never went with the bytes it points at.
+      - uses: actions/checkout@v7
+        if: steps.target.outputs.skip != 'yes' && steps.key.outputs.skip != 'yes'
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+
+      - name: Generate the PKGBUILD
+        if: steps.target.outputs.skip != 'yes' && steps.key.outputs.skip != 'yes'
+        run: ./build/linux/aur/generate.sh "${{ steps.target.outputs.version }}"
+
+      # makepkg only exists on Arch, and refuses to run as root even for
+      # --printsrcinfo, which is why this makes a user rather than just running
+      # the container as one - the checkout above belongs to the runner's uid.
+      - name: Generate .SRCINFO
+        if: steps.target.outputs.skip != 'yes' && steps.key.outputs.skip != 'yes'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/dist/aur:/pkg" archlinux:base-devel bash -c '
+            set -eu
+            useradd -m builder
+            cp /pkg/PKGBUILD /home/builder/
+            chown -R builder:builder /home/builder
+            cd /home/builder
+            su builder -c "makepkg --printsrcinfo" > /pkg/.SRCINFO
+          '
+          echo "--- .SRCINFO ---"
+          cat dist/aur/.SRCINFO
+
+      - name: Push to the AUR
+        if: steps.target.outputs.skip != 'yes' && steps.key.outputs.skip != 'yes'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+
+          # Fetch the host key, then check it against the fingerprint Arch
+          # publishes before trusting it - rather than StrictHostKeyChecking=no,
+          # which would offer a key that can overwrite what every user of this
+          # package installs to whatever happens to answer on that address.
+          #
+          # The fingerprint rather than the key itself because that is what Arch
+          # actually publishes:
+          #   https://archlinux.org/news/aur-migration-new-ssh-hostkeys/
+          # If this ever fails, check that page before changing the line below.
+          # A changed host key is either a migration they announced or something
+          # that should stop this workflow dead.
+          expected='SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4'
+
+          ssh-keyscan -t ed25519 aur.archlinux.org > /tmp/aur-hostkey 2>/dev/null
+          actual="$(ssh-keygen -lf /tmp/aur-hostkey | awk '{print $2}')"
+
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::aur.archlinux.org host key is $actual, expected $expected"
+            exit 1
+          fi
+
+          cat /tmp/aur-hostkey >> ~/.ssh/known_hosts
+
+          cat >> ~/.ssh/config <<'CONF'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+          CONF
+
+          git clone ssh://aur@aur.archlinux.org/omnigit-bin.git aur-repo
+          cd aur-repo
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          cp ../dist/aur/PKGBUILD ../dist/aur/.SRCINFO .
+
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "::notice::The AUR already has $VERSION - nothing to do"
+            exit 0
+          fi
+
+          git commit -m "Omnigit $VERSION"
+
+          # Whatever the clone says its branch is, rather than a hardcoded
+          # "master". AUR repositories use master today; asking the clone costs
+          # nothing and means a rename upstream doesn't silently push a second
+          # branch that nobody serves.
+          git push origin "$(git symbolic-ref --short HEAD)"

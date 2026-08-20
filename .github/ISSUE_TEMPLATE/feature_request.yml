@@ -5,10 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        The [known gaps](https://github.com/Polemus/Omnigit#known-gaps) in the README and
-        the list at the end of `CLAUDE.md` are the honest backlog — worth a look first,
-        since the big absences (pull requests, issues, reordering commits, history
-        paging) are already known.
+        The [known gaps](https://github.com/Polemus/Omnigit#known-gaps) in the README are
+        the honest backlog — worth a look first, since the big absences (pull requests,
+        issues, reordering commits, history paging) are already known.
 
   - type: textarea
     id: problem

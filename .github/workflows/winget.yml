@@ -1,0 +1,278 @@
+name: winget
+
+# Opens the pull request that publishes a release to microsoft/winget-pkgs.
+#
+# Two rules shape this. Validation step 01 requires exactly one package version
+# and nothing but manifest files, so the commit adds precisely three files. And
+# the PR template's checklist claims the manifest was validated and installed
+# with winget - there is no Windows machine here, so the verify job does it on a
+# windows runner and the PR job cannot start unless it passed.
+#
+# Runs only once WINGET_TOKEN exists.
+#
+# ONE-TIME SETUP:
+#   1. Fork microsoft/winget-pkgs to Polemus/winget-pkgs.
+#   2. A fine-grained PAT scoped to that fork only, Contents and Pull requests
+#      read/write, as WINGET_TOKEN. It needs nothing on this repository.
+#   3. Answer the CLA bot on the first PR. The agreement is not signed in
+#      advance; a bot decides whether one is needed and comments. Once done it
+#      covers every Microsoft repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (without the leading v)'
+        required: true
+
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: winget
+  cancel-in-progress: false
+
+jobs:
+  # ------------------------------------------------------------------ build
+  manifests:
+    name: Generate the manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      version: ${{ steps.target.outputs.version }}
+      skip: ${{ steps.target.outputs.skip || steps.token.outputs.skip }}
+    steps:
+      - name: Work out which version this is
+        id: target
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          TRIGGERING_REF: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            tag="v${DISPATCH_VERSION}"
+          else
+            tag="${TRIGGERING_REF}"
+          fi
+
+          case "$tag" in
+              v[0-9]*) ;;
+              *)
+                  echo "::notice::$tag is not a version tag - nothing to publish"
+                  echo "skip=yes" >> "$GITHUB_OUTPUT"
+                  exit 0
+                  ;;
+          esac
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check there is somewhere to publish to
+        id: token
+        if: steps.target.outputs.skip != 'yes'
+        run: |
+          if [ -z "${{ secrets.WINGET_TOKEN }}" ]; then
+            echo "::notice::WINGET_TOKEN is not set, so Omnigit is not on winget yet."
+            echo "::notice::The one-time setup is in the header of this workflow file."
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+
+      - name: Generate
+        if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
+        run: ./build/windows/winget/generate.sh "${{ steps.target.outputs.version }}"
+
+      - uses: actions/upload-artifact@v7
+        if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
+        with:
+          name: winget-manifests
+          path: dist/winget/
+          if-no-files-found: error
+
+  # --------------------------------------------------------------- verify
+  # The two checklist boxes that say the manifest was validated and installed
+  # locally. Done on a real Windows machine because there isn't one here, and
+  # because a manifest that installs nothing is worse than no manifest.
+  verify:
+    name: Validate and install on Windows
+    needs: manifests
+    if: needs.manifests.outputs.skip != 'yes'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: winget-manifests
+          path: winget
+
+      - name: Locate the manifest directory
+        id: dir
+        shell: pwsh
+        run: |
+          $dir = "winget/manifests/p/Polemus/Omnigit/${{ needs.manifests.outputs.version }}"
+          if (-not (Test-Path $dir)) { throw "no manifests at $dir" }
+          Get-ChildItem $dir | ForEach-Object { Write-Host "  $($_.Name)" }
+          "path=$dir" >> $env:GITHUB_OUTPUT
+
+      - name: winget validate
+        shell: pwsh
+        run: |
+          winget --version
+          winget validate --manifest "${{ steps.dir.outputs.path }}"
+
+      # --disable-interactivity and the agreement flags because there is nobody
+      # to answer a prompt; a hang here would burn the whole timeout.
+      - name: winget install
+        shell: pwsh
+        run: |
+          winget install --manifest "${{ steps.dir.outputs.path }}" `
+            --disable-interactivity `
+            --accept-package-agreements `
+            --accept-source-agreements
+
+      - name: Confirm it actually landed
+        shell: pwsh
+        run: |
+          $exe = "$env:ProgramFiles\Omnigit\Omnigit.exe"
+          if (-not (Test-Path $exe)) { throw "installed, but $exe is not there" }
+          Write-Host "installed: $exe"
+
+  # ----------------------------------------------------------- pull request
+  pull-request:
+    name: Open the winget pull request
+    needs: [manifests, verify]
+    if: needs.manifests.outputs.skip != 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+      VERSION: ${{ needs.manifests.outputs.version }}
+      FORK: Polemus/winget-pkgs
+      UPSTREAM: microsoft/winget-pkgs
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: winget-manifests
+          path: winget
+
+      # winget-pkgs is far too large to clone on a runner - hundreds of
+      # thousands of files, and we need to add three. The Git Data API builds a
+      # commit out of blobs without a working tree ever existing.
+      - name: Commit the manifests to a branch on the fork
+        id: commit
+        run: |
+          set -euo pipefail
+
+          DIR="manifests/p/Polemus/Omnigit/$VERSION"
+          BRANCH="omnigit-$VERSION"
+
+          # A fork drifts behind upstream, and validation step 01 fails a pull
+          # request that conflicts with the base branch.
+          gh api -X POST "repos/$FORK/merge-upstream" -f branch=master >/dev/null
+
+          BASE_SHA="$(gh api "repos/$FORK/git/ref/heads/master" --jq .object.sha)"
+          BASE_TREE="$(gh api "repos/$FORK/git/commits/$BASE_SHA" --jq .tree.sha)"
+
+          tree='[]'
+          for f in winget/"$DIR"/*.yaml; do
+            name="$(basename "$f")"
+            blob="$(jq -n --arg c "$(base64 -w0 "$f")" \
+                      '{content:$c, encoding:"base64"}' \
+                    | gh api -X POST "repos/$FORK/git/blobs" --input - --jq .sha)"
+            tree="$(jq --arg p "$DIR/$name" --arg s "$blob" \
+                      '. + [{path:$p, mode:"100644", type:"blob", sha:$s}]' <<<"$tree")"
+            echo "  blob $name -> $blob"
+          done
+
+          TREE_SHA="$(jq -n --arg b "$BASE_TREE" --argjson t "$tree" \
+                        '{base_tree:$b, tree:$t}' \
+                      | gh api -X POST "repos/$FORK/git/trees" --input - --jq .sha)"
+
+          COMMIT_SHA="$(jq -n --arg m "Omnigit $VERSION" --arg t "$TREE_SHA" --arg p "$BASE_SHA" \
+                          '{message:$m, tree:$t, parents:[$p]}' \
+                        | gh api -X POST "repos/$FORK/git/commits" --input - --jq .sha)"
+
+          # Force, so a re-run of a failed release moves the branch rather than
+          # colliding with what the previous attempt left behind.
+          if gh api "repos/$FORK/git/ref/heads/$BRANCH" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$FORK/git/refs/heads/$BRANCH" \
+              -f sha="$COMMIT_SHA" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/$FORK/git/refs" \
+              -f ref="refs/heads/$BRANCH" -f sha="$COMMIT_SHA" >/dev/null
+          fi
+
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Open the pull request
+        run: |
+          set -euo pipefail
+
+          BRANCH="${{ steps.commit.outputs.branch }}"
+          DIR="${{ steps.commit.outputs.dir }}"
+
+          # The REST API rather than `gh pr list --head`, which matches on the
+          # branch name alone and cannot express "that branch, on my fork".
+          if [ -n "$(gh api "repos/$UPSTREAM/pulls?head=Polemus:$BRANCH&state=open" --jq '.[0].number')" ]; then
+            echo "::notice::A pull request for $VERSION is already open - the push updated it"
+            exit 0
+          fi
+
+          # "New package:" the first time, "Update:" thereafter - the format the
+          # template asks for in its first line.
+          # The CLA is signed by answering a bot on the first pull request, not
+          # beforehand - so on that one the box is not ticked, because it is not
+          # yet true. Every later submission is covered by that same signature.
+          if gh api "repos/$UPSTREAM/contents/manifests/p/Polemus/Omnigit" >/dev/null 2>&1; then
+            TITLE="Update: Polemus.Omnigit to $VERSION"
+            CLA="- [x] Signed the [Contributor License Agreement](https://cla.opensource.microsoft.com)"
+          else
+            TITLE="New package: Polemus.Omnigit version $VERSION"
+            CLA="- [ ] Signed the [Contributor License Agreement](https://cla.opensource.microsoft.com) — first submission; awaiting the CLA bot"
+          fi
+
+          # Every box below is ticked because the work is done, not to get past a
+          # check. The two winget ones were run on a windows runner in the verify
+          # job, which had to pass for this job to start at all.
+          cat > /tmp/pr-body.md <<BODY
+          ## 📖 Description
+
+          Omnigit $VERSION - a desktop git client for GitHub, Gitea and other forges.
+          Built and released from [Polemus/Omnigit](https://github.com/Polemus/Omnigit),
+          and submitted automatically by \`.github/workflows/winget.yml\` there.
+
+          ## ✅ Checklist
+
+          $CLA
+          - [ ] Linked to an issue (if applicable)
+
+          ## 📦 Manifest Checklist
+
+          - [x] Checked that there aren't other open [pull requests](https://github.com/microsoft/winget-pkgs/pulls) for the same manifest update/change
+          - [x] This PR only modifies one (1) manifest
+          - [x] Validated manifest locally with \`winget validate --manifest $DIR\`
+          - [x] Tested manifest locally with \`winget install --manifest $DIR\`
+          - [x] Manifest conforms to the [1.12 schema](https://github.com/microsoft/winget-pkgs/tree/master/doc/manifest/schema/1.12.0)
+
+          Both winget commands were run on a \`windows-latest\` runner before this pull
+          request was opened, and the installed executable was checked for on disk
+          afterwards. The run is linked from the commit in this branch.
+          BODY
+
+          gh pr create \
+            --repo "$UPSTREAM" \
+            --base master \
+            --head "Polemus:$BRANCH" \
+            --title "$TITLE" \
+            --body-file /tmp/pr-body.md

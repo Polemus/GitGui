@@ -158,7 +158,6 @@ modules:
         # host names package paths that do not exist inside the sandbox.
         skip:
           - .git
-          - .claude
           - .idea
           - .vs
           - dist
