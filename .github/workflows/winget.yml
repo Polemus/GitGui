@@ -223,6 +223,16 @@ jobs:
           DIR="manifests/p/Polemus/Omnigit/$VERSION"
           BRANCH="omnigit-$VERSION"
 
+          # "New package:" the first time, "Update:" after - the format the
+          # template asks for. The commit message is the same string, because
+          # opening the pull request by hand takes its default title from the
+          # commit, and a title in the wrong format is a review comment.
+          if gh api "repos/$UPSTREAM/contents/manifests/p/Polemus/Omnigit" >/dev/null 2>&1; then
+            TITLE="Update: Polemus.Omnigit to $VERSION"
+          else
+            TITLE="New package: Polemus.Omnigit version $VERSION"
+          fi
+
           # A fork drifts behind upstream, and validation step 01 fails a pull
           # request that conflicts with the base branch.
           gh api -X POST "repos/$FORK/merge-upstream" -f branch=master >/dev/null
@@ -245,7 +255,7 @@ jobs:
                         '{base_tree:$b, tree:$t}' \
                       | gh api -X POST "repos/$FORK/git/trees" --input - --jq .sha)"
 
-          COMMIT_SHA="$(jq -n --arg m "Omnigit $VERSION" --arg t "$TREE_SHA" --arg p "$BASE_SHA" \
+          COMMIT_SHA="$(jq -n --arg m "$TITLE" --arg t "$TREE_SHA" --arg p "$BASE_SHA" \
                           '{message:$m, tree:$t, parents:[$p]}' \
                         | gh api -X POST "repos/$FORK/git/commits" --input - --jq .sha)"
 
@@ -261,6 +271,7 @@ jobs:
 
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
 
       - name: Open the pull request
         run: |
@@ -278,16 +289,17 @@ jobs:
 
           # "New package:" the first time, "Update:" thereafter - the format the
           # template asks for in its first line.
+          TITLE="${{ steps.commit.outputs.title }}"
+
           # The CLA is signed by answering a bot on the first pull request, not
           # beforehand - so on that one the box is not ticked, because it is not
           # yet true. Every later submission is covered by that same signature.
-          if gh api "repos/$UPSTREAM/contents/manifests/p/Polemus/Omnigit" >/dev/null 2>&1; then
-            TITLE="Update: Polemus.Omnigit to $VERSION"
-            CLA="- [x] Signed the [Contributor License Agreement](https://cla.opensource.microsoft.com)"
-          else
-            TITLE="New package: Polemus.Omnigit version $VERSION"
-            CLA="- [ ] Signed the [Contributor License Agreement](https://cla.opensource.microsoft.com) — first submission; awaiting the CLA bot"
-          fi
+          case "$TITLE" in
+            "New package:"*)
+              CLA="- [ ] Signed the [Contributor License Agreement](https://cla.opensource.microsoft.com) — first submission; awaiting the CLA bot" ;;
+            *)
+              CLA="- [x] Signed the [Contributor License Agreement](https://cla.opensource.microsoft.com)" ;;
+          esac
 
           # Every box below is ticked because the work is done, not to get past a
           # check. The two winget ones were run on a windows runner in the verify
