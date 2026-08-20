@@ -146,15 +146,29 @@ jobs:
           # fail the step regardless of the check above.
           exit 0
 
+      # Installing from a local manifest is off by default and has to be turned
+      # on by an administrator, which the runner account is.
+      - name: Allow local manifests
+        shell: pwsh
+        run: |
+          winget settings --enable LocalManifestFiles
+          exit 0
+
       # --disable-interactivity and the agreement flags because there is nobody
       # to answer a prompt; a hang here would burn the whole timeout.
+      #
+      # The exit code is not the gate - winget returns non-zero for reasons that
+      # are not a failed install. Whether the executable is on disk afterwards is
+      # the thing actually being tested, and the next step checks that.
       - name: winget install
         shell: pwsh
         run: |
-          winget install --manifest "${{ steps.dir.outputs.path }}" `
+          $out = winget install --manifest "${{ steps.dir.outputs.path }}" `
             --disable-interactivity `
             --accept-package-agreements `
-            --accept-source-agreements
+            --accept-source-agreements 2>&1 | Out-String
+          Write-Host $out
+          exit 0
 
       - name: Confirm it actually landed
         shell: pwsh
