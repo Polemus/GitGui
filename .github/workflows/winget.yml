@@ -83,10 +83,13 @@ jobs:
             echo "skip=yes" >> "$GITHUB_OUTPUT"
           fi
 
+      # main, not the tag: the generator lives here and the manifests it writes is
+      # built from the published release, not from the source at that commit. A
+      # tag older than this tooling would check out a tree without it.
       - uses: actions/checkout@v7
         if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'
         with:
-          ref: ${{ steps.target.outputs.tag }}
+          ref: main
 
       - name: Generate
         if: steps.target.outputs.skip != 'yes' && steps.token.outputs.skip != 'yes'

@@ -94,10 +94,13 @@ jobs:
       # The tag, not the default branch. PKGBUILD.in is what gets published, and
       # generating it from a later commit would ship a package description that
       # never went with the bytes it points at.
+      # main, not the tag: the generator lives here and the PKGBUILD it writes is
+      # built from the published release, not from the source at that commit. A
+      # tag older than this tooling would check out a tree without it.
       - uses: actions/checkout@v7
         if: steps.target.outputs.skip != 'yes' && steps.key.outputs.skip != 'yes'
         with:
-          ref: ${{ steps.target.outputs.tag }}
+          ref: main
 
       - name: Generate the PKGBUILD
         if: steps.target.outputs.skip != 'yes' && steps.key.outputs.skip != 'yes'
