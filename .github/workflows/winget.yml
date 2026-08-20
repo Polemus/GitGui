@@ -127,11 +127,20 @@ jobs:
           Get-ChildItem $dir | ForEach-Object { Write-Host "  $($_.Name)" }
           "path=$dir" >> $env:GITHUB_OUTPUT
 
+      # winget exits 1 on warnings as well as errors, and the runner's winget
+      # trails the schema the repository requires - v1.11 warns that a 1.12
+      # schema header "does not match the expected pattern". Microsoft's own
+      # validation understands 1.12, so warnings are reported and not fatal;
+      # anything that is not an outright success still fails the job.
       - name: winget validate
         shell: pwsh
         run: |
           winget --version
-          winget validate --manifest "${{ steps.dir.outputs.path }}"
+          $out = winget validate --manifest "${{ steps.dir.outputs.path }}" 2>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'Manifest validation succeeded') {
+            throw "winget validate did not succeed"
+          }
 
       # --disable-interactivity and the agreement flags because there is nobody
       # to answer a prompt; a hang here would burn the whole timeout.
