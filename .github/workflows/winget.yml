@@ -154,34 +154,27 @@ jobs:
           winget settings --enable LocalManifestFiles
           exit 0
 
-      # TEMPORARY PROBE. winget install hangs at "Starting package install...",
-      # so this runs the installer directly with Inno's own /LOG to find out
-      # whether winget or Inno is the thing that stops. Restore the winget
-      # install step once the working switches are known.
-      - name: Probe the installer directly
+      # /ALLUSERS is carried by the manifest's Silent switches. Without it Inno
+      # asks per-user vs all-users, cannot draw the dialog under /VERYSILENT, and
+      # waits forever. Verified directly on a runner: with it, Inno installs in
+      # about two seconds.
+      #
+      # Output is not piped through Out-String - that buffers until winget exits,
+      # so a stall looks like a dead job. Run bare and it streams.
+      #
+      # The exit code is not the gate: winget returns non-zero for reasons that
+      # are not a failed install. The next step checks the executable is on disk,
+      # which is what is actually being tested.
+      - name: winget install
         shell: pwsh
-        timeout-minutes: 6
+        timeout-minutes: 8
         run: |
-          $url = "https://github.com/Polemus/Omnigit/releases/download/v${{ needs.manifests.outputs.version }}/Omnigit-${{ needs.manifests.outputs.version }}-win-x64-setup.exe"
-          Write-Host "downloading $url"
-          Invoke-WebRequest $url -OutFile setup.exe
-          Write-Host "size: $((Get-Item setup.exe).Length) bytes"
-
-          $log  = Join-Path $PWD 'inno.log'
-          $args = @('/SP-','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/ALLUSERS',"/LOG=$log")
-          Write-Host "running: setup.exe $($args -join ' ')"
-
-          $p = Start-Process -FilePath .\setup.exe -ArgumentList $args -PassThru
-          if (-not $p.WaitForExit(180000)) {
-            Write-Host "::error::STILL RUNNING after 180s - Inno itself is hanging"
-            try { $p.Kill() } catch {}
-            Start-Sleep -Seconds 2
-          } else {
-            Write-Host "exited with code $($p.ExitCode) after $([int]((Get-Date) - $p.StartTime).TotalSeconds)s"
-          }
-
-          Write-Host "===== Inno log ====="
-          if (Test-Path $log) { Get-Content $log } else { Write-Host "(no log written - Inno never got that far)" }
+          winget install --manifest "${{ steps.dir.outputs.path }}" `
+            --silent `
+            --disable-interactivity `
+            --accept-package-agreements `
+            --accept-source-agreements
+          Write-Host "winget exit code: $LASTEXITCODE"
           exit 0
 
       - name: Confirm it actually landed
