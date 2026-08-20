@@ -12,8 +12,14 @@ name: winget
 #
 # ONE-TIME SETUP:
 #   1. Fork microsoft/winget-pkgs to Polemus/winget-pkgs.
-#   2. A fine-grained PAT scoped to that fork only, Contents and Pull requests
-#      read/write, as WINGET_TOKEN. It needs nothing on this repository.
+#   2. A PAT as WINGET_TOKEN. Either works:
+#        - fine-grained, scoped to the fork only, Contents read/write. The
+#          branch is pushed automatically and the job prints one link to open
+#          the pull request by hand. Narrow, one click per release.
+#        - classic with public_repo, which also opens the pull request. Fully
+#          automatic, but it can write to every public repository you can.
+#      A fine-grained token cannot open the pull request: microsoft/winget-pkgs
+#      belongs to someone else, so it cannot be granted access to it.
 #   3. Answer the CLA bot on the first PR. The agreement is not signed in
 #      advance; a bot decides whether one is needed and comments. Once done it
 #      covers every Microsoft repository.
@@ -317,9 +323,28 @@ jobs:
           own log is in the workflow run.
           BODY
 
-          gh pr create \
-            --repo "$UPSTREAM" \
-            --base master \
-            --head "Polemus:$BRANCH" \
-            --title "$TITLE" \
-            --body-file /tmp/pr-body.md
+          # A fine-grained token cannot open a pull request on a repository it was
+          # not granted - and it cannot be granted microsoft/winget-pkgs, which
+          # somebody else owns. Only a classic token with public_repo can, and
+          # that can write to every public repository the account can reach.
+          #
+          # So this tries, and on refusal prints the one link that finishes the
+          # job by hand rather than failing a release over it. The branch is
+          # pushed either way, which is all the work.
+          if gh pr create \
+              --repo "$UPSTREAM" \
+              --base master \
+              --head "Polemus:$BRANCH" \
+              --title "$TITLE" \
+              --body-file /tmp/pr-body.md; then
+            exit 0
+          fi
+
+          echo "::warning::Could not open the pull request - the token is scoped to the fork only."
+          echo "::warning::Open it here: https://github.com/$UPSTREAM/compare/master...Polemus:winget-pkgs:$BRANCH?expand=1"
+          echo "::warning::Title: $TITLE"
+          echo
+          echo "Body to paste:"
+          echo "-----------------------------------------------------------"
+          cat /tmp/pr-body.md
+          echo "-----------------------------------------------------------"
