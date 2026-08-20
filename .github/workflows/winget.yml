@@ -139,8 +139,12 @@ jobs:
           $out = winget validate --manifest "${{ steps.dir.outputs.path }}" 2>&1 | Out-String
           Write-Host $out
           if ($out -notmatch 'Manifest validation succeeded') {
-            throw "winget validate did not succeed"
+            Write-Host "::error::winget validate did not succeed"
+            exit 1
           }
+          # GitHub's pwsh shell appends `exit $LASTEXITCODE`, so winget's 1 would
+          # fail the step regardless of the check above.
+          exit 0
 
       # --disable-interactivity and the agreement flags because there is nobody
       # to answer a prompt; a hang here would burn the whole timeout.
