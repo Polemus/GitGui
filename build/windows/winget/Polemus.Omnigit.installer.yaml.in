@@ -6,13 +6,16 @@ PackageIdentifier: Polemus.Omnigit
 PackageVersion: @VERSION@
 InstallerType: inno
 
-# winget knows Inno's switches, but naming them is what every merged Inno
-# manifest does and it costs nothing to be explicit. /SP- suppresses the
-# "This will install..." prompt, which would otherwise wait for a keypress in a
-# window nobody is looking at.
+# /ALLUSERS is not optional here. omnigit.iss sets
+# PrivilegesRequiredOverridesAllowed=dialog, so Inno asks whether to install for
+# one user or all of them - and under /VERYSILENT it cannot draw that dialog, so
+# it waits for an answer that can never arrive. The install hangs until it is
+# killed. Naming the scope up front is what skips the question.
+#
+# /SP- suppresses the "This will install..." prompt, for the same reason.
 InstallerSwitches:
-  Silent: /SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-  SilentWithProgress: /SP- /SILENT /SUPPRESSMSGBOXES /NORESTART
+  Silent: /SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS
+  SilentWithProgress: /SP- /SILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS
 
 # Inno registers its uninstall entry as <AppId>_is1, and AppId in
 # build/windows/omnigit.iss is {9F2C6B31-7A4E-4D18-9C55-2E7B1A4F8D30}. Without
