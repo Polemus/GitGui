@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls; // GridLength, for the resizable pane widths below.
+using Avalonia.Threading; // The timer behind the background fetch.
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Omnigit.HostProviders;
@@ -110,6 +111,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<RepositoryInfo> Repositories { get; } = [];
     public ObservableCollection<HostGroupViewModel> RepositoryGroups { get; } = [];
     public ObservableCollection<BranchInfo> Branches { get; } = [];
+
+    /// <summary>
+    /// The same branches as <see cref="Branches"/>, filtered and grouped the way the
+    /// picker draws them. A view over that list rather than a second source of truth.
+    /// </summary>
+    public ObservableCollection<BranchSectionViewModel> BranchSections { get; } = [];
     public ObservableCollection<CommitInfo> History { get; } = [];
     public ObservableCollection<FileChangeViewModel> Changes { get; } = [];
     public ObservableCollection<FileChange> SelectedCommitFiles { get; } = [];
@@ -230,6 +237,10 @@ public partial class MainWindowViewModel : ViewModelBase
     // ---- Loading / errors --------------------------------------------------
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SyncCommand))]
+    [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PullCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PushCommand))]
     public partial bool IsBusy { get; set; }
 
     public bool HasRepositories => Repositories.Count > 0;
@@ -241,6 +252,10 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(PullRequestsEmptyLabel))]
     [NotifyPropertyChangedFor(nameof(CreatePullRequestLabel))]
     [NotifyCanExecuteChangedFor(nameof(CreatePullRequestCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SyncCommand))]
+    [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PullCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PushCommand))]
     public partial RepositoryInfo? SelectedRepository { get; set; }
 
     [ObservableProperty]
@@ -356,6 +371,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>False for a repository with no remote, where publishing means nothing.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SyncActionLabel))]
+    [NotifyCanExecuteChangedFor(nameof(SyncCommand))]
+    [NotifyCanExecuteChangedFor(nameof(FetchCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PullCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PushCommand))]
     public partial bool HasRemote { get; set; }
 
     /// <summary>The branch exists nowhere but here, and there is a remote to send it to.</summary>
@@ -445,11 +464,17 @@ public partial class MainWindowViewModel : ViewModelBase
         : LastFetched is { } when ? $"Last fetched {TimeFormat.Relative(when)}"
         : "Never fetched";
 
-    public string SyncCountLabel => Behind > 0 ? $"↓ {Behind}"
-                                  : Ahead > 0 ? $"↑ {Ahead}"
-                                  : string.Empty;
+    /// <summary>What a press would send, and what it would bring down.</summary>
+    public string SyncCountLabel => SyncCounts.Label(Ahead, Behind);
 
     public bool HasSyncCount => !string.IsNullOrEmpty(SyncCountLabel);
+
+    /// <summary>
+    /// All four sync commands need somewhere to go. A repository with no remote is not a
+    /// failure to report every time the button is pressed - it is a button that should
+    /// not be pressable.
+    /// </summary>
+    public bool CanSync => SelectedRepository is not null && HasRemote && !IsBusy;
 
     // ---- Commit box --------------------------------------------------------
 
@@ -516,6 +541,45 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CreateBranchCommand))]
     public partial string NewBranchName { get; set; } = string.Empty;
+
+    // ---- Branch picker -----------------------------------------------------
+
+    /// <summary>
+    /// What the picker's box is filtering the branch list down to. Plain substring,
+    /// case-insensitive: a branch name is not a search query, and every git host lets
+    /// people put slashes and dashes in one, which a smarter match would only get wrong.
+    /// </summary>
+    [ObservableProperty]
+    public partial string BranchFilter { get; set; } = string.Empty;
+
+    partial void OnBranchFilterChanged(string value) => RebuildBranchSections();
+
+    public bool HasBranchMatches => BranchSections.Count > 0;
+
+    public string BranchesEmptyLabel => string.IsNullOrWhiteSpace(BranchFilter)
+        ? "No branches yet - the first commit makes one."
+        : $"No branch here or on the remote matches \u201c{BranchFilter.Trim()}\u201d.";
+
+    private void RebuildBranchSections()
+    {
+        Replace(BranchSections, BranchSectionViewModel.Build(Branches, BranchFilter));
+
+        OnPropertyChanged(nameof(HasBranchMatches));
+        OnPropertyChanged(nameof(BranchesEmptyLabel));
+    }
+
+    /// <summary>
+    /// Enter in the filter box takes the top match - the row the list is already pointing
+    /// at. No match does nothing rather than creating a branch: the box at the bottom of
+    /// the picker is where a new branch is named, and typing a filter is not a request
+    /// for one to exist.
+    /// </summary>
+    [RelayCommand]
+    private async Task CheckoutTopMatchAsync()
+    {
+        if (BranchSections.FirstOrDefault()?.Branches.FirstOrDefault() is { } branch)
+            await SelectBranchAsync(branch);
+    }
 
     // ---- Stashes -----------------------------------------------------------
 
@@ -831,6 +895,78 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (Repositories.Count > 0)
             await OpenRepositoryAsync(Repositories[0]);
+
+        StartBackgroundFetch();
+    }
+
+    // ---- Fetching without being asked --------------------------------------
+
+    /// <summary>
+    /// How often the app fetches on its own. The same ten minutes GitHub Desktop uses,
+    /// and for the same reason: a toolbar reading "Fetch origin" over a branch three
+    /// commits behind is not so much wrong as useless - you have to press it to find out
+    /// there was anything to find out.
+    /// </summary>
+    private static readonly TimeSpan BackgroundFetchInterval = TimeSpan.FromMinutes(10);
+
+    private DispatcherTimer? _backgroundFetch;
+
+    /// <summary>Guards against a slow fetch overlapping the next tick.</summary>
+    private bool _fetchingInBackground;
+
+    private void StartBackgroundFetch()
+    {
+        if (_isDesignTime || _backgroundFetch is not null)
+            return;
+
+        var timer = new DispatcherTimer { Interval = BackgroundFetchInterval };
+        timer.Tick += (_, _) => _ = FetchInBackgroundAsync();
+        timer.Start();
+
+        _backgroundFetch = timer;
+    }
+
+    /// <summary>
+    /// A fetch nobody asked for. It differs from the button's in three ways, all of them
+    /// about not interrupting: no busy strip, since the user is in the middle of
+    /// something; failures go to the log at trace level rather than the error banner,
+    /// because being signed out is ordinary and an automatic action should not punish
+    /// anyone for leaving the app open; and the reload afterwards is the quiet one, which
+    /// keeps the selection and the staging ticks as they were. Nothing in the working
+    /// tree is touched either way - a fetch only moves remote-tracking refs, which is
+    /// what makes doing it unbidden acceptable at all.
+    /// </summary>
+    private async Task FetchInBackgroundAsync()
+    {
+        if (_isDesignTime || _fetchingInBackground || IsBusy || !HasRemote)
+            return;
+
+        if (SelectedRepository is not { } repository)
+            return;
+
+        _fetchingInBackground = true;
+        var path = repository.LocalPath;
+
+        try
+        {
+            var credentials = await Task.Run(() => CredentialsFor(_git.GetRemoteUrl(path)));
+            var result = await Task.Run(() => _git.Fetch(path, credentials, null));
+
+            Log(ActivityLevel.Trace, $"Background fetch — {result.Message}");
+
+            // The user may have switched repositories, or started something of their
+            // own, while the fetch was in flight.
+            if (!IsBusy && SelectedRepository is { } still && still.LocalPath == path)
+                await LoadRepositoryAsync(still, announce: false);
+        }
+        catch (Exception ex)
+        {
+            Log(ActivityLevel.Trace, $"Background fetch failed — {ex.Message}");
+        }
+        finally
+        {
+            _fetchingInBackground = false;
+        }
     }
 
     // ---- Commands ----------------------------------------------------------
@@ -882,6 +1018,7 @@ public partial class MainWindowViewModel : ViewModelBase
             _watcher.Stop();
             SelectedRepository = null;
             Branches.Clear();
+            BranchSections.Clear();
             Changes.Clear();
             History.Clear();
             SelectedCommitFiles.Clear();
@@ -1030,9 +1167,19 @@ public partial class MainWindowViewModel : ViewModelBase
         await OpenRepositoryAsync(repo);
     }
 
+    /// <summary>
+    /// Checks out a branch from the picker. A branch that is only on the remote is asked
+    /// for by its short name and created here tracking it, which is what git does for
+    /// <c>git checkout &lt;name&gt;</c> - so nothing on this side has to know which of the
+    /// two it was.
+    /// </summary>
     [RelayCommand]
     private async Task SelectBranchAsync(BranchInfo branch)
     {
+        // The search that found it has served its purpose, and leaving it filled would
+        // greet the next open with a list of one.
+        BranchFilter = string.Empty;
+
         if (SelectedRepository is null || branch.IsCurrent)
         {
             SelectedBranch = branch;
@@ -1091,22 +1238,36 @@ public partial class MainWindowViewModel : ViewModelBase
         await OpenRepositoryAsync(repo);
     }
 
+    /// <summary>Which of git's three network verbs to run.</summary>
+    private enum SyncAction { Fetch, Pull, Push }
+
     /// <summary>
     /// Performs whatever the sync button says: publish when the remote has never seen
     /// this branch, pull when behind, push when ahead, otherwise fetch.
     /// </summary>
-    [RelayCommand]
-    private async Task SyncAsync()
+    [RelayCommand(CanExecute = nameof(CanSync))]
+    private Task SyncAsync()
+        // Publishing is a push - to a branch that isn't there yet. Push writes the
+        // tracking config on the way, so this only ever happens once per branch.
+        => PerformSyncAsync(CanPublish || (Behind == 0 && Ahead > 0) ? SyncAction.Push
+                            : Behind > 0 ? SyncAction.Pull
+                            : SyncAction.Fetch);
+
+    [RelayCommand(CanExecute = nameof(CanSync))]
+    private Task FetchAsync() => PerformSyncAsync(SyncAction.Fetch);
+
+    [RelayCommand(CanExecute = nameof(CanSync))]
+    private Task PullAsync() => PerformSyncAsync(SyncAction.Pull);
+
+    [RelayCommand(CanExecute = nameof(CanSync))]
+    private Task PushAsync() => PerformSyncAsync(SyncAction.Push);
+
+    private async Task PerformSyncAsync(SyncAction action)
     {
         if (SelectedRepository is not { } repo)
             return;
 
         var path = repo.LocalPath;
-
-        // Publishing is a push - to a branch that isn't there yet. Push writes the
-        // tracking config on the way, so this only ever happens once per branch.
-        var push = CanPublish || (Behind == 0 && Ahead > 0);
-        var behind = Behind;
 
         await RunAsync(async () =>
         {
@@ -1114,9 +1275,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
             void Trace(string line) => _log.Write(ActivityLevel.Trace, line);
 
-            var result = await Task.Run(() => push ? _git.Push(path, credentials, Trace)
-                                            : behind > 0 ? _git.Pull(path, credentials, Trace)
-                                            : _git.Fetch(path, credentials, Trace));
+            var result = await Task.Run(() => action switch
+            {
+                SyncAction.Push => _git.Push(path, credentials, Trace),
+                SyncAction.Pull => _git.Pull(path, credentials, Trace),
+                _ => _git.Fetch(path, credentials, Trace),
+            });
 
             // Being signed out is an ordinary outcome, so it arrives as a result rather
             // than an exception; it still belongs in the error banner, not the status one.
@@ -2307,12 +2471,27 @@ public partial class MainWindowViewModel : ViewModelBase
             NotifyPullRequestsChanged();
         }
 
+        // Reloads pass the repository that is already open; only a genuine switch is
+        // worth a fetch, or every commit would trigger one.
+        var switched = SelectedRepository?.LocalPath != repository.LocalPath;
+
         SelectedRepository = repository;
         OnPropertyChanged(nameof(SyncDetailLabel));
         _watcher.Watch(repository.LocalPath);
 
         await RunAsync(() => LoadRepositoryAsync(repository, announce: true));
+
+        if (switched && IsFetchStale)
+            await FetchInBackgroundAsync();
     }
+
+    /// <summary>
+    /// Nothing has fetched this clone within the interval the timer keeps to. Opening a
+    /// repository last touched days ago should not show a fortnight-old picture of the
+    /// remote until the first tick comes round.
+    /// </summary>
+    private bool IsFetchStale =>
+        LastFetched is not { } when || DateTimeOffset.Now - when > BackgroundFetchInterval;
 
     /// <summary>
     /// Something changed on disk under the repository - an editor saved, or git ran in a
@@ -2386,6 +2565,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         Replace(Branches, branches);
+        RebuildBranchSections();
         Replace(History, history);
 
         foreach (var change in Changes)
@@ -2405,7 +2585,11 @@ public partial class MainWindowViewModel : ViewModelBase
             Changes.Add(vm);
         }
 
-        SelectedBranch = Branches.FirstOrDefault(b => b.IsCurrent) ?? Branches.FirstOrDefault();
+        // Falls back to a local branch rather than to whatever is first: the list now
+        // carries branches that are only on the remote, and the toolbar would otherwise
+        // name one of those as the branch being committed to.
+        SelectedBranch = Branches.FirstOrDefault(b => b.IsCurrent)
+                         ?? Branches.FirstOrDefault(b => !b.IsRemoteOnly);
 
         // Only the current branch's stashes, since that's all the commit box can offer
         // to restore without switching first.
@@ -2578,6 +2762,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Replace(Repositories, MockData.Repositories);
         Replace(Branches, MockData.Branches);
+        RebuildBranchSections();
         Replace(History, MockData.History);
         Replace(Hosts, MockData.Hosts);
 

@@ -116,6 +116,21 @@ public sealed partial class GitService : IGitService
         return repo.Head?.FriendlyName ?? "HEAD";
     }
 
+    /// <summary>
+    /// Every branch worth offering: the local ones, plus the branches that are on a
+    /// remote and not here yet.
+    /// </summary>
+    /// <remarks>
+    /// The remote-only half is what makes "check out a colleague's branch" possible
+    /// without dropping to a terminal - it was the whole list before, so a freshly cloned
+    /// repository showed one branch and no way to reach any of the others.
+    ///
+    /// Two remote refs are deliberately left out. <c>&lt;remote&gt;/HEAD</c> is a symbolic
+    /// ref naming the default branch rather than a branch of its own, and
+    /// <c>&lt;remote&gt;/pr/&lt;n&gt;</c> is a mirror <see cref="FetchPullRequest"/> wrote
+    /// here - neither is a branch anyone pushed, and both would be checked out under a
+    /// name the server has never heard of.
+    /// </remarks>
     public IReadOnlyList<BranchInfo> GetBranches(string path)
     {
         using var repo = new Repository(Discover(path));
@@ -128,7 +143,7 @@ public sealed partial class GitService : IGitService
         var defaultName = DefaultBranchName(repo, repo.Network.Remotes["origin"]
                                                   ?? repo.Network.Remotes.FirstOrDefault());
 
-        return repo.Branches
+        var locals = repo.Branches
             .Where(b => !b.IsRemote)
             .Select(b => new BranchInfo
             {
@@ -138,9 +153,66 @@ public sealed partial class GitService : IGitService
                 IsCurrent = b.FriendlyName == currentName,
                 IsDefault = b.FriendlyName == defaultName,
             })
+            .ToList();
+
+        var here = locals.Select(b => b.Name).ToHashSet(StringComparer.Ordinal);
+
+        var remotes = repo.Branches
+            .Where(b => b.IsRemote)
+            .Select(b => (Branch: b, Short: ShortRemoteName(b)))
+            .Where(x => x.Short is not null
+                        && x.Short != "HEAD"
+                        && !x.Short.StartsWith("pr/", StringComparison.Ordinal)
+                        && !here.Contains(x.Short))
+            // A branch on two remotes is one branch as far as a checkout is concerned,
+            // and the first remote is the one it would come from.
+            .GroupBy(x => x.Short, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .Select(x => new BranchInfo
+            {
+                Name = x.Short!,
+                LastCommitSummary = x.Branch.Tip?.MessageShort ?? string.Empty,
+                LastCommitAt = x.Branch.Tip?.Committer.When ?? DateTimeOffset.MinValue,
+                IsRemoteOnly = true,
+                RemoteName = RemoteOf(x.Branch),
+                IsDefault = x.Short == defaultName,
+            });
+
+        return locals
+            .Concat(remotes)
             .OrderByDescending(b => b.IsCurrent)
             .ThenByDescending(b => b.LastCommitAt)
             .ToList();
+    }
+
+    /// <summary>
+    /// "feature" out of "origin/feature". Null when the ref doesn't sit under the remote
+    /// it claims, which nothing normal produces but a hand-written refspec can.
+    /// </summary>
+    private static string? ShortRemoteName(Branch branch)
+    {
+        var prefix = $"{RemoteOf(branch)}/";
+
+        return branch.FriendlyName.StartsWith(prefix, StringComparison.Ordinal)
+            ? branch.FriendlyName[prefix.Length..]
+            : null;
+    }
+
+    /// <summary>
+    /// Which remote a remote-tracking branch belongs to. <c>Branch.RemoteName</c> throws
+    /// on a ref no remote's refspec matches, and one stale ref left behind by a removed
+    /// remote is not worth failing the whole branch list over.
+    /// </summary>
+    private static string RemoteOf(Branch branch)
+    {
+        try
+        {
+            return branch.RemoteName ?? string.Empty;
+        }
+        catch (LibGit2SharpException)
+        {
+            return string.Empty;
+        }
     }
 
     public IReadOnlyList<FileChange> GetWorkingChanges(string path)
@@ -337,6 +409,7 @@ public sealed partial class GitService : IGitService
         using var repo = new Repository(Discover(path));
 
         var branch = repo.Branches[branchName]
+                     ?? Adopt(repo, branchName)
                      ?? throw new InvalidOperationException($"Branch '{branchName}' not found.");
 
         Commands.Checkout(repo, branch);
@@ -467,7 +540,7 @@ public sealed partial class GitService : IGitService
         // only a start point can make a created branch differ from what is in the tree.
         var target = create
             ? startPoint is null ? null : repo.Lookup<Commit>(startPoint)
-            : repo.Branches[branchName]?.Tip;
+            : Resolve(repo, branchName)?.Tip;
 
         if (target is null)
             return [];
@@ -498,9 +571,67 @@ public sealed partial class GitService : IGitService
         }
 
         var branch = repo.Branches[branchName]
+                     ?? Adopt(repo, branchName)
                      ?? throw new InvalidOperationException($"Branch '{branchName}' not found.");
 
         Commands.Checkout(repo, branch);
+    }
+
+    /// <summary>
+    /// The branch by this name, local for preference and remote-tracking otherwise. Used
+    /// where only the commit it points at is wanted, so nothing is created.
+    /// </summary>
+    private static Branch? Resolve(Repository repo, string branchName)
+        => repo.Branches[branchName] ?? RemoteTracking(repo, branchName);
+
+    /// <summary>
+    /// Creates the local branch for one that so far only exists on a remote, tracking it -
+    /// what <c>git checkout &lt;name&gt;</c> does when the name matches a remote-tracking
+    /// ref and nothing here. Null when no remote has it either, which leaves the caller to
+    /// report a branch that isn't anywhere.
+    /// </summary>
+    /// <remarks>
+    /// The upstream is written here rather than left to <see cref="EnsureTracking"/>: the
+    /// ref this branch was just created from is the one certain answer to what it tracks,
+    /// and recording it now is what makes the first pull a fast-forward rather than a
+    /// guess at a branch of the same name.
+    /// </remarks>
+    private static Branch? Adopt(Repository repo, string branchName)
+    {
+        if (RemoteTracking(repo, branchName) is not { Tip: { } tip } upstream)
+            return null;
+
+        var created = repo.CreateBranch(branchName, tip);
+
+        // No remote to name means a ref left behind by one that was removed. The branch
+        // is still worth having at that commit; what it tracks is then EnsureTracking's
+        // problem, and writing an empty remote here would only get in its way.
+        if (RemoteOf(upstream) is not { Length: > 0 } remote)
+            return created;
+
+        return repo.Branches.Update(created,
+            b => b.Remote = remote,
+            b => b.UpstreamBranch = $"refs/heads/{branchName}");
+    }
+
+    /// <summary>
+    /// <c>&lt;remote&gt;/&lt;branchName&gt;</c>, preferring origin when several remotes
+    /// carry a branch of the same name - the order the rest of this service reads remotes
+    /// in.
+    /// </summary>
+    private static Branch? RemoteTracking(Repository repo, string branchName)
+    {
+        var remotes = repo.Network.Remotes
+            .OrderByDescending(r => r.Name == "origin")
+            .Select(r => r.Name);
+
+        foreach (var remote in remotes)
+        {
+            if (repo.Branches[$"{remote}/{branchName}"] is { IsRemote: true } branch)
+                return branch;
+        }
+
+        return null;
     }
 
     /// <summary>Every path with uncommitted work, tracked or not.</summary>

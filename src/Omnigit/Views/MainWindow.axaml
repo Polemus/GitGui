@@ -26,6 +26,15 @@
         <conv:HexToBrushConverter x:Key="HexToBrush" />
     </Window.Resources>
 
+    <!-- GitHub Desktop's own keys for push and pull. The sync button fetches when there
+         is nothing to send or bring down, so fetch needs a key only for the case where
+         the button is busy proposing something else. -->
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+P" Command="{Binding PushCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding PullCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+F" Command="{Binding FetchCommand}" />
+    </Window.KeyBindings>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />              <!-- toolbar -->
@@ -117,7 +126,7 @@
                     <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedLeft"
                                 FlyoutPresenterClasses="picker">
-                            <Grid Width="340" RowDefinitions="Auto,Auto,*,Auto,Auto">
+                            <Grid Width="380" RowDefinitions="Auto,Auto,*,Auto,Auto">
                                 <!-- Branches / pull requests. The second tab is hidden
                                      for a site that can't list them, rather than shown
                                      empty over a list that could never fill. -->
@@ -181,32 +190,79 @@
                                     </ScrollViewer>
                                 </Grid>
 
-                                <ScrollViewer Grid.Row="2" MaxHeight="380"
-                                              IsVisible="{Binding IsBranchesTab}">
-                                    <ItemsControl ItemsSource="{Binding Branches}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="m:BranchInfo">
-                                                <Button Classes="rowButton"
-                                                        Click="OnBranchRowClick"
-                                                        Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).SelectBranchCommand}"
-                                                        CommandParameter="{Binding}">
-                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
-                                                        <Path Grid.Column="0" Classes="icon"
-                                                              Data="{DynamicResource IconBranch}" />
-                                                        <StackPanel Grid.Column="1">
-                                                            <TextBlock Classes="body" Text="{Binding Name}" />
-                                                            <TextBlock Classes="muted"
-                                                                       Text="{Binding LastCommitSummary}" />
-                                                        </StackPanel>
-                                                        <TextBlock Grid.Column="2" Classes="muted"
-                                                                   VerticalAlignment="Center"
-                                                                   Text="{Binding RelativeTime}" />
-                                                    </Grid>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                <!-- Branches, filtered and grouped. The box is focused
+                                     when the flyout opens, so the picker can be driven
+                                     from the keyboard alone: type, Enter, done. -->
+                                <Grid Grid.Row="2" RowDefinitions="Auto,Auto,*"
+                                      IsVisible="{Binding IsBranchesTab}">
+                                    <TextBox Grid.Row="0" x:Name="BranchFilterBox"
+                                             Classes="commitBox" Margin="10,2,10,8"
+                                             KeyDown="OnBranchFilterKeyDown"
+                                             Text="{Binding BranchFilter, Mode=TwoWay}"
+                                             PlaceholderText="Filter branches, here or on the remote" />
+
+                                    <TextBlock Grid.Row="1" Classes="muted" Margin="10,4,10,10"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding !HasBranchMatches}"
+                                               Text="{Binding BranchesEmptyLabel}" />
+
+                                    <ScrollViewer Grid.Row="2" MaxHeight="380">
+                                        <ItemsControl ItemsSource="{Binding BranchSections}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:BranchSectionViewModel">
+                                                    <StackPanel Margin="0,0,0,6">
+                                                        <TextBlock Classes="groupLabel"
+                                                                   Margin="10,6,10,4"
+                                                                   Text="{Binding Header}" />
+
+                                                        <ItemsControl ItemsSource="{Binding Branches}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="m:BranchInfo">
+                                                                    <Button Classes="rowButton"
+                                                                            Click="OnBranchRowClick"
+                                                                            ToolTip.Tip="{Binding QualifiedName}"
+                                                                            Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).SelectBranchCommand}"
+                                                                            CommandParameter="{Binding}">
+                                                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                                                                            <!-- A globe for a branch that is only
+                                                                                 on the server: checking it out
+                                                                                 creates it here. -->
+                                                                            <Path Grid.Column="0" Classes="icon"
+                                                                                  IsVisible="{Binding !IsRemoteOnly}"
+                                                                                  Data="{DynamicResource IconBranch}" />
+                                                                            <Path Grid.Column="0" Classes="icon"
+                                                                                  IsVisible="{Binding IsRemoteOnly}"
+                                                                                  Data="{DynamicResource IconGlobe}" />
+
+                                                                            <StackPanel Grid.Column="1">
+                                                                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                                                                    <TextBlock Classes="body"
+                                                                                               TextTrimming="CharacterEllipsis"
+                                                                                               Text="{Binding Name}" />
+                                                                                    <Border Classes="chip" Padding="6,1"
+                                                                                            IsVisible="{Binding IsCurrent}">
+                                                                                        <TextBlock Classes="muted" Text="Current" />
+                                                                                    </Border>
+                                                                                </StackPanel>
+                                                                                <TextBlock Classes="muted"
+                                                                                           TextTrimming="CharacterEllipsis"
+                                                                                           Text="{Binding LastCommitSummary}" />
+                                                                            </StackPanel>
+
+                                                                            <TextBlock Grid.Column="2" Classes="muted"
+                                                                                       VerticalAlignment="Center"
+                                                                                       Text="{Binding RelativeTime}" />
+                                                                        </Grid>
+                                                                    </Button>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
 
                                 <Border Grid.Row="3" Classes="divider" Margin="0,6" />
 
@@ -246,9 +302,16 @@
                     </Button.Flyout>
                 </Button>
 
-                <!-- Fetch / push / pull -->
+                <!-- Fetch / push / pull. One button that says what the repository
+                     currently calls for, the way GitHub Desktop's does - the state
+                     decides the verb, so there is nothing to choose from. The counts
+                     beside it are what a press would send and bring down; both show
+                     when the branch has moved on either side. Push and pull are on
+                     their own keys for the case the button can't offer: being ahead
+                     and behind at once. -->
                 <Button Grid.Column="2" Classes="toolbarItem"
-                        Command="{Binding SyncCommand}">
+                        Command="{Binding SyncCommand}"
+                        ToolTip.Tip="Ctrl+P to push · Ctrl+Shift+P to pull · Ctrl+Shift+F to fetch">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
                         <Path Grid.Column="0" Classes="icon" Data="{DynamicResource IconSync}" />
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">

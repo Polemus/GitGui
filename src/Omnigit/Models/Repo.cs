@@ -77,13 +77,32 @@ public sealed class RepositoryInfo
 
 public sealed class BranchInfo
 {
+    /// <summary>
+    /// The short name, with no remote on the front even for a branch that only exists on
+    /// one - it is the name a checkout is asked for, and the name the same branch will
+    /// have here once it has been checked out.
+    /// </summary>
     public required string Name { get; init; }
+
     public required string LastCommitSummary { get; init; }
     public DateTimeOffset LastCommitAt { get; init; }
     public bool IsDefault { get; init; }
 
     /// <summary>True for the branch HEAD currently points at.</summary>
     public bool IsCurrent { get; init; }
+
+    /// <summary>
+    /// The branch is on the remote and nowhere here. Checking it out creates the local
+    /// branch tracking it, which is what <c>git checkout &lt;name&gt;</c> does.
+    /// </summary>
+    public bool IsRemoteOnly { get; init; }
+
+    /// <summary>Which remote it lives on. Empty for a branch that is only local.</summary>
+    public string RemoteName { get; init; } = string.Empty;
+
+    /// <summary>What git would call the ref: "origin/feature" for a remote-only branch.</summary>
+    public string QualifiedName =>
+        IsRemoteOnly && !string.IsNullOrEmpty(RemoteName) ? $"{RemoteName}/{Name}" : Name;
 
     public string RelativeTime => TimeFormat.Relative(LastCommitAt);
 }

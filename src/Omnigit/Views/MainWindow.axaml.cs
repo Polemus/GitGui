@@ -2,6 +2,7 @@ using System;
 using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -16,6 +17,50 @@ public partial class MainWindow : Window
         InitializeComponent();
         UpdateThemeIcon();
         DataContextChanged += OnDataContextChanged;
+
+        // The branch picker opens onto its filter box, so it can be driven from the
+        // keyboard alone. The flyout builds its content on open, which is why this hangs
+        // off the flyout's event rather than the box's own Loaded.
+        if (BranchPickerButton.Flyout is { } picker)
+        {
+            picker.Opened += (_, _) =>
+                Dispatcher.UIThread.Post(() => BranchFilterBox.Focus(), DispatcherPriority.Input);
+
+            // A filter left behind would greet the next open with a list of one.
+            picker.Closed += (_, _) =>
+            {
+                if (DataContext is MainWindowViewModel model)
+                    model.BranchFilter = string.Empty;
+            };
+        }
+    }
+
+    /// <summary>
+    /// Enter takes the top match, Escape clears the box before the flyout gets the key
+    /// and closes on the first press - a filter is worth undoing without losing the list.
+    /// </summary>
+    private void OnBranchFilterKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel model)
+            return;
+
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+
+            // Order matters: hiding the flyout clears the filter below, which rebuilds
+            // the list unfiltered - and the top match would then be the top of every
+            // branch in the repository rather than of the ones that were on screen.
+            model.CheckoutTopMatchCommand.Execute(null);
+            BranchPickerButton.Flyout?.Hide();
+            return;
+        }
+
+        if (e.Key == Key.Escape && model.BranchFilter.Length > 0)
+        {
+            e.Handled = true;
+            model.BranchFilter = string.Empty;
+        }
     }
 
     /// <summary>

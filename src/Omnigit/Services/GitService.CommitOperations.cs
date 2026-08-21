@@ -149,7 +149,11 @@ public sealed partial class GitService
 
         if (target.Length > 0 && !string.Equals(target, repo.Head.FriendlyName, StringComparison.Ordinal))
         {
+            // Adopt for the same reason the branch picker checks one out: the target list
+            // is the branch list, and that now holds branches which are only on the
+            // remote. Copying a commit onto one means creating it here first.
             var branch = repo.Branches[target]
+                         ?? Adopt(repo, target)
                          ?? throw new InvalidOperationException($"Branch '{target}' not found.");
 
             Commands.Checkout(repo, branch);

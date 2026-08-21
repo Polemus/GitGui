@@ -77,6 +77,58 @@ public sealed class TempRepository : IDisposable
             "the push was meant to leave the branch untracked");
     }
 
+    /// <summary>
+    /// Makes a branch at the current HEAD, pushes it, and deletes the local half - which
+    /// leaves <c>refs/remotes/origin/&lt;name&gt;</c> and nothing here, the state a clone
+    /// is in for every branch but the one it checked out.
+    /// </summary>
+    public void AddRemoteOnlyBranch(string name, string fileName, string contents)
+    {
+        var startingOn = CurrentBranch();
+
+        using (var repo = new Repository(Path))
+        {
+            Commands.Checkout(repo, repo.CreateBranch(name));
+        }
+
+        Write(fileName, contents);
+        Commit($"work on {name}");
+
+        using (var repo = new Repository(Path))
+        {
+            repo.Network.Push(repo.Network.Remotes["origin"], $"refs/heads/{name}");
+            Commands.Checkout(repo, repo.Branches[startingOn]);
+            repo.Branches.Remove(name);
+
+            Assert.NotNull(repo.Branches[$"origin/{name}"]);
+            Assert.Null(repo.Branches[name]);
+        }
+    }
+
+    /// <summary>
+    /// Points a remote-tracking ref at HEAD without any branch behind it. Stands in for
+    /// the two refs under <c>refs/remotes/origin</c> that are not branches anyone pushed:
+    /// the <c>HEAD</c> symref, and the <c>pr/&lt;n&gt;</c> mirrors our own pull request
+    /// fetch writes.
+    /// </summary>
+    public void AddRemoteRef(string name)
+    {
+        using var repo = new Repository(Path);
+        repo.Refs.Add($"refs/remotes/origin/{name}", repo.Head.Tip!.Sha);
+    }
+
+    public string? UpstreamOf(string branchName)
+    {
+        using var repo = new Repository(Path);
+        return repo.Branches[branchName]?.TrackedBranch?.FriendlyName;
+    }
+
+    public string TipOf(string branchName)
+    {
+        using var repo = new Repository(Path);
+        return repo.Branches[branchName]!.Tip!.Sha;
+    }
+
     /// <summary>Records branch.&lt;name&gt;.remote/.merge, as clone and push -u do.</summary>
     public void SetUpstream()
     {
