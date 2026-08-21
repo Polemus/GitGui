@@ -130,6 +130,18 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.3.0" date="2026-08-21">
+      <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.3.0</url>
+      <description>
+        <p>
+          The branch picker gained a filter box and now lists branches
+          that exist only on the remote, where checking one out creates
+          it locally. The sync button shows both the commits waiting to
+          be pushed and those waiting to be pulled, and Omnigit fetches
+          every ten minutes to keep those counts current.
+        </p>
+      </description>
+    </release>
     <release version="0.2.2" date="2026-08-17">
       <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.2.2</url>
       <description>
