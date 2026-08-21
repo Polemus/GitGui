@@ -287,6 +287,21 @@ jobs:
       - name: Verify everything arrived
         run: ./build/verify-artifacts.sh "${{ needs.version.outputs.version }}" --dir dist all
 
+      # A user downloading a file gets no signature to check it against, and the
+      # AUR PKGBUILD hashes the published release rather than dist/ for exactly the
+      # same reason. One manifest serves both, plus the in-app updater, which will
+      # not install a download whose hash is not in here.
+      #
+      # Deliberately not in expected-artifacts.sh: that file says what a complete
+      # *build* produces, and this is a description of those files rather than one
+      # of them. It is made here because this is the first point at which all
+      # fourteen are in one directory.
+      - name: Checksum every artifact
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Create or update the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -295,10 +310,18 @@ jobs:
           TAG="v${VERSION}"
 
           # workflow_dispatch runs have no tag yet - make one at this commit.
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" \
-              --title "Omnigit $VERSION" \
-              --notes "Automated build of Omnigit $VERSION.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            exit 0
+          fi
+
+          # What changed comes out of the metainfo, where build/release.sh wrote it.
+          # Failing here rather than shipping the boilerplate alone is the point: a
+          # missing entry means release.sh did not run, and that also means the app
+          # on Flathub would report the wrong version.
+          {
+            ./build/release-notes.sh "$VERSION"
+            cat <<NOTES
 
           ## Install
 
@@ -310,17 +333,18 @@ jobs:
 
           **No git installation is required.** The native libgit2 library ships inside the app, along with everything else it needs.
 
+          Verify a download against \`SHA256SUMS\`: \`sha256sum -c --ignore-missing SHA256SUMS\`.
+
           ## Getting started
 
           Add a clone you already have from the **+** in the header, or sign in under **Settings → Accounts** and clone one straight from that menu's *Clone from a hosting site…* entry. GitHub supports browser sign-in; anywhere else takes a personal access token. Tokens go to your OS keychain, never to a settings file.
+          NOTES
+          } > notes.md
 
-          Beyond the usual staging, committing, branching and fetch/push/pull: switching branches with uncommitted work asks whether to bring it along or stash it, the app notices changes made outside it, and hosting sites other than GitHub, Gitea and GitLab can be added under **Settings → Hosting sites** without writing any code — or by hand, see docs/host-manifests.md.
-
-          ## Not in this build
-
-          Pull requests and issues." \
-              --target "$GITHUB_SHA"
-          fi
+          gh release create "$TAG" \
+            --title "Omnigit $VERSION" \
+            --notes-file notes.md \
+            --target "$GITHUB_SHA"
 
           gh release upload "$TAG" dist/* --clobber
 

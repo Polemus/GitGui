@@ -334,7 +334,17 @@
                     </Button>
                     <Button Classes="iconButton" Command="{Binding ShowSettingsCommand}"
                             ToolTip.Tip="Settings">
-                        <Path Classes="icon" Data="{DynamicResource IconSettings}" />
+                        <!-- The gear, with a dot over its corner when there is a newer
+                             Omnigit. Settings is where the update lives, so this is the
+                             one control in the header that can carry the news. -->
+                        <Panel>
+                            <Path Classes="icon" Data="{DynamicResource IconSettings}" />
+                            <Ellipse Width="7" Height="7"
+                                     HorizontalAlignment="Right" VerticalAlignment="Top"
+                                     Margin="0,-2,-3,0"
+                                     Fill="{DynamicResource NotificationDot}"
+                                     IsVisible="{Binding IsUpdateAvailable}" />
+                        </Panel>
                     </Button>
                 </StackPanel>
             </Grid>

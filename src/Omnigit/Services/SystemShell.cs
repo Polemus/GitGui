@@ -34,6 +34,13 @@ public interface ISystemShell
     /// is gone or nothing is registered for it.
     /// </summary>
     Task<bool> OpenFileAsync(string filePath);
+
+    /// <summary>
+    /// Closes Omnigit. False where there is no desktop lifetime to close - a preview
+    /// host, a test. Used after an update has replaced the running copy and started the
+    /// new one, which is the only thing that asks the app to end itself.
+    /// </summary>
+    bool Shutdown();
 }
 
 /// <summary>
@@ -123,6 +130,20 @@ public sealed class SystemShell : ISystemShell
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Asks the lifetime to shut down rather than calling Environment.Exit: windows get
+    /// their closing events, so anything holding a file - the repository watcher, the
+    /// credential store - lets go of it before the process ends.
+    /// </summary>
+    public bool Shutdown()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return false;
+
+        desktop.Shutdown();
+        return true;
     }
 
     private static Avalonia.Controls.Window? MainWindow

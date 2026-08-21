@@ -51,3 +51,19 @@ Name: "{autodesktop}\Omnigit"; Filename: "{app}\Omnigit.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Omnigit.exe"; Description: "Launch Omnigit"; Flags: nowait postinstall skipifsilent
+
+; The in-app updater runs this installer with /SILENT /RELAUNCH=1. The entry above
+; carries skipifsilent, so without this one a silent upgrade installs correctly and
+; leaves the user staring at a closed application - Inno has just shut Omnigit down
+; itself, via CloseApplications, to replace the files it was running from.
+;
+; runasoriginaluser is the load-bearing flag: an all-users install runs elevated, and
+; without it Omnigit would come back as administrator. It would work, and every
+; repository it touched afterwards would end up owned by the wrong user.
+Filename: "{app}\Omnigit.exe"; Flags: nowait runasoriginaluser; Check: RelaunchRequested
+
+[Code]
+function RelaunchRequested: Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;

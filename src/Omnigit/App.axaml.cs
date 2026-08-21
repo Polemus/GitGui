@@ -45,6 +45,11 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // A portable build that updated itself last run left the version before it
+            // beside the new one: on Windows the old directory holds the executable the
+            // updating process was running from, so it could not be deleted then.
+            UpdateService.SweepPreviousVersion();
+
             var http = new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(30) };
             var credentials = CredentialStoreFactory.Create();
             var log = new ActivityLog();
@@ -58,7 +63,8 @@ public partial class App : Application
                 credentials,
                 log,
                 new SystemShell(),
-                new RepositoryWatcher());
+                new RepositoryWatcher(),
+                new UpdateService());
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 

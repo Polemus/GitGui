@@ -42,7 +42,8 @@ public partial class MainWindowViewModel : ViewModelBase
         : this(new GitService(), new RepositoryStore(), new FolderPicker(),
                HostProviderRegistry.Create(new System.Net.Http.HttpClient()),
                new AccountStore(new FileCredentialStore()), new FileCredentialStore(),
-               new ActivityLog(), new SystemShell(), new RepositoryWatcher(), designTime: true)
+               new ActivityLog(), new SystemShell(), new RepositoryWatcher(), new UpdateService(),
+               designTime: true)
     {
         LoadDesignTimeData();
     }
@@ -56,8 +57,9 @@ public partial class MainWindowViewModel : ViewModelBase
         ICredentialStore credentials,
         IActivityLog log,
         ISystemShell shell,
-        IRepositoryWatcher watcher)
-        : this(git, store, picker, hosts, accountStore, credentials, log, shell, watcher,
+        IRepositoryWatcher watcher,
+        IUpdateService update)
+        : this(git, store, picker, hosts, accountStore, credentials, log, shell, watcher, update,
                designTime: false)
     {
     }
@@ -72,6 +74,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IActivityLog log,
         ISystemShell shell,
         IRepositoryWatcher watcher,
+        IUpdateService update,
         bool designTime)
     {
         _git = git;
@@ -84,6 +87,16 @@ public partial class MainWindowViewModel : ViewModelBase
         _shell = shell;
         _watcher = watcher;
         _isDesignTime = designTime;
+
+        Update = new UpdateViewModel(update, log, shell, designTime);
+
+        // The dot on the settings button is the only part of the update state the rest
+        // of the app shows, and it lives in a view model the header does not bind to.
+        Update.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(UpdateViewModel.IsUpdateAvailable))
+                OnPropertyChanged(nameof(IsUpdateAvailable));
+        };
 
         if (!designTime)
             watcher.Changed += OnRepositoryChangedOnDisk;
@@ -333,10 +346,21 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAccountsSection))]
     [NotifyPropertyChangedFor(nameof(IsHostsSection))]
+    [NotifyPropertyChangedFor(nameof(IsAboutSection))]
     public partial int SettingsSection { get; set; }
 
     public bool IsAccountsSection => SettingsSection == 0;
     public bool IsHostsSection => SettingsSection == 1;
+    public bool IsAboutSection => SettingsSection == 2;
+
+    /// <summary>The version, and the one button that changes it.</summary>
+    public UpdateViewModel Update { get; }
+
+    /// <summary>
+    /// Mirrors <see cref="UpdateViewModel.IsUpdateAvailable"/> so the header's settings
+    /// button can carry the dot. The header binds to this view model, not to that one.
+    /// </summary>
+    public bool IsUpdateAvailable => Update.IsUpdateAvailable;
 
     /// <summary>Every site Omnigit knows about, whatever the description came from.</summary>
     public ObservableCollection<HostEntryViewModel> HostEntries { get; } = [];
@@ -897,6 +921,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await OpenRepositoryAsync(Repositories[0]);
 
         StartBackgroundFetch();
+        Update.StartChecking();
     }
 
     // ---- Fetching without being asked --------------------------------------

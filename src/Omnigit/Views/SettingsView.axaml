@@ -40,6 +40,23 @@
                         <x:Int32>1</x:Int32>
                     </Button.CommandParameter>
                 </Button>
+
+                <!-- The dot is inside the tab rather than beside it because the rail
+                     stretches its buttons; a sibling would sit at the far edge of a
+                     220-pixel column, three inches from the word it is about. -->
+                <Button Classes="settingsTab"
+                        Classes.active="{Binding IsAboutSection}"
+                        Command="{Binding ShowSettingsSectionCommand}">
+                    <Button.CommandParameter>
+                        <x:Int32>2</x:Int32>
+                    </Button.CommandParameter>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="About" VerticalAlignment="Center" />
+                        <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                 Fill="{DynamicResource NotificationDot}"
+                                 IsVisible="{Binding Update.IsUpdateAvailable}" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Border>
 
@@ -529,6 +546,95 @@
 
                     <TextBlock Classes="muted" TextWrapping="Wrap"
                                Text="Sites added here are written to the hosts folder as JSON. You can still edit those files by hand — see docs/host-manifests.md." />
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ===================== About ===================== -->
+            <ScrollViewer IsVisible="{Binding IsAboutSection}">
+                <StackPanel MaxWidth="880" Margin="32,28,32,48" Spacing="22"
+                            HorizontalAlignment="Left">
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="h1" Text="About Omnigit" />
+                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                   Text="A git client that talks to more than one hosting site. MIT licensed." />
+                    </StackPanel>
+
+                    <!-- Through a template rather than by reassigning DataContext on a
+                         panel: everything inside binds against the update view model, and
+                         a template is the one place a compiled binding's x:DataType can
+                         change without the enclosing scope having to change with it. -->
+                    <ContentControl Content="{Binding Update}">
+                        <ContentControl.ContentTemplate>
+                            <DataTemplate x:DataType="vm:UpdateViewModel">
+                                <Border Classes="card">
+                                    <StackPanel Spacing="16">
+
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Classes="h2"
+                                                       Text="{Binding CurrentVersion, StringFormat='Version {0}'}" />
+                                            <TextBlock Classes="muted" Text="{Binding CurrentVersionDetail}" />
+                                        </StackPanel>
+
+                                        <!-- What the check found. Nothing has been asked
+                                             before the first one, which is why this hides
+                                             rather than showing a status of nothing. -->
+                                        <TextBlock Classes="body" TextWrapping="Wrap"
+                                                   Text="{Binding StatusLine}"
+                                                   IsVisible="{Binding StatusLine,
+                                                       Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                                        <ProgressBar Minimum="0" Maximum="1" Height="4"
+                                                     Value="{Binding Progress}"
+                                                     IsVisible="{Binding IsDownloading}" />
+
+                                        <!-- What changed, as release.sh wrote it into the
+                                             metainfo. Selectable because the first thing
+                                             anyone does with a version is paste it. -->
+                                        <Border Background="{DynamicResource BannerInfoBackground}"
+                                                BorderBrush="{DynamicResource BannerInfoBorder}"
+                                                BorderThickness="1" CornerRadius="8" Padding="14,11"
+                                                IsVisible="{Binding HasNotes}">
+                                            <SelectableTextBlock TextWrapping="Wrap"
+                                                                 FontSize="13" LineHeight="18"
+                                                                 Text="{Binding Notes}" />
+                                        </Border>
+
+                                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource BannerWarningBorder}"
+                                                   Text="{Binding Detail}"
+                                                   IsVisible="{Binding HasFailed}" />
+
+                                        <!-- A Flatpak, a .deb and an .rpm each update
+                                             themselves through something better than a
+                                             button. Saying so beats a control that is
+                                             disabled with no explanation. -->
+                                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                   Text="{Binding ManagedBy}"
+                                                   IsVisible="{Binding IsManagedElsewhere}" />
+
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Button Classes="primary" Content="Update now"
+                                                    IsVisible="{Binding CanInstall}"
+                                                    Command="{Binding InstallCommand}" />
+
+                                            <Button Classes="secondary" Content="Check for updates"
+                                                    IsVisible="{Binding !IsDownloading}"
+                                                    Command="{Binding CheckCommand}" />
+
+                                            <Button Classes="link" Content="Release notes on GitHub"
+                                                    VerticalAlignment="Center"
+                                                    IsVisible="{Binding IsUpdateAvailable}"
+                                                    Command="{Binding OpenReleasePageCommand}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+
+                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                               Text="Omnigit checks for a new release once a day. Nothing is downloaded until you press Update now." />
                 </StackPanel>
             </ScrollViewer>
         </Panel>

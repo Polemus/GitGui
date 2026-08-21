@@ -78,6 +78,11 @@
                  stopped merge has not gone wrong, it has stopped. -->
             <SolidColorBrush x:Key="BannerWarningBackground" Color="#2A2213" />
             <SolidColorBrush x:Key="BannerWarningBorder" Color="#D29922" />
+
+            <!-- The dot on the settings button when a new version is out. Not the
+                 accent, which the whole UI already uses for things that are merely
+                 selected, and not the error red - a release is good news. -->
+            <SolidColorBrush x:Key="NotificationDot" Color="#DB8B2A" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
@@ -132,6 +137,7 @@
             <SolidColorBrush x:Key="BannerInfoBorder" Color="#2B87B5" />
             <SolidColorBrush x:Key="BannerWarningBackground" Color="#FFF8C5" />
             <SolidColorBrush x:Key="BannerWarningBorder" Color="#9A6700" />
+            <SolidColorBrush x:Key="NotificationDot" Color="#BC5A05" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>
