@@ -130,6 +130,19 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.4.0" date="2026-08-21">
+      <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.4.0</url>
+      <description>
+        <p>
+          Omnigit now updates itself. Settings gained an About tab
+          showing the version you are running and what changed in the
+          newest release, with one button that downloads it, checks it
+          against a published checksum and restarts into it. Every
+          package format does this except the Flatpak, which its sandbox
+          rules out.
+        </p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-08-21">
       <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.3.0</url>
       <description>
