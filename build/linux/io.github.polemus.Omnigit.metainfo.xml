@@ -130,6 +130,18 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.4.2" date="2026-08-21">
+      <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.4.2</url>
+      <description>
+        <p>
+          Omnigit now notices a new release while it is running, rather
+          than only on the next launch, and checks again whenever you
+          come back to the window. While an update installs it says so -
+          and where a password is needed it says to look for the prompt,
+          which can open behind the window or on another screen.
+        </p>
+      </description>
+    </release>
     <release version="0.4.1" date="2026-08-21">
       <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.4.1</url>
       <description>
