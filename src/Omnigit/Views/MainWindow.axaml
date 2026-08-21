@@ -393,6 +393,51 @@
                 </Border>
             </Border>
 
+            <!-- Deleting a clone. The other unrecoverable action, and the one that can
+                 take work with it that is on no server - so the dialog counts what that
+                 is rather than asking "are you sure" about an unknown quantity. -->
+            <Border Background="{DynamicResource ScrimBackground}"
+                    IsVisible="{Binding HasPendingRemoval}">
+                <ContentControl Content="{Binding PendingRemoval}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:RepositoryRemovalViewModel">
+                            <Border Classes="dialog" MaxWidth="460">
+                                <StackPanel Spacing="14">
+                                    <TextBlock Classes="h2" Text="{Binding Title}" />
+
+                                    <SelectableTextBlock Classes="mono" TextWrapping="Wrap"
+                                                         FontSize="12"
+                                                         Foreground="{DynamicResource TextSecondary}"
+                                                         Text="{Binding Path}" />
+
+                                    <!-- Only when there is something to lose. A warning
+                                         shown every time is a warning nobody reads. -->
+                                    <Border Background="{DynamicResource BannerWarningBackground}"
+                                            BorderBrush="{DynamicResource BannerWarningBorder}"
+                                            BorderThickness="1" CornerRadius="8" Padding="14,11"
+                                            IsVisible="{Binding HasWarnings}">
+                                        <TextBlock Classes="caption" TextWrapping="Wrap"
+                                                   Text="{Binding WarningSummary}" />
+                                    </Border>
+
+                                    <TextBlock Classes="caption" TextWrapping="Wrap"
+                                               Text="{Binding Summary}" />
+
+                                    <StackPanel Orientation="Horizontal" Spacing="9"
+                                                HorizontalAlignment="Right">
+                                        <Button Classes="secondary" Content="Cancel"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).CancelRemovalCommand}" />
+                                        <Button Classes="primary" Content="{Binding ConfirmLabel}"
+                                                Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).ConfirmRemovalCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </Border>
+
             <!-- Branch switch with uncommitted work. A ContentControl so nothing binds
                  against a null prompt, and a scrim so the choice has to be made. -->
             <Border Background="{DynamicResource ScrimBackground}"

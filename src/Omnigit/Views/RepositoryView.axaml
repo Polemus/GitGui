@@ -107,6 +107,34 @@
                                                         <Button Classes="rowButton"
                                                                 Command="{Binding #SidebarRoot.((vm:MainWindowViewModel)DataContext).SelectRepositoryCommand}"
                                                                 CommandParameter="{Binding}">
+
+                                                            <!-- ContextFlyout, not ContextMenu:
+                                                                 the latter draws nothing at all
+                                                                 in Avalonia 12, which is how the
+                                                                 changed-file list below does it
+                                                                 too. Removing from the list needs
+                                                                 no confirmation - the clone stays
+                                                                 and re-adding is one folder
+                                                                 picker. Deleting does, hence the
+                                                                 ellipsis. -->
+                                                            <Button.ContextFlyout>
+                                                                <MenuFlyout Placement="Pointer">
+                                                                    <MenuItem Header="Remove from Omnigit"
+                                                                              Command="{Binding #SidebarRoot.((vm:MainWindowViewModel)DataContext).RemoveRepositoryCommand}"
+                                                                              CommandParameter="{Binding}" />
+                                                                    <MenuItem Header="Remove from this computer…"
+                                                                              Command="{Binding #SidebarRoot.((vm:MainWindowViewModel)DataContext).AskDeleteRepositoryCommand}"
+                                                                              CommandParameter="{Binding}" />
+                                                                    <Separator />
+                                                                    <MenuItem Header="Show in file manager"
+                                                                              Command="{Binding #SidebarRoot.((vm:MainWindowViewModel)DataContext).ShowRepositoryInFileManagerCommand}"
+                                                                              CommandParameter="{Binding}" />
+                                                                    <MenuItem Header="Copy path"
+                                                                              Command="{Binding #SidebarRoot.((vm:MainWindowViewModel)DataContext).CopyRepositoryPathCommand}"
+                                                                              CommandParameter="{Binding}" />
+                                                                </MenuFlyout>
+                                                            </Button.ContextFlyout>
+
                                                             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
                                                                 <Path Grid.Column="0" Classes="icon"
                                                                       Data="{DynamicResource IconRepo}" />

@@ -1031,6 +1031,134 @@ public partial class MainWindowViewModel : ViewModelBase
         await OpenRepositoryAsync(repository);
     }
 
+    /// <summary>Non-null while the delete-from-disk question is on screen.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingRemoval))]
+    public partial RepositoryRemovalViewModel? PendingRemoval { get; set; }
+
+    public bool HasPendingRemoval => PendingRemoval is not null;
+
+    /// <summary>
+    /// Asks before deleting a clone, having first counted what is in it that the remote
+    /// has not got.
+    /// </summary>
+    /// <remarks>
+    /// The counting happens here rather than in the dialog because it touches the
+    /// repository, and it happens before the dialog rather than after the answer because
+    /// the answer is what it is meant to inform. A repository that cannot be opened -
+    /// an unplugged drive, a folder already deleted by hand - still gets the dialog,
+    /// with no warnings and the same offer, since removing it is exactly what the user
+    /// is likely to want.
+    /// </remarks>
+    [RelayCommand]
+    private async Task AskDeleteRepositoryAsync(RepositoryInfo repository)
+    {
+        var path = repository.LocalPath;
+
+        var prompt = await Task.Run(() =>
+        {
+            var changes = 0;
+            var ahead = 0;
+            var unpublished = 0;
+            var stashes = 0;
+
+            try
+            {
+                changes = _git.GetWorkingChanges(path).Count;
+                stashes = _git.GetStashes(path).Count;
+
+                // Ahead and IsPublished are properties of the checked-out branch, not of
+                // every branch: BranchInfo carries neither, and working them out for all
+                // of them would mean walking each one against its remote counterpart.
+                // The branch you are standing on is where unpushed work almost always is,
+                // and a warning that names it beats an exact count nobody waited for.
+                var open = _git.OpenRepository(path);
+                ahead = open.Ahead;
+                unpublished = open.IsPublished ? 0 : 1;
+            }
+            catch (Exception)
+            {
+                // Whatever could not be read is reported as nothing to lose rather than
+                // as an error: the dialog's job is to warn where it can, not to stand
+                // between the user and a folder they have asked to delete.
+            }
+
+            return new RepositoryRemovalViewModel
+            {
+                Repository = repository,
+                Path = path,
+                UncommittedChanges = changes,
+                UnpushedCommits = ahead,
+                UnpublishedBranches = unpublished,
+                Stashes = stashes,
+            };
+        });
+
+        PendingRemoval = prompt;
+    }
+
+    [RelayCommand]
+    private void CancelRemoval() => PendingRemoval = null;
+
+    [RelayCommand]
+    private async Task ShowRepositoryInFileManagerAsync(RepositoryInfo repository)
+    {
+        if (!await _shell.ShowInFileManagerAsync(repository.LocalPath))
+            Log(ActivityLevel.Warning, $"Nothing here opens folders. It is at {repository.LocalPath}");
+    }
+
+    [RelayCommand]
+    private async Task CopyRepositoryPathAsync(RepositoryInfo repository)
+    {
+        if (await _shell.CopyTextAsync(repository.LocalPath))
+            Log(ActivityLevel.Trace, $"Copied {repository.LocalPath}");
+    }
+
+    /// <summary>
+    /// Takes the repository out of the list and puts the folder in the trash.
+    /// </summary>
+    /// <remarks>
+    /// The list comes first. If the trash refuses - a filesystem that has none, a folder
+    /// that is open elsewhere - the entry is already gone and the files are still there,
+    /// which is the harmless half of what was asked for; the log says the rest. Doing it
+    /// the other way round would leave a row in the sidebar pointing at nothing.
+    ///
+    /// The watcher has to be stopped before the move, not after. It holds a handle on
+    /// the directory, and on Windows that alone is enough for the delete to fail.
+    /// </remarks>
+    [RelayCommand]
+    private async Task ConfirmRemovalAsync()
+    {
+        if (PendingRemoval is not { } prompt)
+            return;
+
+        PendingRemoval = null;
+
+        if (SelectedRepository == prompt.Repository)
+            _watcher.Stop();
+
+        await RemoveRepositoryAsync(prompt.Repository);
+
+        var result = await Trash.MoveDirectoryAsync(prompt.Path);
+
+        switch (result.Outcome)
+        {
+            case TrashOutcome.Trashed:
+                Log(ActivityLevel.Success, $"Moved {prompt.Repository.Name} to the trash.");
+                break;
+
+            case TrashOutcome.NotFound:
+                Log(ActivityLevel.Info, $"Removed {prompt.Repository.Name}; its folder was already gone.");
+                break;
+
+            default:
+                Log(ActivityLevel.Warning,
+                    $"Removed {prompt.Repository.Name} from Omnigit, but its folder is still on disk.",
+                    result.Detail);
+                break;
+        }
+    }
+
     [RelayCommand]
     private async Task RemoveRepositoryAsync(RepositoryInfo repository)
     {
