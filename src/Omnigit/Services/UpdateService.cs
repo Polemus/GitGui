@@ -41,6 +41,23 @@ public readonly record struct UpdateCheckResult(
     ReleaseInfo? Release = null,
     string? Detail = null);
 
+/// <summary>Which half of an update is happening.</summary>
+/// <remarks>
+/// The two look identical from outside and take very different amounts of time for very
+/// different reasons - one is a transfer, the other can be a password prompt on another
+/// monitor. Reporting "Downloading…" through both is how a wait for the user reads as a
+/// hang, which is exactly what happened the first time this ran for real.
+/// </remarks>
+public enum UpdatePhase
+{
+    Downloading,
+
+    /// <summary>Downloaded and verified; now being put in place.</summary>
+    Installing,
+}
+
+public readonly record struct UpdateProgress(UpdatePhase Phase, double Fraction);
+
 public enum UpdateApplyOutcome
 {
     /// <summary>The new version is in place. Relaunch to be running it.</summary>
@@ -71,7 +88,7 @@ public interface IUpdateService
     /// </summary>
     Task<UpdateApplyResult> ApplyAsync(
         ReleaseInfo release,
-        IProgress<double>? progress = null,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancel = default);
 
     /// <summary>
@@ -205,7 +222,7 @@ public sealed partial class UpdateService : IUpdateService
 
     public async Task<UpdateApplyResult> ApplyAsync(
         ReleaseInfo release,
-        IProgress<double>? progress = null,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancel = default)
     {
         if (!Location.CanSelfUpdate || Location.Target is not { } target)
@@ -290,7 +307,7 @@ public sealed partial class UpdateService : IUpdateService
         string target,
         ReleaseAsset asset,
         string expected,
-        IProgress<double>? progress,
+        IProgress<UpdateProgress>? progress,
         CancellationToken cancel)
     {
         var directory = Path.GetDirectoryName(target);
@@ -321,6 +338,8 @@ public sealed partial class UpdateService : IUpdateService
                     UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
                     UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
 
+            progress?.Report(new(UpdatePhase.Installing, 1d));
+
             File.Move(staged, target, overwrite: true);
             return new(UpdateApplyOutcome.Applied, target);
         }
@@ -337,7 +356,7 @@ public sealed partial class UpdateService : IUpdateService
     private async Task<string> DownloadAsync(
         ReleaseAsset asset,
         string path,
-        IProgress<double>? progress,
+        IProgress<UpdateProgress>? progress,
         CancellationToken cancel)
     {
         using var response = await _http
@@ -370,7 +389,7 @@ public sealed partial class UpdateService : IUpdateService
 
             copied += read;
             if (total > 0)
-                progress?.Report(Math.Min(1d, (double)copied / total));
+                progress?.Report(new(UpdatePhase.Downloading, Math.Min(1d, (double)copied / total)));
         }
 
         digest.TransformFinalBlock([], 0, 0);

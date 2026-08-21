@@ -586,7 +586,7 @@
 
                                         <ProgressBar Minimum="0" Maximum="1" Height="4"
                                                      Value="{Binding Progress}"
-                                                     IsVisible="{Binding IsDownloading}" />
+                                                     IsVisible="{Binding IsWorking}" />
 
                                         <!-- What changed, as release.sh wrote it into the
                                              metainfo. Selectable because the first thing
@@ -619,7 +619,7 @@
                                                     Command="{Binding InstallCommand}" />
 
                                             <Button Classes="secondary" Content="Check for updates"
-                                                    IsVisible="{Binding !IsDownloading}"
+                                                    IsVisible="{Binding !IsWorking}"
                                                     Command="{Binding CheckCommand}" />
 
                                             <Button Classes="link" Content="Release notes on GitHub"

@@ -18,6 +18,16 @@ public partial class MainWindow : Window
         UpdateThemeIcon();
         DataContextChanged += OnDataContextChanged;
 
+        // Coming back to the window is when someone might act on a new release, so it is
+        // the moment worth spending a request on. The view model decides whether enough
+        // time has passed to bother; a timer alone cannot help a window left open for
+        // days, because it fires on its own schedule rather than on anyone's attention.
+        Activated += (_, _) =>
+        {
+            if (DataContext is MainWindowViewModel model)
+                model.Update.OnWindowActivated();
+        };
+
         // The branch picker opens onto its filter box, so it can be driven from the
         // keyboard alone. The flyout builds its content on open, which is why this hangs
         // off the flyout's event rather than the box's own Loaded.

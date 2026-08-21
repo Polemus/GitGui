@@ -56,7 +56,7 @@ public sealed partial class UpdateService
     private async Task<UpdateApplyResult> InstallSystemPackageAsync(
         ReleaseAsset asset,
         string expected,
-        IProgress<double>? progress,
+        IProgress<UpdateProgress>? progress,
         CancellationToken cancel)
     {
         var package = Path.Combine(StagingDirectory(), asset.Name);
@@ -67,6 +67,8 @@ public sealed partial class UpdateService
             Delete(package);
             return Mismatched(asset);
         }
+
+        progress?.Report(new(UpdatePhase.Installing, 1d));
 
         if (PackageInstallerFor(Location.Medium, package) is not { } command)
         {
@@ -144,7 +146,7 @@ public sealed partial class UpdateService
         string target,
         ReleaseAsset asset,
         string expected,
-        IProgress<double>? progress,
+        IProgress<UpdateProgress>? progress,
         CancellationToken cancel)
     {
         var installer = Path.Combine(StagingDirectory(), asset.Name);
@@ -155,6 +157,8 @@ public sealed partial class UpdateService
             Delete(installer);
             return Mismatched(asset);
         }
+
+        progress?.Report(new(UpdatePhase.Installing, 1d));
 
         var scope = IsPerMachine(target) ? "/ALLUSERS" : "/CURRENTUSER";
 
@@ -213,7 +217,7 @@ public sealed partial class UpdateService
         string target,
         ReleaseAsset asset,
         string expected,
-        IProgress<double>? progress,
+        IProgress<UpdateProgress>? progress,
         CancellationToken cancel)
     {
         var parent = Path.GetDirectoryName(target);
@@ -229,6 +233,8 @@ public sealed partial class UpdateService
             var actual = await DownloadAsync(asset, archive, progress, cancel).ConfigureAwait(false);
             if (!Matches(actual, expected))
                 return Mismatched(asset);
+
+            progress?.Report(new(UpdatePhase.Installing, 1d));
 
             if (Directory.Exists(staged))
                 Directory.Delete(staged, recursive: true);
@@ -443,7 +449,7 @@ public sealed partial class UpdateService
         string target,
         ReleaseAsset asset,
         string expected,
-        IProgress<double>? progress,
+        IProgress<UpdateProgress>? progress,
         CancellationToken cancel)
     {
         var image = Path.Combine(StagingDirectory(), asset.Name);
@@ -455,6 +461,8 @@ public sealed partial class UpdateService
             var actual = await DownloadAsync(asset, image, progress, cancel).ConfigureAwait(false);
             if (!Matches(actual, expected))
                 return Mismatched(asset);
+
+            progress?.Report(new(UpdatePhase.Installing, 1d));
 
             // -nobrowse keeps it off the desktop and out of the Finder sidebar; this is
             // a mount the user never asked for and should never see.

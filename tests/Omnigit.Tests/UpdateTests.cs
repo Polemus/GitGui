@@ -459,15 +459,41 @@ public class UpdateTests
     {
         using var install = new FakeAppImage("old");
 
-        var reported = new List<double>();
-        await install.ApplyAsync("new", progress: new Progress<double>(reported.Add));
+        var reported = new List<UpdateProgress>();
+        await install.ApplyAsync("new", progress: new Progress<UpdateProgress>(reported.Add));
 
         // Progress<T> posts to the synchronisation context, so the last report can still
         // be in flight; what matters is that it got there.
         await Task.Delay(50);
 
         Assert.NotEmpty(reported);
-        Assert.Equal(1d, reported[^1], precision: 3);
+        Assert.Equal(1d, reported[^1].Fraction, precision: 3);
+    }
+
+    /// <summary>
+    /// The two halves have to be told apart, because for a package install the second is
+    /// usually a password box that may have opened on another screen. Reporting
+    /// "Downloading" through it is how a wait for the user reads as a hang - which is
+    /// exactly what it did the first time this ran for real.
+    /// </summary>
+    [Fact]
+    public async Task Installing_is_reported_separately_from_downloading()
+    {
+        using var install = new FakeAppImage("old");
+
+        var reported = new List<UpdateProgress>();
+        await install.ApplyAsync("new", progress: new Progress<UpdateProgress>(reported.Add));
+        await Task.Delay(50);
+
+        Assert.Contains(reported, r => r.Phase == UpdatePhase.Downloading);
+        Assert.Contains(reported, r => r.Phase == UpdatePhase.Installing);
+
+        // And in that order - a label that goes back to "Downloading" is worse than one
+        // that never changed.
+        var download = reported.FindLastIndex(r => r.Phase == UpdatePhase.Downloading);
+        var installing = reported.FindIndex(r => r.Phase == UpdatePhase.Installing);
+
+        Assert.True(installing > download, "installing should be reported after downloading");
     }
 
     [Fact]
@@ -580,7 +606,7 @@ public class UpdateTests
             string? publishedHash = null,
             bool publishChecksums = true,
             HttpStatusCode status = HttpStatusCode.OK,
-            IProgress<double>? progress = null)
+            IProgress<UpdateProgress>? progress = null)
         {
             var name = "Omnigit-99.0.0-x86_64.AppImage";
             var bytes = System.Text.Encoding.UTF8.GetBytes(newContents);

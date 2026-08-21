@@ -24,6 +24,9 @@ public enum UpdateStage
 
     Downloading,
 
+    /// <summary>Downloaded and verified; being put in place. May be waiting on a prompt.</summary>
+    Installing,
+
     /// <summary>Replaced on disk. The app is restarting itself.</summary>
     Applied,
 
@@ -44,11 +47,30 @@ public enum UpdateStage
 public sealed partial class UpdateViewModel : ViewModelBase
 {
     /// <summary>
-    /// How often the app looks. Daily rather than hourly: releases are weeks apart, the
-    /// check is a request to somebody else's server, and an update nobody has been told
-    /// about for a few hours has cost nothing.
+    /// How often the app looks while it is running.
     /// </summary>
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
+    /// <remarks>
+    /// It was a day, on the reasoning that releases are weeks apart so a few hours'
+    /// delay costs nothing. That is true of the delay and false of the mechanism: an
+    /// Omnigit left open when a release lands checks once, thirty seconds after launch,
+    /// and then not again until tomorrow - so the one automatic check that mattered had
+    /// already happened before there was anything to find. Hourly is still nothing
+    /// against GitHub's sixty-an-hour for anonymous callers.
+    /// </remarks>
+    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How stale a check has to be before returning to the window triggers another.
+    /// </summary>
+    /// <remarks>
+    /// The timer alone cannot help someone coming back to a window that has been open
+    /// for days - it fires on its own schedule, not on their attention. Coming back to
+    /// Omnigit is the moment they might act on an update, so it is the moment worth
+    /// spending a request on. The floor stops alt-tabbing from becoming a poll.
+    /// </remarks>
+    private static readonly TimeSpan RecheckOnReturnAfter = TimeSpan.FromMinutes(15);
+
+    private DateTimeOffset _lastCheck = DateTimeOffset.MinValue;
 
     /// <summary>
     /// How long after launch the first check happens. Long enough to be behind opening a
@@ -126,6 +148,7 @@ public sealed partial class UpdateViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(IsChecking))]
     [NotifyPropertyChangedFor(nameof(IsUpdateAvailable))]
     [NotifyPropertyChangedFor(nameof(IsDownloading))]
+    [NotifyPropertyChangedFor(nameof(IsWorking))]
     [NotifyPropertyChangedFor(nameof(IsUpToDate))]
     [NotifyPropertyChangedFor(nameof(HasFailed))]
     [NotifyPropertyChangedFor(nameof(CanInstall))]
@@ -154,16 +177,24 @@ public sealed partial class UpdateViewModel : ViewModelBase
 
     public bool IsChecking => Stage == UpdateStage.Checking;
     public bool IsDownloading => Stage == UpdateStage.Downloading;
+
+    /// <summary>Downloading or installing - either way, an update is under way.</summary>
+    public bool IsWorking => Stage is UpdateStage.Downloading or UpdateStage.Installing;
     public bool IsUpToDate => Stage == UpdateStage.UpToDate;
     public bool HasFailed => Stage == UpdateStage.Failed;
     public bool HasNotes => !string.IsNullOrWhiteSpace(Notes);
 
     /// <summary>
-    /// Drives the dot on the settings button and on the About tab. Deliberately not true
-    /// while downloading: the user is looking at the thing, and a badge telling them
-    /// about it is noise.
+    /// Drives the dot on the settings button and on the About tab.
     /// </summary>
-    public bool IsUpdateAvailable => Stage == UpdateStage.Available;
+    /// <remarks>
+    /// Not merely <c>Stage == Available</c>. It stays lit through a failure, because a
+    /// download that did not work does not mean the release stopped existing, and the
+    /// dot going out would say it had. It goes out while the update is actually
+    /// happening, where the user is already looking at the thing the badge is about.
+    /// </remarks>
+    public bool IsUpdateAvailable =>
+        _release is not null && Stage is UpdateStage.Available or UpdateStage.Failed;
 
     /// <summary>
     /// Whether the button installs anything. An update we found but cannot apply still
@@ -177,6 +208,13 @@ public sealed partial class UpdateViewModel : ViewModelBase
         UpdateStage.UpToDate => "Omnigit is up to date.",
         UpdateStage.Available => $"Omnigit {AvailableVersion} is available.",
         UpdateStage.Downloading => $"Downloading Omnigit {AvailableVersion}…",
+
+        // Named for what is actually happening, which for a package install is usually
+        // waiting on a password box that may have opened on another screen. Saying
+        // "Downloading" through this is how the wait reads as a hang.
+        UpdateStage.Installing => NeedsElevation
+            ? "Waiting for permission — check for a password prompt, it may be behind this window."
+            : $"Installing Omnigit {AvailableVersion}…",
         UpdateStage.Applied => $"Updated to {AvailableVersion}. Restarting…",
         UpdateStage.Failed => "Could not check for updates.",
         _ => string.Empty,
@@ -206,10 +244,23 @@ public sealed partial class UpdateViewModel : ViewModelBase
         _timer = timer;
     }
 
+    /// <summary>
+    /// Called when the window is activated. Checks only if the last one is old enough to
+    /// be worth repeating, and never says anything if it fails.
+    /// </summary>
+    public void OnWindowActivated()
+    {
+        if (_isDesignTime || DateTimeOffset.UtcNow - _lastCheck < RecheckOnReturnAfter)
+            return;
+
+        _ = CheckAsync(announce: false);
+    }
+
     [RelayCommand(CanExecute = nameof(CanCheck))]
     private Task Check() => CheckAsync(announce: true);
 
-    private bool CanCheck() => Stage is not (UpdateStage.Checking or UpdateStage.Downloading or UpdateStage.Applied);
+    private bool CanCheck() => Stage is not (UpdateStage.Checking or UpdateStage.Downloading
+                                             or UpdateStage.Installing or UpdateStage.Applied);
 
     /// <summary>
     /// Asks the release feed. <paramref name="announce"/> separates the button from the
@@ -219,11 +270,12 @@ public sealed partial class UpdateViewModel : ViewModelBase
     /// </summary>
     private async Task CheckAsync(bool announce)
     {
-        if (Stage is UpdateStage.Downloading or UpdateStage.Applied)
+        if (Stage is UpdateStage.Downloading or UpdateStage.Installing or UpdateStage.Applied)
             return;
 
         Stage = UpdateStage.Checking;
         Detail = null;
+        _lastCheck = DateTimeOffset.UtcNow;
 
         // The service's client has a long timeout because the same one fetches an
         // eighty-megabyte AppImage. A check is one small GET, and left to that timeout a
@@ -237,6 +289,7 @@ public sealed partial class UpdateViewModel : ViewModelBase
         {
             case UpdateCheckOutcome.UpdateAvailable when result.Release is { } release:
                 _release = release;
+                OnPropertyChanged(nameof(IsUpdateAvailable));
                 AvailableVersion = release.Version.ToString(3);
                 Notes = release.Notes;
                 Stage = UpdateStage.Available;
@@ -245,6 +298,7 @@ public sealed partial class UpdateViewModel : ViewModelBase
 
             case UpdateCheckOutcome.UpToDate:
                 _release = null;
+                OnPropertyChanged(nameof(IsUpdateAvailable));
                 AvailableVersion = null;
                 Notes = null;
                 Stage = UpdateStage.UpToDate;
@@ -284,7 +338,15 @@ public sealed partial class UpdateViewModel : ViewModelBase
 
         _log.Write(ActivityLevel.Info, $"Downloading Omnigit {AvailableVersion}…");
 
-        var progress = new Progress<double>(fraction => Progress = fraction);
+        var progress = new Progress<UpdateProgress>(report =>
+        {
+            Progress = report.Fraction;
+
+            // Only ever forwards: a late download report arriving after the install has
+            // begun must not put the label back.
+            if (report.Phase is UpdatePhase.Installing && Stage is UpdateStage.Downloading)
+                Stage = UpdateStage.Installing;
+        });
 
         UpdateApplyResult result;
         try
@@ -296,6 +358,7 @@ public sealed partial class UpdateViewModel : ViewModelBase
             Stage = UpdateStage.Available;
             return;
         }
+
 
         if (result.Outcome != UpdateApplyOutcome.Applied)
         {
