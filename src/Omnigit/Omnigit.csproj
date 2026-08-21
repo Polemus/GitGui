@@ -10,7 +10,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>Omnigit</RootNamespace>
     <AssemblyName>Omnigit</AssemblyName>
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
     <Company>Polemus</Company>
     <Product>Omnigit</Product>
     <ApplicationIcon>Assets/omnigit.ico</ApplicationIcon>

@@ -130,6 +130,17 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.4.1" date="2026-08-21">
+      <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.4.1</url>
+      <description>
+        <p>
+          Repositories can now be removed. Right-click one in the
+          sidebar to take it out of Omnigit, or to move the whole folder
+          to the trash - the second asks first, and tells you what is in
+          there that the remote has not got.
+        </p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-08-21">
       <url type="details">https://github.com/Polemus/Omnigit/releases/tag/v0.4.0</url>
       <description>
